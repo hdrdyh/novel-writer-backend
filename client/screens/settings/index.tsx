@@ -12,6 +12,13 @@ import {
 import { Screen } from '@/components/Screen';
 import { Feather } from '@expo/vector-icons';
 
+interface APIConfig {
+  id: string;
+  name: string;
+  provider: string;
+  apiKey: string;
+}
+
 interface Agent {
   id: string;
   name: string;
@@ -19,72 +26,130 @@ interface Agent {
   prompt: string;
   enabled: boolean;
   icon: string;
+  apiId: string | null;
 }
 
 export default function SettingsScreen() {
-  const [agents, setAgents] = useState<Agent[]>([
-    {
-      id: '1',
-      name: '世界观架构师',
-      role: 'system',
-      prompt: '负责设计故事背景、世界观设定、历史文明、地理环境等宏观架构。',
-      enabled: true,
-      icon: 'globe',
-    },
-    {
-      id: '2',
-      name: '人物设定师',
-      role: 'character',
-      prompt: '负责塑造角色性格、外貌特征、行为动机、技能设定与成长轨迹。',
-      enabled: true,
-      icon: 'user',
-    },
-    {
-      id: '3',
-      name: '情节设计师',
-      role: 'plot',
-      prompt: '负责规划故事线、高潮转折、冲突设置与悬念埋设。',
-      enabled: true,
-      icon: 'git-branch',
-    },
-    {
-      id: '4',
-      name: '文笔润色师',
-      role: 'style',
-      prompt: '负责优化文字描写、对话风格、环境渲染与情感表达。',
-      enabled: false,
-      icon: 'edit',
-    },
-    {
-      id: '5',
-      name: '审核校对师',
-      role: 'review',
-      prompt: '负责检查逻辑漏洞、错别字、角色一致性与违规内容。',
-      enabled: true,
-      icon: 'check-circle',
-    },
+  // API配置列表
+  const [apis, setApis] = useState<APIConfig[]>([
+    { id: '1', name: 'DeepSeek', provider: 'deepseek', apiKey: 'sk-xxx...xxx' },
+    { id: '2', name: 'Kimi', provider: 'kimi', apiKey: 'sk-xxx...xxx' },
   ]);
 
-  const [modalVisible, setModalVisible] = useState(false);
+  // Agent列表
+  const [agents, setAgents] = useState<Agent[]>([
+    { id: '1', name: '世界观架构师', role: 'system', prompt: '负责设计故事背景、世界观设定、历史文明、地理环境等宏观架构。', enabled: true, icon: 'globe', apiId: '1' },
+    { id: '2', name: '人物设定师', role: 'character', prompt: '负责塑造角色性格、外貌特征、行为动机、技能设定与成长轨迹。', enabled: true, icon: 'user', apiId: '1' },
+    { id: '3', name: '情节设计师', role: 'plot', prompt: '负责规划故事线、高潮转折、冲突设置与悬念埋设。', enabled: true, icon: 'git-branch', apiId: '2' },
+    { id: '4', name: '文笔润色师', role: 'style', prompt: '负责优化文字描写、对话风格、环境渲染与情感表达。', enabled: false, icon: 'edit', apiId: '2' },
+    { id: '5', name: '审核校对师', role: 'review', prompt: '负责检查逻辑漏洞、错别字、角色一致性与违规内容。', enabled: true, icon: 'check-circle', apiId: '1' },
+  ]);
+
+  // 弹窗状态
+  const [apiModalVisible, setApiModalVisible] = useState(false);
+  const [editingApi, setEditingApi] = useState<APIConfig | null>(null);
+  const [apiName, setApiName] = useState('');
+  const [apiProvider, setApiProvider] = useState('');
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  const [agentModalVisible, setAgentModalVisible] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [agentName, setAgentName] = useState('');
   const [agentPrompt, setAgentPrompt] = useState('');
-  const [apiKeyModalVisible, setApiKeyModalVisible] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [selectedApiId, setSelectedApiId] = useState<string | null>(null);
 
+  // ============== API管理 ==============
+  const handleAddApi = () => {
+    setEditingApi(null);
+    setApiName('');
+    setApiProvider('');
+    setApiKeyInput('');
+    setShowApiKey(false);
+    setApiModalVisible(true);
+  };
+
+  const handleEditApi = (api: APIConfig) => {
+    setEditingApi(api);
+    setApiName(api.name);
+    setApiProvider(api.provider);
+    setApiKeyInput(api.apiKey);
+    setShowApiKey(false);
+    setApiModalVisible(true);
+  };
+
+  const handleSaveApi = () => {
+    if (!apiName.trim()) {
+      Alert.alert('提示', '请输入 API 名称');
+      return;
+    }
+    if (!apiProvider.trim()) {
+      Alert.alert('提示', '请输入 API Provider（如 deepseek、kimi）');
+      return;
+    }
+    if (!apiKeyInput.trim()) {
+      Alert.alert('提示', '请输入 API Key');
+      return;
+    }
+
+    if (editingApi) {
+      setApis(prev =>
+        prev.map(a =>
+          a.id === editingApi.id
+            ? { ...a, name: apiName.trim(), provider: apiProvider.trim(), apiKey: apiKeyInput.trim() }
+            : a
+        )
+      );
+      Alert.alert('成功', 'API 配置已更新');
+    } else {
+      const newApi: APIConfig = {
+        id: Date.now().toString(),
+        name: apiName.trim(),
+        provider: apiProvider.trim(),
+        apiKey: apiKeyInput.trim(),
+      };
+      setApis(prev => [...prev, newApi]);
+      Alert.alert('成功', 'API 配置已添加');
+    }
+    setApiModalVisible(false);
+  };
+
+  const handleDeleteApi = (api: APIConfig) => {
+    // 检查是否有Agent正在使用此API
+    const usedBy = agents.filter(a => a.apiId === api.id);
+    if (usedBy.length > 0) {
+      Alert.alert('无法删除', `该API正被以下Agent使用：${usedBy.map(a => a.name).join('、')}`);
+      return;
+    }
+
+    Alert.alert('删除确认', `确定要删除「${api.name}」吗？`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: () => {
+          setApis(prev => prev.filter(a => a.id !== api.id));
+          Alert.alert('成功', 'API 配置已删除');
+        },
+      },
+    ]);
+  };
+
+  // ============== Agent管理 ==============
   const handleAddAgent = () => {
     setEditingAgent(null);
     setAgentName('');
     setAgentPrompt('');
-    setModalVisible(true);
+    setSelectedApiId(apis.length > 0 ? apis[0].id : null);
+    setAgentModalVisible(true);
   };
 
   const handleEditAgent = (agent: Agent) => {
     setEditingAgent(agent);
     setAgentName(agent.name);
     setAgentPrompt(agent.prompt);
-    setModalVisible(true);
+    setSelectedApiId(agent.apiId);
+    setAgentModalVisible(true);
   };
 
   const handleSaveAgent = () => {
@@ -96,19 +161,21 @@ export default function SettingsScreen() {
       Alert.alert('提示', '请输入 Agent 规则描述');
       return;
     }
+    if (!selectedApiId) {
+      Alert.alert('提示', '请选择关联的 API');
+      return;
+    }
 
     if (editingAgent) {
-      // 编辑现有Agent
       setAgents(prev =>
         prev.map(a =>
           a.id === editingAgent.id
-            ? { ...a, name: agentName.trim(), prompt: agentPrompt.trim() }
+            ? { ...a, name: agentName.trim(), prompt: agentPrompt.trim(), apiId: selectedApiId }
             : a
         )
       );
       Alert.alert('成功', 'Agent 已更新');
     } else {
-      // 新增Agent
       const newAgent: Agent = {
         id: Date.now().toString(),
         name: agentName.trim(),
@@ -116,45 +183,32 @@ export default function SettingsScreen() {
         prompt: agentPrompt.trim(),
         enabled: true,
         icon: 'user',
+        apiId: selectedApiId,
       };
       setAgents(prev => [...prev, newAgent]);
       Alert.alert('成功', 'Agent 已添加');
     }
-    setModalVisible(false);
+    setAgentModalVisible(false);
   };
 
   const handleDeleteAgent = (agent: Agent) => {
-    Alert.alert(
-      '删除确认',
-      `确定要删除「${agent.name}」吗？`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '删除',
-          style: 'destructive',
-          onPress: () => {
-            setAgents(prev => prev.filter(a => a.id !== agent.id));
-            Alert.alert('成功', 'Agent 已删除');
-          },
+    Alert.alert('删除确认', `确定要删除「${agent.name}」吗？`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: () => {
+          setAgents(prev => prev.filter(a => a.id !== agent.id));
+          Alert.alert('成功', 'Agent 已删除');
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleToggleAgent = (id: string) => {
     setAgents(prev =>
       prev.map(a => (a.id === id ? { ...a, enabled: !a.enabled } : a))
     );
-  };
-
-  const handleSaveApiKey = () => {
-    if (!apiKey.trim()) {
-      Alert.alert('提示', '请输入 API Key');
-      return;
-    }
-    // 保存到本地存储（实际项目中应该调用API保存）
-    Alert.alert('成功', 'API Key 已保存');
-    setApiKeyModalVisible(false);
   };
 
   const getAgentIcon = (iconName: string) => {
@@ -168,6 +222,12 @@ export default function SettingsScreen() {
     return iconMap[iconName] || 'user';
   };
 
+  const getApiName = (apiId: string | null) => {
+    if (!apiId) return '未配置';
+    const api = apis.find(a => a.id === apiId);
+    return api?.name || '未知';
+  };
+
   return (
     <Screen>
       <View style={styles.header}>
@@ -176,22 +236,41 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* API Key 配置 */}
+        {/* API管理 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>API 配置</Text>
-          <Pressable style={styles.apiCard} onPress={() => setApiKeyModalVisible(true)}>
-            <View style={styles.apiIcon}>
-              <Feather name="key" size={20} color="#111111" />
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>API 配置</Text>
+            <Pressable style={styles.addBtn} onPress={handleAddApi}>
+              <Feather name="plus" size={16} color="#FFFFFF" />
+              <Text style={styles.addBtnText}>添加</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.sectionHint}>管理多个API配置，每个Agent可独立选择</Text>
+
+          {apis.map(api => (
+            <Pressable key={api.id} style={styles.apiCard} onPress={() => handleEditApi(api)}>
+              <View style={styles.apiIcon}>
+                <Feather name="key" size={18} color="#111111" />
+              </View>
+              <View style={styles.apiInfo}>
+                <Text style={styles.apiName}>{api.name}</Text>
+                <Text style={styles.apiProvider}>{api.provider} · {api.apiKey.slice(0, 10)}...</Text>
+              </View>
+              <Pressable onPress={() => handleDeleteApi(api)} hitSlop={10}>
+                <Feather name="trash-2" size={16} color="#DC2626" />
+              </Pressable>
+            </Pressable>
+          ))}
+
+          {apis.length === 0 && (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>暂无API配置</Text>
+              <Text style={styles.emptyHint}>点击上方按钮添加</Text>
             </View>
-            <View style={styles.apiInfo}>
-              <Text style={styles.apiTitle}>API Key</Text>
-              <Text style={styles.apiHint}>点击配置 LLM API Key</Text>
-            </View>
-            <Feather name="chevron-right" size={20} color="#CCCCCC" />
-          </Pressable>
+          )}
         </View>
 
-        {/* Agent 管理 */}
+        {/* Agent管理 */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Agent 管理</Text>
@@ -200,45 +279,32 @@ export default function SettingsScreen() {
               <Text style={styles.addBtnText}>添加</Text>
             </Pressable>
           </View>
-          <Text style={styles.sectionHint}>
-            配置多个写作 Agent，每个 Agent 有不同的职责和规则
-          </Text>
+          <Text style={styles.sectionHint}>每个Agent独立选择API</Text>
 
           {agents.map(agent => (
             <View key={agent.id} style={styles.agentCard}>
-              <View style={styles.agentIcon}>
-                <Feather
-                  name={getAgentIcon(agent.icon) as any}
-                  size={20}
-                  color="#111111"
-                />
-              </View>
-              <View style={styles.agentInfo}>
-                <View style={styles.agentHeader}>
-                  <Text style={styles.agentName}>{agent.name}</Text>
-                  <View style={[styles.statusDot, agent.enabled && styles.statusDotActive]} />
+              <View style={styles.agentMain}>
+                <View style={styles.agentIcon}>
+                  <Feather name={getAgentIcon(agent.icon) as any} size={18} color="#111111" />
                 </View>
-                <Text style={styles.agentRole}>{agent.role}</Text>
+                <View style={styles.agentInfo}>
+                  <View style={styles.agentHeader}>
+                    <Text style={styles.agentName}>{agent.name}</Text>
+                    <View style={[styles.statusDot, agent.enabled && styles.statusDotActive]} />
+                  </View>
+                  <Text style={styles.agentRole}>{agent.role} · {getApiName(agent.apiId)}</Text>
+                </View>
               </View>
               <View style={styles.agentActions}>
-                <Pressable
-                  style={styles.actionBtn}
-                  onPress={() => handleToggleAgent(agent.id)}
-                >
+                <Pressable style={styles.actionBtn} onPress={() => handleToggleAgent(agent.id)}>
                   <Text style={[styles.toggleText, agent.enabled && styles.toggleTextActive]}>
                     {agent.enabled ? '启用' : '禁用'}
                   </Text>
                 </Pressable>
-                <Pressable
-                  style={styles.actionBtn}
-                  onPress={() => handleEditAgent(agent)}
-                >
+                <Pressable style={styles.actionBtn} onPress={() => handleEditAgent(agent)}>
                   <Feather name="edit-2" size={16} color="#888888" />
                 </Pressable>
-                <Pressable
-                  style={styles.actionBtn}
-                  onPress={() => handleDeleteAgent(agent)}
-                >
+                <Pressable style={styles.actionBtn} onPress={() => handleDeleteAgent(agent)}>
                   <Feather name="trash-2" size={16} color="#DC2626" />
                 </Pressable>
               </View>
@@ -280,13 +346,68 @@ export default function SettingsScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* 添加/编辑 Agent 弹窗 */}
-      <Modal visible={modalVisible} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
+      {/* API配置弹窗 */}
+      <Modal visible={apiModalVisible} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setApiModalVisible(false)}>
           <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>
-              {editingAgent ? '编辑 Agent' : '添加 Agent'}
-            </Text>
+            <Text style={styles.modalTitle}>{editingApi ? '编辑 API' : '添加 API'}</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>API 名称 *</Text>
+              <TextInput
+                style={styles.input}
+                value={apiName}
+                onChangeText={setApiName}
+                placeholder="如：DeepSeek"
+                placeholderTextColor="#CCCCCC"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Provider *</Text>
+              <TextInput
+                style={styles.input}
+                value={apiProvider}
+                onChangeText={setApiProvider}
+                placeholder="如：deepseek"
+                placeholderTextColor="#CCCCCC"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>API Key *</Text>
+              <View style={styles.apiKeyWrapper}>
+                <TextInput
+                  style={[styles.input, styles.apiKeyInput]}
+                  value={apiKeyInput}
+                  onChangeText={setApiKeyInput}
+                  placeholder="请输入 API Key"
+                  placeholderTextColor="#CCCCCC"
+                  secureTextEntry={!showApiKey}
+                />
+                <Pressable style={styles.eyeBtn} onPress={() => setShowApiKey(!showApiKey)}>
+                  <Feather name={showApiKey ? 'eye-off' : 'eye'} size={20} color="#888888" />
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <Pressable style={styles.cancelBtn} onPress={() => setApiModalVisible(false)}>
+                <Text style={styles.cancelBtnText}>取消</Text>
+              </Pressable>
+              <Pressable style={styles.saveBtn} onPress={handleSaveApi}>
+                <Text style={styles.saveBtnText}>保存</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Agent配置弹窗 */}
+      <Modal visible={agentModalVisible} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setAgentModalVisible(false)}>
+          <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>{editingAgent ? '编辑 Agent' : '添加 Agent'}</Text>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Agent 名称 *</Text>
@@ -308,68 +429,37 @@ export default function SettingsScreen() {
                 placeholder="请输入 Agent 的职责和写作规则..."
                 placeholderTextColor="#CCCCCC"
                 multiline
-                numberOfLines={5}
+                numberOfLines={4}
                 textAlignVertical="top"
               />
             </View>
 
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>关联 API *</Text>
+              <View style={styles.apiSelector}>
+                {apis.map(api => (
+                  <Pressable
+                    key={api.id}
+                    style={[styles.apiOption, selectedApiId === api.id && styles.apiOptionSelected]}
+                    onPress={() => setSelectedApiId(api.id)}
+                  >
+                    <Text style={[styles.apiOptionText, selectedApiId === api.id && styles.apiOptionTextSelected]}>
+                      {api.name}
+                    </Text>
+                    {selectedApiId === api.id && <Feather name="check" size={16} color="#FFFFFF" />}
+                  </Pressable>
+                ))}
+              </View>
+              {apis.length === 0 && (
+                <Text style={styles.noApiHint}>暂无API配置，请先在「API配置」中添加</Text>
+              )}
+            </View>
+
             <View style={styles.modalActions}>
-              <Pressable
-                style={styles.cancelBtn}
-                onPress={() => setModalVisible(false)}
-              >
+              <Pressable style={styles.cancelBtn} onPress={() => setAgentModalVisible(false)}>
                 <Text style={styles.cancelBtnText}>取消</Text>
               </Pressable>
               <Pressable style={styles.saveBtn} onPress={handleSaveAgent}>
-                <Text style={styles.saveBtnText}>保存</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* API Key 配置弹窗 */}
-      <Modal visible={apiKeyModalVisible} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setApiKeyModalVisible(false)}>
-          <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>配置 API Key</Text>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>API Key</Text>
-              <View style={styles.apiKeyInputWrapper}>
-                <TextInput
-                  style={[styles.input, styles.apiKeyInput]}
-                  value={apiKey}
-                  onChangeText={setApiKey}
-                  placeholder="请输入 API Key"
-                  placeholderTextColor="#CCCCCC"
-                  secureTextEntry={!showApiKey}
-                />
-                <Pressable
-                  style={styles.eyeBtn}
-                  onPress={() => setShowApiKey(!showApiKey)}
-                >
-                  <Feather
-                    name={showApiKey ? 'eye-off' : 'eye'}
-                    size={20}
-                    color="#888888"
-                  />
-                </Pressable>
-              </View>
-            </View>
-
-            <Text style={styles.apiHintText}>
-              支持 DeepSeek、Kimi、OpenAI 等主流 LLM API
-            </Text>
-
-            <View style={styles.modalActions}>
-              <Pressable
-                style={styles.cancelBtn}
-                onPress={() => setApiKeyModalVisible(false)}
-              >
-                <Text style={styles.cancelBtnText}>取消</Text>
-              </Pressable>
-              <Pressable style={styles.saveBtn} onPress={handleSaveApiKey}>
                 <Text style={styles.saveBtnText}>保存</Text>
               </Pressable>
             </View>
@@ -418,7 +508,6 @@ const styles = StyleSheet.create({
     color: '#888888',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 12,
   },
   sectionHint: {
     fontSize: 13,
@@ -434,7 +523,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 8,
-    marginBottom: 12,
   },
   addBtnText: {
     fontSize: 13,
@@ -448,39 +536,60 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ECECEC',
-    padding: 16,
+    padding: 14,
+    marginBottom: 10,
   },
   apiIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#F7F7F7',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   apiInfo: {
     flex: 1,
   },
-  apiTitle: {
-    fontSize: 16,
+  apiName: {
+    fontSize: 15,
     fontWeight: '600',
     color: '#111111',
     marginBottom: 2,
   },
-  apiHint: {
-    fontSize: 13,
+  apiProvider: {
+    fontSize: 12,
+    color: '#888888',
+  },
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ECECEC',
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#111111',
+    marginBottom: 4,
+  },
+  emptyHint: {
+    fontSize: 12,
     color: '#888888',
   },
   agentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ECECEC',
     padding: 14,
     marginBottom: 10,
+  },
+  agentMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   agentIcon: {
     width: 40,
@@ -517,15 +626,19 @@ const styles = StyleSheet.create({
   agentRole: {
     fontSize: 12,
     color: '#888888',
-    textTransform: 'uppercase',
   },
   agentActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#ECECEC',
+    paddingTop: 12,
   },
   actionBtn: {
-    padding: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
   },
   toggleText: {
     fontSize: 12,
@@ -565,7 +678,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 24,
-    width: '85%',
+    width: '90%',
     maxWidth: 400,
   },
   modalTitle: {
@@ -594,10 +707,10 @@ const styles = StyleSheet.create({
     color: '#111111',
   },
   textArea: {
-    minHeight: 100,
+    minHeight: 80,
     paddingTop: 16,
   },
-  apiKeyInputWrapper: {
+  apiKeyWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -612,11 +725,38 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 12,
     borderBottomRightRadius: 12,
   },
-  apiHintText: {
-    fontSize: 12,
-    color: '#888888',
-    marginBottom: 20,
-    textAlign: 'center',
+  apiSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  apiOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ECECEC',
+  },
+  apiOptionSelected: {
+    backgroundColor: '#111111',
+    borderColor: '#111111',
+  },
+  apiOptionText: {
+    fontSize: 14,
+    color: '#111111',
+    fontWeight: '500',
+  },
+  apiOptionTextSelected: {
+    color: '#FFFFFF',
+  },
+  noApiHint: {
+    fontSize: 13,
+    color: '#DC2626',
+    marginTop: 8,
   },
   modalActions: {
     flexDirection: 'row',
