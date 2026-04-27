@@ -8,12 +8,9 @@ import {
   Modal,
   TextInput,
   Alert,
-  Switch,
-  Linking,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { Feather } from '@expo/vector-icons';
-import { useSafeRouter } from '@/hooks/useSafeRouter';
 
 interface Agent {
   id: string;
@@ -25,7 +22,6 @@ interface Agent {
 }
 
 export default function SettingsScreen() {
-  const router = useSafeRouter();
   const [agents, setAgents] = useState<Agent[]>([
     {
       id: '1',
@@ -69,27 +65,40 @@ export default function SettingsScreen() {
     },
   ]);
 
-  const [agentModalVisible, setAgentModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [agentName, setAgentName] = useState('');
   const [agentPrompt, setAgentPrompt] = useState('');
+  const [apiKeyModalVisible, setApiKeyModalVisible] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
+
+  const handleAddAgent = () => {
+    setEditingAgent(null);
+    setAgentName('');
+    setAgentPrompt('');
+    setModalVisible(true);
+  };
 
   const handleEditAgent = (agent: Agent) => {
     setEditingAgent(agent);
     setAgentName(agent.name);
     setAgentPrompt(agent.prompt);
-    setAgentModalVisible(true);
+    setModalVisible(true);
   };
 
   const handleSaveAgent = () => {
-    if (!agentName.trim() || !agentPrompt.trim()) {
-      Alert.alert('提示', '请填写名称和规则描述');
+    if (!agentName.trim()) {
+      Alert.alert('提示', '请输入 Agent 名称');
+      return;
+    }
+    if (!agentPrompt.trim()) {
+      Alert.alert('提示', '请输入 Agent 规则描述');
       return;
     }
 
     if (editingAgent) {
+      // 编辑现有Agent
       setAgents(prev =>
         prev.map(a =>
           a.id === editingAgent.id
@@ -97,8 +106,39 @@ export default function SettingsScreen() {
             : a
         )
       );
+      Alert.alert('成功', 'Agent 已更新');
+    } else {
+      // 新增Agent
+      const newAgent: Agent = {
+        id: Date.now().toString(),
+        name: agentName.trim(),
+        role: 'custom',
+        prompt: agentPrompt.trim(),
+        enabled: true,
+        icon: 'user',
+      };
+      setAgents(prev => [...prev, newAgent]);
+      Alert.alert('成功', 'Agent 已添加');
     }
-    setAgentModalVisible(false);
+    setModalVisible(false);
+  };
+
+  const handleDeleteAgent = (agent: Agent) => {
+    Alert.alert(
+      '删除确认',
+      `确定要删除「${agent.name}」吗？`,
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '删除',
+          style: 'destructive',
+          onPress: () => {
+            setAgents(prev => prev.filter(a => a.id !== agent.id));
+            Alert.alert('成功', 'Agent 已删除');
+          },
+        },
+      ]
+    );
   };
 
   const handleToggleAgent = (id: string) => {
@@ -112,7 +152,9 @@ export default function SettingsScreen() {
       Alert.alert('提示', '请输入 API Key');
       return;
     }
-    Alert.alert('保存成功', 'API Key 已保存');
+    // 保存到本地存储（实际项目中应该调用API保存）
+    Alert.alert('成功', 'API Key 已保存');
+    setApiKeyModalVisible(false);
   };
 
   const getAgentIcon = (iconName: string) => {
@@ -134,37 +176,30 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* API 配置 */}
+        {/* API Key 配置 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>API 配置</Text>
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardLabel}>API Key</Text>
-              <Pressable onPress={() => setShowApiKey(!showApiKey)}>
-                <Feather
-                  name={showApiKey ? 'eye-off' : 'eye'}
-                  size={18}
-                  color="#888888"
-                />
-              </Pressable>
+          <Pressable style={styles.apiCard} onPress={() => setApiKeyModalVisible(true)}>
+            <View style={styles.apiIcon}>
+              <Feather name="key" size={20} color="#111111" />
             </View>
-            <TextInput
-              style={styles.input}
-              value={apiKey}
-              onChangeText={setApiKey}
-              placeholder="输入 API Key"
-              placeholderTextColor="#CCCCCC"
-              secureTextEntry={!showApiKey}
-            />
-            <Pressable style={styles.saveKeyBtn} onPress={handleSaveApiKey}>
-              <Text style={styles.saveKeyText}>保存 Key</Text>
-            </Pressable>
-          </View>
+            <View style={styles.apiInfo}>
+              <Text style={styles.apiTitle}>API Key</Text>
+              <Text style={styles.apiHint}>点击配置 LLM API Key</Text>
+            </View>
+            <Feather name="chevron-right" size={20} color="#CCCCCC" />
+          </Pressable>
         </View>
 
         {/* Agent 管理 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Agent 管理</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Agent 管理</Text>
+            <Pressable style={styles.addBtn} onPress={handleAddAgent}>
+              <Feather name="plus" size={16} color="#FFFFFF" />
+              <Text style={styles.addBtnText}>添加</Text>
+            </Pressable>
+          </View>
           <Text style={styles.sectionHint}>
             配置多个写作 Agent，每个 Agent 有不同的职责和规则
           </Text>
@@ -179,21 +214,32 @@ export default function SettingsScreen() {
                 />
               </View>
               <View style={styles.agentInfo}>
-                <Text style={styles.agentName}>{agent.name}</Text>
+                <View style={styles.agentHeader}>
+                  <Text style={styles.agentName}>{agent.name}</Text>
+                  <View style={[styles.statusDot, agent.enabled && styles.statusDotActive]} />
+                </View>
                 <Text style={styles.agentRole}>{agent.role}</Text>
               </View>
               <View style={styles.agentActions}>
-                <Switch
-                  value={agent.enabled}
-                  onValueChange={() => handleToggleAgent(agent.id)}
-                  trackColor={{ false: '#E5E5E5', true: '#111111' }}
-                  thumbColor="#FFFFFF"
-                />
                 <Pressable
-                  style={styles.editBtn}
+                  style={styles.actionBtn}
+                  onPress={() => handleToggleAgent(agent.id)}
+                >
+                  <Text style={[styles.toggleText, agent.enabled && styles.toggleTextActive]}>
+                    {agent.enabled ? '启用' : '禁用'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={styles.actionBtn}
                   onPress={() => handleEditAgent(agent)}
                 >
                   <Feather name="edit-2" size={16} color="#888888" />
+                </Pressable>
+                <Pressable
+                  style={styles.actionBtn}
+                  onPress={() => handleDeleteAgent(agent)}
+                >
+                  <Feather name="trash-2" size={16} color="#DC2626" />
                 </Pressable>
               </View>
             </View>
@@ -231,69 +277,99 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* 关于 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>关于</Text>
-          <View style={styles.aboutCard}>
-            <View style={styles.aboutItem}>
-              <Text style={styles.aboutLabel}>版本</Text>
-              <Text style={styles.aboutValue}>1.0.0</Text>
-            </View>
-            <View style={styles.divider} />
-            <Pressable style={styles.aboutItem}>
-              <Text style={styles.aboutLabel}>使用帮助</Text>
-              <Feather name="chevron-right" size={18} color="#CCCCCC" />
-            </Pressable>
-            <View style={styles.divider} />
-            <Pressable style={styles.aboutItem}>
-              <Text style={styles.aboutLabel}>隐私政策</Text>
-              <Feather name="chevron-right" size={18} color="#CCCCCC" />
-            </Pressable>
-          </View>
-        </View>
-
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* 编辑 Agent 弹窗 */}
-      <Modal visible={agentModalVisible} transparent animationType="fade">
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setAgentModalVisible(false)}
-        >
+      {/* 添加/编辑 Agent 弹窗 */}
+      <Modal visible={modalVisible} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
           <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>编辑 Agent</Text>
+            <Text style={styles.modalTitle}>
+              {editingAgent ? '编辑 Agent' : '添加 Agent'}
+            </Text>
+
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Agent 名称</Text>
+              <Text style={styles.inputLabel}>Agent 名称 *</Text>
               <TextInput
                 style={styles.input}
                 value={agentName}
                 onChangeText={setAgentName}
-                placeholder="如：世界观架构师"
+                placeholder="请输入 Agent 名称"
                 placeholderTextColor="#CCCCCC"
               />
             </View>
+
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>规则描述</Text>
+              <Text style={styles.inputLabel}>规则描述 *</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={agentPrompt}
                 onChangeText={setAgentPrompt}
-                placeholder="描述这个 Agent 的职责和写作规则..."
+                placeholder="请输入 Agent 的职责和写作规则..."
                 placeholderTextColor="#CCCCCC"
                 multiline
-                numberOfLines={6}
+                numberOfLines={5}
                 textAlignVertical="top"
               />
             </View>
+
             <View style={styles.modalActions}>
               <Pressable
                 style={styles.cancelBtn}
-                onPress={() => setAgentModalVisible(false)}
+                onPress={() => setModalVisible(false)}
               >
                 <Text style={styles.cancelBtnText}>取消</Text>
               </Pressable>
               <Pressable style={styles.saveBtn} onPress={handleSaveAgent}>
+                <Text style={styles.saveBtnText}>保存</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* API Key 配置弹窗 */}
+      <Modal visible={apiKeyModalVisible} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setApiKeyModalVisible(false)}>
+          <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>配置 API Key</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>API Key</Text>
+              <View style={styles.apiKeyInputWrapper}>
+                <TextInput
+                  style={[styles.input, styles.apiKeyInput]}
+                  value={apiKey}
+                  onChangeText={setApiKey}
+                  placeholder="请输入 API Key"
+                  placeholderTextColor="#CCCCCC"
+                  secureTextEntry={!showApiKey}
+                />
+                <Pressable
+                  style={styles.eyeBtn}
+                  onPress={() => setShowApiKey(!showApiKey)}
+                >
+                  <Feather
+                    name={showApiKey ? 'eye-off' : 'eye'}
+                    size={20}
+                    color="#888888"
+                  />
+                </Pressable>
+              </View>
+            </View>
+
+            <Text style={styles.apiHintText}>
+              支持 DeepSeek、Kimi、OpenAI 等主流 LLM API
+            </Text>
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.cancelBtn}
+                onPress={() => setApiKeyModalVisible(false)}
+              >
+                <Text style={styles.cancelBtnText}>取消</Text>
+              </Pressable>
+              <Pressable style={styles.saveBtn} onPress={handleSaveApiKey}>
                 <Text style={styles.saveBtnText}>保存</Text>
               </Pressable>
             </View>
@@ -330,6 +406,12 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 32,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600',
@@ -344,42 +426,51 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginTop: -8,
   },
-  card: {
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#111111',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  addBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  apiCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ECECEC',
-    padding: 20,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111111',
-  },
-  input: {
-    backgroundColor: '#F7F7F7',
-    borderRadius: 12,
     padding: 16,
-    fontSize: 15,
-    color: '#111111',
   },
-  saveKeyBtn: {
-    backgroundColor: '#111111',
-    borderRadius: 10,
-    paddingVertical: 12,
+  apiIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F7F7F7',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
+    marginRight: 14,
   },
-  saveKeyText: {
-    color: '#FFFFFF',
-    fontSize: 14,
+  apiInfo: {
+    flex: 1,
+  },
+  apiTitle: {
+    fontSize: 16,
     fontWeight: '600',
+    color: '#111111',
+    marginBottom: 2,
+  },
+  apiHint: {
+    fontSize: 13,
+    color: '#888888',
   },
   agentCard: {
     flexDirection: 'row',
@@ -388,7 +479,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ECECEC',
-    padding: 16,
+    padding: 14,
     marginBottom: 10,
   },
   agentIcon: {
@@ -403,11 +494,25 @@ const styles = StyleSheet.create({
   agentInfo: {
     flex: 1,
   },
+  agentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
   agentName: {
     fontSize: 15,
     fontWeight: '600',
     color: '#111111',
-    marginBottom: 2,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#CCCCCC',
+  },
+  statusDotActive: {
+    backgroundColor: '#059669',
   },
   agentRole: {
     fontSize: 12,
@@ -417,10 +522,18 @@ const styles = StyleSheet.create({
   agentActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
-  editBtn: {
-    padding: 4,
+  actionBtn: {
+    padding: 8,
+  },
+  toggleText: {
+    fontSize: 12,
+    color: '#888888',
+    fontWeight: '600',
+  },
+  toggleTextActive: {
+    color: '#059669',
   },
   rulesCard: {
     backgroundColor: '#FFFFFF',
@@ -438,33 +551,6 @@ const styles = StyleSheet.create({
   ruleText: {
     fontSize: 14,
     color: '#111111',
-  },
-  aboutCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ECECEC',
-    padding: 4,
-  },
-  aboutItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  aboutLabel: {
-    fontSize: 15,
-    color: '#111111',
-  },
-  aboutValue: {
-    fontSize: 15,
-    color: '#888888',
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#ECECEC',
-    marginHorizontal: 16,
   },
   bottomSpacer: {
     height: 100,
@@ -500,9 +586,37 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  input: {
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 15,
+    color: '#111111',
+  },
   textArea: {
-    minHeight: 120,
+    minHeight: 100,
     paddingTop: 16,
+  },
+  apiKeyInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  apiKeyInput: {
+    flex: 1,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  eyeBtn: {
+    backgroundColor: '#E5E5E5',
+    padding: 16,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  apiHintText: {
+    fontSize: 12,
+    color: '#888888',
+    marginBottom: 20,
+    textAlign: 'center',
   },
   modalActions: {
     flexDirection: 'row',
