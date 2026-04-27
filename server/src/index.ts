@@ -36,6 +36,7 @@ interface Agent {
   role: string;
   prompt: string;
   enabled: boolean;
+  order: number;
 }
 
 // 内存存储（生产环境应使用数据库）
@@ -61,6 +62,7 @@ const agents: Agent[] = [
 - 地图/区域划分
 - 核心规则设定`,
     enabled: true,
+    order: 1,
   },
   {
     id: '2',
@@ -86,6 +88,7 @@ const agents: Agent[] = [
 - 禁止挤眉弄眼、过度表情
 - 用反差制造笑点`,
     enabled: true,
+    order: 2,
   },
   {
     id: '3',
@@ -111,6 +114,7 @@ const agents: Agent[] = [
 - 记录伏笔内容和计划回收章节
 - 确保伏笔最终被回收`,
     enabled: true,
+    order: 3,
   },
   {
     id: '4',
@@ -140,6 +144,7 @@ const agents: Agent[] = [
 - 心理活动通过身体反应表现
 - 例如：紧张→手心出汗、腿软；愤怒→握拳、发抖`,
     enabled: false,
+    order: 4,
   },
   {
     id: '5',
@@ -171,6 +176,7 @@ const agents: Agent[] = [
 - 通过：输出"✅ 审核通过"
 - 打回：列出具体违规位置和原因`,
     enabled: true,
+    order: 5,
   },
   {
     id: '6',
@@ -196,6 +202,7 @@ const agents: Agent[] = [
 8. 空间坐标：（当前位置）
 9. 关系变化：（关系如何改变）`,
     enabled: true,
+    order: 6,
   },
 ];
 
@@ -579,6 +586,7 @@ app.put('/api/v1/agents/:id', (req, res) => {
     name: z.string().optional(),
     prompt: z.string().optional(),
     enabled: z.boolean().optional(),
+    order: z.number().optional(),
   });
 
   try {
@@ -592,8 +600,36 @@ app.put('/api/v1/agents/:id', (req, res) => {
     if (data.name) agent.name = data.name;
     if (data.prompt) agent.prompt = data.prompt;
     if (typeof data.enabled === 'boolean') agent.enabled = data.enabled;
+    if (typeof data.order === 'number') agent.order = data.order;
 
     res.json({ agent });
+  } catch (error) {
+    res.status(400).json({ error: 'Invalid request body' });
+  }
+});
+
+// 调整 Agent 顺序
+app.put('/api/v1/agents/reorder', (req, res) => {
+  const schema = z.object({
+    orders: z.array(z.object({
+      id: z.string(),
+      order: z.number(),
+    })),
+  });
+
+  try {
+    const { orders } = schema.parse(req.body);
+    
+    orders.forEach(({ id, order }) => {
+      const agent = agents.find(a => a.id === id);
+      if (agent) {
+        agent.order = order;
+      }
+    });
+
+    // 按 order 排序返回
+    const sortedAgents = [...agents].sort((a, b) => a.order - b.order);
+    res.json({ agents: sortedAgents });
   } catch (error) {
     res.status(400).json({ error: 'Invalid request body' });
   }

@@ -29,6 +29,7 @@ interface Agent {
   enabled: boolean;
   icon: string;
   apiId: string | null;
+  order: number;
 }
 
 export default function SettingsScreen() {
@@ -221,6 +222,7 @@ export default function SettingsScreen() {
       );
       Alert.alert('成功', 'Agent 已更新');
     } else {
+      const maxOrder = agents.reduce((max, a) => Math.max(max, a.order), 0);
       const newAgent: Agent = {
         id: Date.now().toString(),
         name: agentName.trim(),
@@ -229,6 +231,7 @@ export default function SettingsScreen() {
         enabled: true,
         icon: 'user',
         apiId: selectedApiId,
+        order: maxOrder + 1,
       };
       setAgents(prev => [...prev, newAgent]);
       Alert.alert('成功', 'Agent 已添加');
@@ -254,6 +257,54 @@ export default function SettingsScreen() {
     setAgents(prev =>
       prev.map(a => (a.id === id ? { ...a, enabled: !a.enabled } : a))
     );
+  };
+
+  // 上移
+  const handleMoveUp = async (id: string) => {
+    const sorted = [...agents].sort((a, b) => a.order - b.order);
+    const index = sorted.findIndex(a => a.id === id);
+    if (index > 0) {
+      const newOrder = sorted.map(a => {
+        if (a.id === id) return { ...a, order: a.order - 1 };
+        if (a.id === sorted[index - 1].id) return { ...a, order: a.order + 1 };
+        return a;
+      });
+      setAgents(newOrder);
+      // 同步到后端
+      try {
+        await fetch(`${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/reorder`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orders: newOrder.map(a => ({ id: a.id, order: a.order })) }),
+        });
+      } catch (e) {
+        console.error('保存顺序失败', e);
+      }
+    }
+  };
+
+  // 下移
+  const handleMoveDown = async (id: string) => {
+    const sorted = [...agents].sort((a, b) => a.order - b.order);
+    const index = sorted.findIndex(a => a.id === id);
+    if (index < sorted.length - 1) {
+      const newOrder = sorted.map(a => {
+        if (a.id === id) return { ...a, order: a.order + 1 };
+        if (a.id === sorted[index + 1].id) return { ...a, order: a.order - 1 };
+        return a;
+      });
+      setAgents(newOrder);
+      // 同步到后端
+      try {
+        await fetch(`${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/reorder`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orders: newOrder.map(a => ({ id: a.id, order: a.order })) }),
+        });
+      } catch (e) {
+        console.error('保存顺序失败', e);
+      }
+    }
   };
 
   const getAgentIcon = (iconName: string) => {
@@ -324,11 +375,22 @@ export default function SettingsScreen() {
               <Text style={styles.addBtnText}>添加</Text>
             </Pressable>
           </View>
-          <Text style={styles.sectionHint}>每个Agent独立选择API</Text>
+          <Text style={styles.sectionHint}>每个Agent独立选择API · 支持拖拽调整调用顺序</Text>
 
-          {agents.map(agent => (
+          {/* 排序说明 */}
+          <View style={styles.orderHint}>
+            <Feather name="info" size={14} color="#666666" />
+            <Text style={styles.orderHintText}>按数字顺序调用：1→2→3→...</Text>
+          </View>
+
+          {/* 按 order 排序显示 */}
+          {agents.sort((a, b) => a.order - b.order).map(agent => (
             <Pressable key={agent.id} style={styles.agentCard} onPress={() => handleViewAgentDetail(agent)}>
               <View style={styles.agentMain}>
+                {/* 顺序号 */}
+                <View style={styles.orderBadge}>
+                  <Text style={styles.orderBadgeText}>{agent.order}</Text>
+                </View>
                 <View style={styles.agentIcon}>
                   <Feather name={getAgentIcon(agent.icon) as any} size={18} color="#111111" />
                 </View>
@@ -341,15 +403,35 @@ export default function SettingsScreen() {
                 </View>
               </View>
               <View style={styles.agentActions}>
-                <Pressable style={styles.actionBtn} onPress={() => handleToggleAgent(agent.id)}>
+                {/* 上移按钮 */}
+                <Pressable 
+                  style={styles.orderBtn} 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleMoveUp(agent.id);
+                  }}
+                >
+                  <Feather name="chevron-up" size={16} color="#666666" />
+                </Pressable>
+                {/* 下移按钮 */}
+                <Pressable 
+                  style={styles.orderBtn} 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleMoveDown(agent.id);
+                  }}
+                >
+                  <Feather name="chevron-down" size={16} color="#666666" />
+                </Pressable>
+                <Pressable style={styles.actionBtn} onPress={(e) => { e.stopPropagation(); handleToggleAgent(agent.id); }}>
                   <Text style={[styles.toggleText, agent.enabled && styles.toggleTextActive]}>
                     {agent.enabled ? '启用' : '禁用'}
                   </Text>
                 </Pressable>
-                <Pressable style={styles.actionBtn} onPress={() => handleEditAgent(agent)}>
+                <Pressable style={styles.actionBtn} onPress={(e) => { e.stopPropagation(); handleEditAgent(agent); }}>
                   <Feather name="edit-2" size={16} color="#888888" />
                 </Pressable>
-                <Pressable style={styles.actionBtn} onPress={() => handleDeleteAgent(agent)}>
+                <Pressable style={styles.actionBtn} onPress={(e) => { e.stopPropagation(); handleDeleteAgent(agent); }}>
                   <Feather name="trash-2" size={16} color="#DC2626" />
                 </Pressable>
               </View>
@@ -598,6 +680,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginTop: -8,
   },
+  orderHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F7F7F7',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  orderHintText: {
+    fontSize: 12,
+    color: '#666666',
+  },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -674,6 +770,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  orderBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#111111',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  orderBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   agentIcon: {
     width: 40,
     height: 40,
@@ -714,10 +824,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 8,
+    gap: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#ECECEC',
     paddingTop: 12,
+  },
+  orderBtn: {
+    padding: 6,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 6,
   },
   actionBtn: {
     paddingVertical: 6,
