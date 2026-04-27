@@ -98,6 +98,8 @@ export default function SettingsScreen() {
   const [selectedApiId, setSelectedApiId] = useState<string | null>(null);
   const [detailAgent, setDetailAgent] = useState<Agent | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [moveModalVisible, setMoveModalVisible] = useState(false);
+  const [selectedAgentForMove, setSelectedAgentForMove] = useState<Agent | null>(null);
 
   // ============== Agent详情 ==============
   const handleViewAgentDetail = (agent: Agent) => {
@@ -259,51 +261,61 @@ export default function SettingsScreen() {
     );
   };
 
-  // 上移
-  const handleMoveUp = async (id: string) => {
-    const sorted = [...agents].sort((a, b) => a.order - b.order);
-    const index = sorted.findIndex(a => a.id === id);
-    if (index > 0) {
-      const newOrder = sorted.map(a => {
-        if (a.id === id) return { ...a, order: a.order - 1 };
-        if (a.id === sorted[index - 1].id) return { ...a, order: a.order + 1 };
-        return a;
-      });
-      setAgents(newOrder);
-      // 同步到后端
-      try {
-        await fetch(`${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/reorder`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orders: newOrder.map(a => ({ id: a.id, order: a.order })) }),
-        });
-      } catch (e) {
-        console.error('保存顺序失败', e);
-      }
-    }
+  // 显示移动位置对话框
+  const handleShowMoveDialog = (agent: Agent) => {
+    setSelectedAgentForMove(agent);
+    setMoveModalVisible(true);
   };
 
-  // 下移
-  const handleMoveDown = async (id: string) => {
+  // 移动到指定位置
+  const handleMoveToOrder = async (targetOrder: number) => {
+    if (!selectedAgentForMove) return;
+    
+    const currentOrder = selectedAgentForMove.order;
+    if (currentOrder === targetOrder) {
+      setMoveModalVisible(false);
+      return;
+    }
+
     const sorted = [...agents].sort((a, b) => a.order - b.order);
-    const index = sorted.findIndex(a => a.id === id);
-    if (index < sorted.length - 1) {
-      const newOrder = sorted.map(a => {
-        if (a.id === id) return { ...a, order: a.order + 1 };
-        if (a.id === sorted[index + 1].id) return { ...a, order: a.order - 1 };
+    let newOrder: Agent[];
+
+    if (targetOrder < currentOrder) {
+      // 向上移动：目标位置之后的往前移
+      newOrder = sorted.map(a => {
+        if (a.id === selectedAgentForMove.id) {
+          return { ...a, order: targetOrder };
+        }
+        if (a.order >= targetOrder && a.order < currentOrder) {
+          return { ...a, order: a.order + 1 };
+        }
         return a;
       });
-      setAgents(newOrder);
-      // 同步到后端
-      try {
-        await fetch(`${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/reorder`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orders: newOrder.map(a => ({ id: a.id, order: a.order })) }),
-        });
-      } catch (e) {
-        console.error('保存顺序失败', e);
-      }
+    } else {
+      // 向下移动：当前位置到目标位置之间的往后移
+      newOrder = sorted.map(a => {
+        if (a.id === selectedAgentForMove.id) {
+          return { ...a, order: targetOrder };
+        }
+        if (a.order > currentOrder && a.order <= targetOrder) {
+          return { ...a, order: a.order - 1 };
+        }
+        return a;
+      });
+    }
+
+    setAgents(newOrder);
+    setMoveModalVisible(false);
+    
+    // 同步到后端
+    try {
+      await fetch(`${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orders: newOrder.map(a => ({ id: a.id, order: a.order })) }),
+      });
+    } catch (e) {
+      console.error('保存顺序失败', e);
     }
   };
 
@@ -375,22 +387,10 @@ export default function SettingsScreen() {
               <Text style={styles.addBtnText}>添加</Text>
             </Pressable>
           </View>
-          <Text style={styles.sectionHint}>每个Agent独立选择API · 支持拖拽调整调用顺序</Text>
-
-          {/* 排序说明 */}
-          <View style={styles.orderHint}>
-            <Feather name="info" size={14} color="#666666" />
-            <Text style={styles.orderHintText}>按数字顺序调用：1→2→3→...</Text>
-          </View>
-
           {/* 按 order 排序显示 */}
           {agents.sort((a, b) => a.order - b.order).map(agent => (
-            <Pressable key={agent.id} style={styles.agentCard} onPress={() => handleViewAgentDetail(agent)}>
+            <Pressable key={agent.id} style={styles.agentCard} onPress={() => handleViewAgentDetail(agent)} onLongPress={() => handleShowMoveDialog(agent)}>
               <View style={styles.agentMain}>
-                {/* 顺序号 */}
-                <View style={styles.orderBadge}>
-                  <Text style={styles.orderBadgeText}>{agent.order}</Text>
-                </View>
                 <View style={styles.agentIcon}>
                   <Feather name={getAgentIcon(agent.icon) as any} size={18} color="#111111" />
                 </View>
@@ -403,25 +403,8 @@ export default function SettingsScreen() {
                 </View>
               </View>
               <View style={styles.agentActions}>
-                {/* 上移按钮 */}
-                <Pressable 
-                  style={styles.orderBtn} 
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleMoveUp(agent.id);
-                  }}
-                >
-                  <Feather name="chevron-up" size={16} color="#666666" />
-                </Pressable>
-                {/* 下移按钮 */}
-                <Pressable 
-                  style={styles.orderBtn} 
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleMoveDown(agent.id);
-                  }}
-                >
-                  <Feather name="chevron-down" size={16} color="#666666" />
+                <Pressable style={styles.orderBtn} onPress={(e) => { e.stopPropagation(); handleShowMoveDialog(agent); }}>
+                  <Text style={styles.orderBtnText}>排序</Text>
                 </Pressable>
                 <Pressable style={styles.actionBtn} onPress={(e) => { e.stopPropagation(); handleToggleAgent(agent.id); }}>
                   <Text style={[styles.toggleText, agent.enabled && styles.toggleTextActive]}>
@@ -631,6 +614,38 @@ export default function SettingsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* 移动位置选择对话框 */}
+      <Modal visible={moveModalVisible} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setMoveModalVisible(false)}>
+          <Pressable style={styles.moveModalContent} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.moveModalTitle}>移动到第几位</Text>
+            <Text style={styles.moveModalSubtitle}>当前：第 {selectedAgentForMove?.order} 位</Text>
+            <View style={styles.moveGrid}>
+              {[...agents].sort((a, b) => a.order - b.order).map((agent) => (
+                <Pressable
+                  key={agent.id}
+                  style={[
+                    styles.moveItem,
+                    agent.order === selectedAgentForMove?.order && styles.moveItemActive,
+                  ]}
+                  onPress={() => handleMoveToOrder(agent.order)}
+                >
+                  <Text style={[
+                    styles.moveItemText,
+                    agent.order === selectedAgentForMove?.order && styles.moveItemTextActive,
+                  ]}>
+                    {agent.order}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable style={styles.moveCancelBtn} onPress={() => setMoveModalVisible(false)}>
+              <Text style={styles.moveCancelText}>取消</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
@@ -679,20 +694,6 @@ const styles = StyleSheet.create({
     color: '#CCCCCC',
     marginBottom: 16,
     marginTop: -8,
-  },
-  orderHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F7F7F7',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  orderHintText: {
-    fontSize: 12,
-    color: '#666666',
   },
   addBtn: {
     flexDirection: 'row',
@@ -770,20 +771,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  orderBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#111111',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  orderBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
   agentIcon: {
     width: 40,
     height: 40,
@@ -833,6 +820,11 @@ const styles = StyleSheet.create({
     padding: 6,
     backgroundColor: '#F7F7F7',
     borderRadius: 6,
+  },
+  orderBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666666',
   },
   actionBtn: {
     paddingVertical: 6,
@@ -1056,5 +1048,63 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  // 移动位置对话框
+  moveModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    width: '80%',
+    maxWidth: 320,
+  },
+  moveModalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#111111',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  moveModalSubtitle: {
+    fontSize: 13,
+    color: '#888888',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  moveGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  moveItem: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  moveItemActive: {
+    backgroundColor: '#111111',
+    borderColor: '#111111',
+  },
+  moveItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#666666',
+  },
+  moveItemTextActive: {
+    color: '#FFFFFF',
+  },
+  moveCancelBtn: {
+    marginTop: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  moveCancelText: {
+    fontSize: 15,
+    color: '#888888',
   },
 });
