@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { Feather } from '@expo/vector-icons';
+
+const EXPO_PUBLIC_BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
 
 interface APIConfig {
   id: string;
@@ -36,14 +38,49 @@ export default function SettingsScreen() {
     { id: '2', name: 'Kimi', provider: 'kimi', apiKey: 'sk-xxx...xxx' },
   ]);
 
-  // Agent列表
-  const [agents, setAgents] = useState<Agent[]>([
-    { id: '1', name: '世界观架构师', role: 'system', prompt: '负责设计故事背景、世界观设定、历史文明、地理环境等宏观架构。', enabled: true, icon: 'globe', apiId: '1' },
-    { id: '2', name: '人物设定师', role: 'character', prompt: '负责塑造角色性格、外貌特征、行为动机、技能设定与成长轨迹。', enabled: true, icon: 'user', apiId: '1' },
-    { id: '3', name: '情节设计师', role: 'plot', prompt: '负责规划故事线、高潮转折、冲突设置与悬念埋设。', enabled: true, icon: 'git-branch', apiId: '2' },
-    { id: '4', name: '文笔润色师', role: 'style', prompt: '负责优化文字描写、对话风格、环境渲染与情感表达。', enabled: false, icon: 'edit', apiId: '2' },
-    { id: '5', name: '审核校对师', role: 'review', prompt: '负责检查逻辑漏洞、错别字、角色一致性与违规内容。', enabled: true, icon: 'check-circle', apiId: '1' },
-  ]);
+  // Agent列表（从后端获取）
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentsLoaded, setAgentsLoaded] = useState(false);
+
+  // 加载Agent列表
+  useEffect(() => {
+    fetchAgents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchAgents = async () => {
+    try {
+      const res = await fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents`);
+      const data = await res.json();
+      if (data.agents) {
+        const mappedAgents: Agent[] = data.agents.map((a: any, index: number) => ({
+          id: a.id,
+          name: a.name,
+          role: a.role,
+          prompt: a.prompt,
+          enabled: a.enabled,
+          icon: getIconByRole(a.role),
+          apiId: apis.length > 0 ? apis[index % apis.length].id : null,
+        }));
+        setAgents(mappedAgents);
+        setAgentsLoaded(true);
+      }
+    } catch (e) {
+      console.error('加载Agent失败:', e);
+    }
+  };
+
+  const getIconByRole = (role: string): string => {
+    const icons: Record<string, string> = {
+      system: 'globe',
+      character: 'user',
+      plot: 'git-branch',
+      style: 'edit',
+      review: 'check-circle',
+      memory: 'database',
+    };
+    return icons[role] || 'user';
+  };
 
   // 弹窗状态
   const [apiModalVisible, setApiModalVisible] = useState(false);
@@ -58,6 +95,14 @@ export default function SettingsScreen() {
   const [agentName, setAgentName] = useState('');
   const [agentPrompt, setAgentPrompt] = useState('');
   const [selectedApiId, setSelectedApiId] = useState<string | null>(null);
+  const [detailAgent, setDetailAgent] = useState<Agent | null>(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+
+  // ============== Agent详情 ==============
+  const handleViewAgentDetail = (agent: Agent) => {
+    setDetailAgent(agent);
+    setDetailModalVisible(true);
+  };
 
   // ============== API管理 ==============
   const handleAddApi = () => {
@@ -282,7 +327,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionHint}>每个Agent独立选择API</Text>
 
           {agents.map(agent => (
-            <View key={agent.id} style={styles.agentCard}>
+            <Pressable key={agent.id} style={styles.agentCard} onPress={() => handleViewAgentDetail(agent)}>
               <View style={styles.agentMain}>
                 <View style={styles.agentIcon}>
                   <Feather name={getAgentIcon(agent.icon) as any} size={18} color="#111111" />
@@ -308,7 +353,7 @@ export default function SettingsScreen() {
                   <Feather name="trash-2" size={16} color="#DC2626" />
                 </Pressable>
               </View>
-            </View>
+            </Pressable>
           ))}
         </View>
 
@@ -463,6 +508,44 @@ export default function SettingsScreen() {
                 <Text style={styles.saveBtnText}>保存</Text>
               </Pressable>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Agent详情弹窗 */}
+      <Modal visible={detailModalVisible} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setDetailModalVisible(false)}>
+          <Pressable style={[styles.modalContent, styles.detailModalContent]} onPress={e => e.stopPropagation()}>
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailTitle}>{detailAgent?.name}</Text>
+              <Pressable onPress={() => setDetailModalVisible(false)}>
+                <Feather name="x" size={24} color="#888888" />
+              </Pressable>
+            </View>
+            <View style={styles.detailInfo}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>角色类型：</Text>
+                <Text style={styles.detailValue}>{detailAgent?.role}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>状态：</Text>
+                <Text style={[styles.detailValue, detailAgent?.enabled ? styles.textGreen : styles.textRed]}>
+                  {detailAgent?.enabled ? '已启用' : '已禁用'}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>关联API：</Text>
+                <Text style={styles.detailValue}>{getApiName(detailAgent?.apiId || null)}</Text>
+              </View>
+            </View>
+            <View style={styles.detailDivider} />
+            <Text style={styles.detailSectionTitle}>规则详情</Text>
+            <ScrollView style={styles.detailScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.detailRules}>{detailAgent?.prompt}</Text>
+            </ScrollView>
+            <Pressable style={styles.detailCloseBtn} onPress={() => setDetailModalVisible(false)}>
+              <Text style={styles.detailCloseText}>关闭</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -783,6 +866,78 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // Agent详情弹窗样式
+  detailModalContent: {
+    maxHeight: '80%',
+    padding: 24,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  detailTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111111',
+  },
+  detailInfo: {
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#888888',
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#111111',
+    fontWeight: '500',
+  },
+  textGreen: {
+    color: '#059669',
+  },
+  textRed: {
+    color: '#DC2626',
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: '#ECECEC',
+    marginBottom: 16,
+  },
+  detailSectionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111111',
+    marginBottom: 12,
+  },
+  detailScroll: {
+    maxHeight: 300,
+  },
+  detailRules: {
+    fontSize: 14,
+    color: '#444444',
+    lineHeight: 22,
+  },
+  detailCloseBtn: {
+    backgroundColor: '#111111',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  detailCloseText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#FFFFFF',
