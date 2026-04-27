@@ -100,6 +100,7 @@ export default function SettingsScreen() {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [moveModalVisible, setMoveModalVisible] = useState(false);
   const [selectedAgentForMove, setSelectedAgentForMove] = useState<Agent | null>(null);
+  const [actionMenuAgent, setActionMenuAgent] = useState<Agent | null>(null);
 
   // ============== Agent详情 ==============
   const handleViewAgentDetail = (agent: Agent) => {
@@ -403,21 +404,33 @@ export default function SettingsScreen() {
                 </View>
               </View>
               <View style={styles.agentActions}>
-                <Pressable style={styles.orderBtn} onPress={(e) => { e.stopPropagation(); handleShowMoveDialog(agent); }}>
-                  <Text style={styles.orderBtnText}>排序</Text>
-                </Pressable>
-                <Pressable style={styles.actionBtn} onPress={(e) => { e.stopPropagation(); handleToggleAgent(agent.id); }}>
-                  <Text style={[styles.toggleText, agent.enabled && styles.toggleTextActive]}>
-                    {agent.enabled ? '启用' : '禁用'}
-                  </Text>
-                </Pressable>
-                <Pressable style={styles.actionBtn} onPress={(e) => { e.stopPropagation(); handleEditAgent(agent); }}>
-                  <Feather name="edit-2" size={16} color="#888888" />
-                </Pressable>
-                <Pressable style={styles.actionBtn} onPress={(e) => { e.stopPropagation(); handleDeleteAgent(agent); }}>
-                  <Feather name="trash-2" size={16} color="#DC2626" />
+                <Pressable 
+                  style={styles.moreBtn} 
+                  onPress={(e) => { e.stopPropagation(); setActionMenuAgent(actionMenuAgent?.id === agent.id ? null : agent); }}
+                >
+                  <Feather name="more-vertical" size={20} color="#888888" />
                 </Pressable>
               </View>
+              {actionMenuAgent?.id === agent.id && (
+                <View style={styles.actionMenu}>
+                  <Pressable style={styles.actionMenuItem} onPress={() => { handleShowMoveDialog(agent); setActionMenuAgent(null); }}>
+                    <Feather name="move" size={16} color="#666666" />
+                    <Text style={styles.actionMenuText}>调整顺序</Text>
+                  </Pressable>
+                  <Pressable style={styles.actionMenuItem} onPress={() => { handleToggleAgent(agent.id); setActionMenuAgent(null); }}>
+                    <Feather name={agent.enabled ? "pause" : "play"} size={16} color="#666666" />
+                    <Text style={styles.actionMenuText}>{agent.enabled ? '禁用' : '启用'}</Text>
+                  </Pressable>
+                  <Pressable style={styles.actionMenuItem} onPress={() => { handleEditAgent(agent); setActionMenuAgent(null); }}>
+                    <Feather name="edit-2" size={16} color="#666666" />
+                    <Text style={styles.actionMenuText}>编辑</Text>
+                  </Pressable>
+                  <Pressable style={styles.actionMenuItem} onPress={() => { handleDeleteAgent(agent); setActionMenuAgent(null); }}>
+                    <Feather name="trash-2" size={16} color="#DC2626" />
+                    <Text style={[styles.actionMenuText, {color: '#DC2626'}]}>删除</Text>
+                  </Pressable>
+                </View>
+              )}
             </Pressable>
           ))}
         </View>
@@ -811,10 +824,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ECECEC',
-    paddingTop: 12,
+  },
+  moreBtn: {
+    padding: 4,
+  },
+  actionMenu: {
+    position: 'absolute',
+    right: 16,
+    top: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    minWidth: 140,
+  },
+  actionMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    gap: 10,
+  },
+  actionMenuText: {
+    fontSize: 14,
+    color: '#333333',
   },
   orderBtn: {
     padding: 6,
