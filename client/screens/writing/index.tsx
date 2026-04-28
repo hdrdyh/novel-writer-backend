@@ -36,19 +36,28 @@ export default function WritingScreen() {
   const [generationProgress, setGenerationProgress] = useState('');
   const [currentChapterInfo, setCurrentChapterInfo] = useState('');  // 当前写作的章节信息
 
-  // 每次进入页面时清空状态，确保是新的一章
+  // 如果有参数（从粗纲页跳转），使用参数初始化；否则清空
   useFocusEffect(
     useCallback(() => {
-      setContent('');
-      setEditedContent('');
+      if (params.chapterNumber && params.outline) {
+        // 从粗纲页跳转过来，使用传入的参数
+        setChapterNum(params.chapterNumber);
+        setChapterOutline(params.outline);
+        setCurrentChapterInfo(`第${params.chapterNumber}章`);
+        setContent('');
+        setEditedContent('');
+      } else {
+        // 直接进入页面，清空状态
+        setChapterNum('');
+        setChapterOutline('');
+        setContent('');
+        setEditedContent('');
+      }
       setIsGenerating(false);
       setIsEditMode(false);
       setGenerationProgress('');
-      setCurrentChapterInfo('');
       setSavedChapters([]);
-      setChapterNum('');
-      setChapterOutline('');
-    }, [])
+    }, [params.chapterNumber, params.outline])
   );
 
   // 模拟流式生成的示例内容

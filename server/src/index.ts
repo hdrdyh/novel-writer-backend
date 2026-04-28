@@ -37,6 +37,7 @@ interface Agent {
   prompt: string;
   enabled: boolean;
   order: number;
+  apiId?: string;
 }
 
 // 内存存储（生产环境应使用数据库）
@@ -281,7 +282,21 @@ ${outline}
 ${memoryContext.length > 0 ? `【相关记忆上下文】
 ${memoryContext.map(m => `- ${m}`).join('\n')}` : ''}
 
-请根据章纲创作本章正文。`;
+【写作要求】
+请根据章纲创作本章正文，要求：
+1. 总字数：2000-3000字
+2. 分成3个小段落，字数平均分配（约700-1000字/段）
+3. 段落之间用空行分隔
+4. 严格遵守以下写作铁律：
+   - 禁用破折号（——）和分号（；）
+   - 外貌描写不超过20字
+   - 连续对话必须有动作描写
+   - 心理活动写身体反应
+   - 禁用心理标签词（感到、觉得、意识到）
+   - 打斗描写不超过200字
+5. 禁止嗅觉描写（铁锈味、泥土芬芳等）
+6. 结尾必须有钩子（悬念）
+7. 保持冷幽默风格`;
 }
 
 // 工作流节点3：代码硬过滤
@@ -421,7 +436,7 @@ app.post('/api/v1/writing/generate', async (req, res) => {
             { role: 'user', content: context },
           ],
           temperature: 0.7,
-          max_tokens: 3000,
+          max_tokens: 3500,
           stream: true,
         }),
       });
