@@ -17,7 +17,8 @@ import { useFocusEffect } from 'expo-router';
 import RNSSE from 'react-native-sse';
 
 // 获取后端地址
-const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
+// 重要：确保后端服务可通过此地址访问
+const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://9.129.239.216:9091';
 
 export default function WritingScreen() {
   const params = useSafeSearchParams<{
