@@ -12,7 +12,7 @@ import {
 import { Screen } from '@/components/Screen';
 import { Feather } from '@expo/vector-icons';
 
-const EXPO_PUBLIC_BACKEND_BASE_URL = 'https://novel-writer-backend.up.railway.app';
+const EXPO_PUBLIC_BACKEND_BASE_URL = 'https://novel-writer-backend-production-24e9.up.railway.app';
 
 interface APIConfig {
   id: string;

@@ -18,7 +18,7 @@ import RNSSE from 'react-native-sse';
 
 // 获取后端地址
 // 重要：确保后端服务可通过此地址访问
-const API_BASE_URL = 'https://novel-writer-backend.up.railway.app';
+const API_BASE_URL = 'https://novel-writer-backend-production-24e9.up.railway.app';
 
 export default function WritingScreen() {
   const params = useSafeSearchParams<{

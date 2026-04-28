@@ -31,12 +31,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      process.env.EXPO_PUBLIC_BACKEND_BASE_URL ? [
+      [
         "expo-router",
         {
-          "origin": process.env.EXPO_PUBLIC_BACKEND_BASE_URL
+          "origin": "https://novel-writer-backend-production-24e9.up.railway.app"
         }
-      ] : 'expo-router',
+      ],
       [
         "expo-splash-screen",
         {
