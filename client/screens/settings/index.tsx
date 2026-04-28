@@ -639,22 +639,24 @@ export default function SettingsScreen() {
             <Text style={styles.moveModalTitle}>移动到第几位</Text>
             <Text style={styles.moveModalSubtitle}>当前：第 {selectedAgentForMove?.order} 位</Text>
             <View style={styles.moveGrid}>
-              {[...agents].sort((a, b) => a.order - b.order).map((agent) => (
-                <Pressable
-                  key={agent.id}
-                  style={[
-                    styles.moveItem,
-                    agent.order === selectedAgentForMove?.order && styles.moveItemActive,
-                  ]}
-                  onPress={() => handleMoveToOrder(agent.order)}
-                >
-                  <Text style={[
-                    styles.moveItemText,
-                    agent.order === selectedAgentForMove?.order && styles.moveItemTextActive,
-                  ]}>
-                    {agent.order}
-                  </Text>
-                </Pressable>
+              {[...agents].sort((a, b) => a.order - b.order).map((agent, index) => (
+                agent.enabled && (
+                  <Pressable
+                    key={agent.id}
+                    style={[
+                      styles.moveItem,
+                      agent.order === selectedAgentForMove?.order && styles.moveItemActive,
+                    ]}
+                    onPress={() => handleMoveToOrder(agent.order)}
+                  >
+                    <Text style={[
+                      styles.moveItemText,
+                      agent.order === selectedAgentForMove?.order && styles.moveItemTextActive,
+                    ]}>
+                      {index + 1}
+                    </Text>
+                  </Pressable>
+                )
               ))}
             </View>
             <Pressable style={styles.moveCancelBtn} onPress={() => setMoveModalVisible(false)}>
