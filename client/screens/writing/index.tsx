@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { Screen } from '@/components/Screen';
 import { Feather } from '@expo/vector-icons';
 import { useSafeSearchParams, useSafeRouter } from '@/hooks/useSafeRouter';
+import { useFocusEffect } from 'expo-router';
 
 export default function WritingScreen() {
   const params = useSafeSearchParams<{
@@ -34,6 +35,21 @@ export default function WritingScreen() {
   const [savedChapters, setSavedChapters] = useState<string[]>([]);
   const [generationProgress, setGenerationProgress] = useState('');
   const [currentChapterInfo, setCurrentChapterInfo] = useState('');  // 当前写作的章节信息
+
+  // 每次进入页面时清空状态，确保是新的一章
+  useFocusEffect(
+    useCallback(() => {
+      setContent('');
+      setEditedContent('');
+      setIsGenerating(false);
+      setIsEditMode(false);
+      setGenerationProgress('');
+      setCurrentChapterInfo('');
+      setSavedChapters([]);
+      setChapterNum('');
+      setChapterOutline('');
+    }, [])
+  );
 
   // 模拟流式生成的示例内容
   const mockNovelContent = `春风拂过青石镇，带来泥土与野花的气息。
