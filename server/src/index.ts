@@ -608,6 +608,19 @@ app.put('/api/v1/agents/:id', (req, res) => {
   }
 });
 
+// 删除 Agent
+app.delete('/api/v1/agents/:id', (req, res) => {
+  const { id } = req.params;
+  const index = agents.findIndex(a => a.id === id);
+  
+  if (index === -1) {
+    return res.status(404).json({ error: 'Agent not found' });
+  }
+  
+  agents.splice(index, 1);
+  res.json({ success: true });
+});
+
 // 调整 Agent 顺序
 app.put('/api/v1/agents/reorder', (req, res) => {
   const schema = z.object({

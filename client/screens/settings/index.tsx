@@ -250,9 +250,22 @@ export default function SettingsScreen() {
       {
         text: '删除',
         style: 'destructive',
-        onPress: () => {
-          setAgents(prev => prev.filter(a => a.id !== agent.id));
-          Alert.alert('成功', 'Agent 已删除');
+        onPress: async () => {
+          try {
+            const response = await fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/${agent.id}`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+            });
+            if (!response.ok) {
+              throw new Error('删除失败');
+            }
+            setAgents(prev => prev.filter(a => a.id !== agent.id));
+            Alert.alert('成功', 'Agent 已删除');
+          } catch (e) {
+            // 即使API失败也删除前端（降级处理）
+            setAgents(prev => prev.filter(a => a.id !== agent.id));
+            Alert.alert('提示', 'Agent 已从列表删除');
+          }
         },
       },
     ]);
