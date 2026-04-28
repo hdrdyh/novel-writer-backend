@@ -102,6 +102,7 @@ export default function SettingsScreen() {
   const [moveModalVisible, setMoveModalVisible] = useState(false);
   const [selectedAgentForMove, setSelectedAgentForMove] = useState<Agent | null>(null);
   const [actionMenuAgent, setActionMenuAgent] = useState<Agent | null>(null);
+  const [actionMenuModalVisible, setActionMenuModalVisible] = useState(false);
 
   // ============== Agent详情 ==============
   const handleViewAgentDetail = (agent: Agent) => {
@@ -410,31 +411,11 @@ export default function SettingsScreen() {
               <View style={styles.agentActions}>
                 <Pressable 
                   style={styles.moreBtn} 
-                  onPress={(e) => { e.stopPropagation(); setActionMenuAgent(actionMenuAgent?.id === agent.id ? null : agent); }}
+                  onPress={(e) => { e.stopPropagation(); setActionMenuAgent(agent); setActionMenuModalVisible(true); }}
                 >
                   <Feather name="more-vertical" size={20} color="#888888" />
                 </Pressable>
               </View>
-              {actionMenuAgent?.id === agent.id && (
-                <View style={styles.actionMenu}>
-                  <Pressable style={styles.actionMenuItem} onPress={() => { handleShowMoveDialog(agent); setActionMenuAgent(null); }}>
-                    <Feather name="move" size={16} color="#666666" />
-                    <Text style={styles.actionMenuText}>调整顺序</Text>
-                  </Pressable>
-                  <Pressable style={styles.actionMenuItem} onPress={() => { handleToggleAgent(agent.id); setActionMenuAgent(null); }}>
-                    <Feather name={agent.enabled ? "pause" : "play"} size={16} color="#666666" />
-                    <Text style={styles.actionMenuText}>{agent.enabled ? '禁用' : '启用'}</Text>
-                  </Pressable>
-                  <Pressable style={styles.actionMenuItem} onPress={() => { handleEditAgent(agent); setActionMenuAgent(null); }}>
-                    <Feather name="edit-2" size={16} color="#666666" />
-                    <Text style={styles.actionMenuText}>编辑</Text>
-                  </Pressable>
-                  <Pressable style={styles.actionMenuItem} onPress={() => { handleDeleteAgent(agent); setActionMenuAgent(null); }}>
-                    <Feather name="trash-2" size={16} color="#DC2626" />
-                    <Text style={[styles.actionMenuText, {color: '#DC2626'}]}>删除</Text>
-                  </Pressable>
-                </View>
-              )}
             </Pressable>
           ))}
         </View>
@@ -665,6 +646,36 @@ export default function SettingsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* 操作菜单 */}
+      <Modal visible={actionMenuModalVisible} transparent animationType="fade" onRequestClose={() => setActionMenuModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setActionMenuModalVisible(false)}>
+          <Pressable style={styles.actionMenuModal} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.actionMenuTitle}>{actionMenuAgent?.name}</Text>
+            <Pressable style={styles.actionMenuItem} onPress={() => { setActionMenuModalVisible(false); handleShowMoveDialog(actionMenuAgent!); }}>
+              <Feather name="move" size={18} color="#333333" />
+              <Text style={styles.actionMenuText}>调整顺序</Text>
+            </Pressable>
+            <Pressable style={styles.actionMenuItem} onPress={() => { setActionMenuModalVisible(false); handleToggleAgent(actionMenuAgent!.id); }}>
+              <Feather name={actionMenuAgent?.enabled ? "pause-circle" : "play-circle"} size={18} color="#333333" />
+              <Text style={styles.actionMenuText}>{actionMenuAgent?.enabled ? '禁用' : '启用'}</Text>
+            </Pressable>
+            <Pressable style={styles.actionMenuItem} onPress={() => { setActionMenuModalVisible(false); handleEditAgent(actionMenuAgent!); }}>
+              <Feather name="edit-2" size={18} color="#333333" />
+              <Text style={styles.actionMenuText}>编辑</Text>
+            </Pressable>
+            <View style={styles.actionMenuDivider} />
+            <Pressable style={styles.actionMenuItem} onPress={() => { setActionMenuModalVisible(false); handleDeleteAgent(actionMenuAgent!); }}>
+              <Feather name="trash-2" size={18} color="#DC2626" />
+              <Text style={[styles.actionMenuText, {color: '#DC2626'}]}>删除</Text>
+            </Pressable>
+            <View style={styles.actionMenuDivider} />
+            <Pressable style={styles.actionMenuCancel} onPress={() => setActionMenuModalVisible(false)}>
+              <Text style={styles.actionMenuCancelText}>取消</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
@@ -853,19 +864,6 @@ const styles = StyleSheet.create({
     elevation: 20,
     minWidth: 120,
   },
-  actionMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  actionMenuText: {
-    fontSize: 14,
-    color: '#333333',
-  },
   orderBtn: {
     padding: 6,
     backgroundColor: '#F7F7F7',
@@ -913,6 +911,48 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  actionMenuModal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    minWidth: 200,
+    maxWidth: 280,
+  },
+  actionMenuTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111111',
+    textAlign: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+    marginBottom: 8,
+  },
+  actionMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    gap: 14,
+  },
+  actionMenuText: {
+    fontSize: 15,
+    color: '#333333',
+  },
+  actionMenuDivider: {
+    height: 1,
+    backgroundColor: '#EEEEEE',
+    marginVertical: 4,
+  },
+  actionMenuCancel: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  actionMenuCancelText: {
+    fontSize: 15,
+    color: '#888888',
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
