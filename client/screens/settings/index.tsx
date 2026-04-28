@@ -308,16 +308,19 @@ export default function SettingsScreen() {
     setAgents(newOrder);
     setMoveModalVisible(false);
     
-    // 同步到后端
-    try {
-      await fetch(`${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/reorder`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orders: newOrder.map(a => ({ id: a.id, order: a.order })) }),
-      });
-    } catch (e) {
-      console.error('保存顺序失败', e);
-    }
+      // 同步到后端
+      try {
+        const response = await fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/reorder`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orders: newOrder.map(a => ({ id: a.id, order: a.order })) }),
+        });
+        if (!response.ok) {
+          throw new Error('保存失败');
+        }
+      } catch (e) {
+        Alert.alert('错误', '调整顺序失败');
+      }
   };
 
   const getAgentIcon = (iconName: string) => {
@@ -1119,28 +1122,24 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   moveItem: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#D1D5DB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 3,
+    borderColor: '#E5E7EB',
+    margin: 4,
   },
   moveItemActive: {
-    backgroundColor: '#111111',
-    borderColor: '#111111',
+    backgroundColor: '#1F2937',
+    borderColor: '#1F2937',
   },
   moveItemText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#374151',
+    color: '#6B7280',
   },
   moveItemTextActive: {
     color: '#FFFFFF',
