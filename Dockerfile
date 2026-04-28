@@ -5,8 +5,8 @@ WORKDIR /app
 # 复制 package.json
 COPY server/package.json ./
 
-# 安装依赖
-RUN npm install
+# 安装所有依赖（包括 devDependencies）
+RUN npm install --include=dev
 
 # 复制源代码
 COPY server/src ./src
@@ -18,4 +18,4 @@ EXPOSE 5000
 ENV PORT=5000
 
 # 启动命令
-CMD ["npm", "start"]
+CMD ["npx", "tsx", "src/index.ts"]
