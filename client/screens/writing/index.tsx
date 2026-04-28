@@ -22,9 +22,10 @@ export default function WritingScreen() {
   }>();
   const router = useSafeRouter();
   const scrollRef = useRef<ScrollView>(null);
+  const contentScrollRef = useRef<ScrollView>(null);  // 生成内容的滚动引用
 
-  const [chapterNum, setChapterNum] = useState(params.chapterNumber || '');
-  const [chapterOutline, setChapterOutline] = useState(params.outline || '');
+  const [chapterNum, setChapterNum] = useState('');  // 跳转后为空状态
+  const [chapterOutline, setChapterOutline] = useState('');  // 跳转后为空状态
   const [content, setContent] = useState('');
   const [editedContent, setEditedContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -32,6 +33,7 @@ export default function WritingScreen() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [savedChapters, setSavedChapters] = useState<string[]>([]);
   const [generationProgress, setGenerationProgress] = useState('');
+  const [currentChapterInfo, setCurrentChapterInfo] = useState('');  // 当前写作的章节信息
 
   // 模拟流式生成的示例内容
   const mockNovelContent = `春风拂过青石镇，带来泥土与野花的气息。
@@ -87,14 +89,17 @@ export default function WritingScreen() {
         setContent(prev => prev + chunk);
         setGenerationProgress(`已生成 ${index + 1}/${mockNovelContent.length} 字`);
         index++;
-        scrollRef.current?.scrollToEnd({ animated: true });
+        // 滚动到底部
+        setTimeout(() => {
+          contentScrollRef.current?.scrollToEnd({ animated: true });
+        }, 10);
       } else {
         clearInterval(timer);
         setIsGenerating(false);
         setGenerationProgress('生成完成');
         setEditedContent(mockNovelContent);
       }
-    }, 50);
+    }, 30);  // 加快速度
   };
 
   const handleSave = () => {
@@ -116,7 +121,18 @@ export default function WritingScreen() {
             setTimeout(() => {
               setSavedChapters(prev => [...prev, `第${chapterNum}章`]);
               setIsSaving(false);
-              Alert.alert('成功', `第${chapterNum}章已存入记忆库`);
+              Alert.alert('成功', `第${chapterNum}章已存入记忆库`, [
+                {
+                  text: '确定',
+                  onPress: () => {
+                    // 保存成功后清空所有内容
+                    setContent('');
+                    setEditedContent('');
+                    setChapterOutline('');
+                    setCurrentChapterInfo('');
+                  }
+                }
+              ]);
             }, 500);
           },
         },
@@ -218,7 +234,7 @@ export default function WritingScreen() {
                   <Feather name="feather" size={24} color="#111111" />
                   <Text style={styles.generatingText}>正在写作...</Text>
                 </View>
-                <ScrollView style={styles.generatingContent} showsVerticalScrollIndicator={false}>
+                <ScrollView ref={contentScrollRef} style={styles.generatingContent} showsVerticalScrollIndicator={false}>
                   <Text style={styles.generatedText}>{content}</Text>
                   <View style={styles.cursor} />
                 </ScrollView>
