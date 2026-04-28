@@ -216,9 +216,9 @@ interface LLMConfig {
 
 // 获取 LLM 配置（从请求头或环境变量获取）
 const getLLMConfig = (req: express.Request): LLMConfig => {
-  const apiKey = req.headers['x-api-key'] as string || process.env.LLM_API_KEY || '';
+  const apiKey = req.headers['x-api-key'] as string || process.env.LLM_API_KEY || 'sk-2d333ed0b01a4fe899df1c7c6cbe5617';
   const baseUrl = req.headers['x-base-url'] as string || 'https://api.deepseek.com';
-  const model = req.headers['x-model'] as string || 'deepseek-chat';
+  const model = req.headers['x-model'] as string || 'deepseek-v4-flash';
   return { apiKey, baseUrl, model };
 };
 
