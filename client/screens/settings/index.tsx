@@ -1125,21 +1125,21 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#DBEAFE', // 浅蓝色背景 - 清晰可见
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#E5E7EB',
+    borderColor: '#3B82F6', // 蓝色边框
     margin: 4,
   },
   moveItemActive: {
-    backgroundColor: '#1F2937',
-    borderColor: '#1F2937',
+    backgroundColor: '#1E40AF', // 深蓝色背景
+    borderColor: '#1E40AF',
   },
   moveItemText: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#6B7280',
+    color: '#1E40AF', // 深蓝色数字
   },
   moveItemTextActive: {
     color: '#FFFFFF',
