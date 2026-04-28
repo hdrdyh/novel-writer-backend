@@ -14,6 +14,10 @@ import { Screen } from '@/components/Screen';
 import { Feather } from '@expo/vector-icons';
 import { useSafeSearchParams, useSafeRouter } from '@/hooks/useSafeRouter';
 import { useFocusEffect } from 'expo-router';
+import RNSSE from 'react-native-sse';
+
+// 获取后端地址
+const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
 
 export default function WritingScreen() {
   const params = useSafeSearchParams<{
@@ -60,25 +64,6 @@ export default function WritingScreen() {
     }, [params.chapterNumber, params.outline])
   );
 
-  // 模拟流式生成的示例内容
-  const mockNovelContent = `春风拂过青石镇，带来泥土与野花的气息。
-
-张远站在废墟之中，四周是断壁残垣。曾经繁华的街道如今杂草丛生，只剩下几座摇摇欲坠的木屋。
-
-"这里就是异世界？"他低头看着自己身上的现代服装，嘴角泛起苦笑。
-
-就在这时，一道苍老的声音从身后传来："年轻人，你是来参加觉醒仪式的吗？"
-
-张远转身，只见一位白发老者拄着拐杖，浑浊的眼睛里却闪烁着精光。老者身后，还站着十几个和他年龄相仿的少年少女。
-
-"觉醒仪式？"张远心中一动。
-
-老者点头道："这个世界，力量才是一切。只有觉醒灵脉，才能成为真正的强者。"
-
-远处传来阵阵喧嚣，似乎有什么大事即将发生。
-
-张远握紧了拳头，眼中闪过一丝期待的光芒。`;
-
   const handleGenerate = () => {
     if (!chapterOutline) {
       Alert.alert('提示', '请先输入章纲内容');
@@ -101,30 +86,81 @@ export default function WritingScreen() {
   };
 
   const startGenerating = () => {
+    if (!chapterOutline) {
+      Alert.alert('提示', '请先输入章纲内容');
+      return;
+    }
+
     setIsGenerating(true);
     setContent('');
     setEditedContent('');
-    setGenerationProgress('');
+    setGenerationProgress('正在连接...');
 
-    // 模拟流式输出
-    let index = 0;
-    const timer = setInterval(() => {
-      if (index < mockNovelContent.length) {
-        const chunk = mockNovelContent[index];
-        setContent(prev => prev + chunk);
-        setGenerationProgress(`已生成 ${index + 1}/${mockNovelContent.length} 字`);
-        index++;
-        // 滚动到底部
-        setTimeout(() => {
-          contentScrollRef.current?.scrollToEnd({ animated: true });
-        }, 10);
-      } else {
-        clearInterval(timer);
-        setIsGenerating(false);
-        setGenerationProgress('生成完成');
-        setEditedContent(mockNovelContent);
+    // 调用后端写作接口
+    fetch(`${API_BASE_URL}/api/v1/writing/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chapterNum: chapterNum,
+        outline: chapterOutline,
+        context: ''  // 可以后续添加上下文
+      }),
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('请求失败');
       }
-    }, 30);  // 加快速度
+      setGenerationProgress('正在生成...');
+      
+      // 使用RNSSE处理SSE流
+      const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chapterNum: chapterNum,
+          outline: chapterOutline,
+          context: ''
+        }),
+      });
+
+      sse.addEventListener('message', (event) => {
+        if (event.data === '[DONE]') {
+          sse.close();
+          setIsGenerating(false);
+          setGenerationProgress('生成完成');
+          setEditedContent(content);
+        } else {
+          setContent(prev => prev + event.data);
+          setGenerationProgress(`已生成 ${content.length} 字`);
+          // 滚动到底部
+          setTimeout(() => {
+            contentScrollRef.current?.scrollToEnd({ animated: false });
+          }, 10);
+        }
+      });
+
+      sse.addEventListener('error', (error) => {
+        console.error('SSE错误:', error);
+        setIsGenerating(false);
+        setGenerationProgress('生成失败');
+        Alert.alert('错误', '生成失败，请重试');
+      });
+
+      sse.addEventListener('close', () => {
+        setIsGenerating(false);
+        setEditedContent(content);
+      });
+    })
+    .catch(error => {
+      console.error('请求错误:', error);
+      setIsGenerating(false);
+      setGenerationProgress('生成失败');
+      Alert.alert('错误', '连接服务器失败，请检查网络');
+    });
   };
 
   const handleSave = () => {
