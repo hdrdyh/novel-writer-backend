@@ -54,14 +54,15 @@ export default function SettingsScreen() {
       const res = await fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents`);
       const data = await res.json();
       if (data.agents) {
-        const mappedAgents: Agent[] = data.agents.map((a: any, index: number) => ({
+        const mappedAgents: Agent[] = data.agents.map((a: any) => ({
           id: a.id,
           name: a.name,
           role: a.role,
           prompt: a.prompt,
           enabled: a.enabled,
+          order: a.order || 0, // 确保有order字段
           icon: getIconByRole(a.role),
-          apiId: apis.length > 0 ? apis[index % apis.length].id : null,
+          apiId: a.apiId || null,
         }));
         setAgents(mappedAgents);
         setAgentsLoaded(true);
@@ -1122,27 +1123,27 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   moveItem: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#DBEAFE', // 浅蓝色背景 - 清晰可见
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF', // 白色背景
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#3B82F6', // 蓝色边框
+    borderWidth: 2,
+    borderColor: '#D1D5DB', // 灰色细边框
     margin: 4,
   },
   moveItemActive: {
-    backgroundColor: '#1E40AF', // 深蓝色背景
-    borderColor: '#1E40AF',
+    backgroundColor: '#F3F4F6', // 浅灰色背景
+    borderColor: '#9CA3AF', // 深灰边框
   },
   moveItemText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1E40AF', // 深蓝色数字
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151', // 深灰色数字
   },
   moveItemTextActive: {
-    color: '#FFFFFF',
+    color: '#111827',
   },
   moveCancelBtn: {
     marginTop: 16,
