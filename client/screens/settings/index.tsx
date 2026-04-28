@@ -88,9 +88,20 @@ export default function SettingsScreen() {
   const [apiModalVisible, setApiModalVisible] = useState(false);
   const [editingApi, setEditingApi] = useState<APIConfig | null>(null);
   const [apiName, setApiName] = useState('');
-  const [apiProvider, setApiProvider] = useState('');
+  const [apiProvider, setApiProvider] = useState('deepseek');
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [isTestingApi, setIsTestingApi] = useState(false);
+  const [apiTestResult, setApiTestResult] = useState<{success: boolean; message: string} | null>(null);
+
+  // Provider选项
+  const providerOptions = [
+    { value: 'deepseek', label: 'DeepSeek', endpoint: 'https://api.deepseek.com', keyFormat: 'sk-' },
+    { value: 'openai', label: 'OpenAI', endpoint: 'https://api.openai.com', keyFormat: 'sk-' },
+    { value: 'kimi', label: 'Kimi', endpoint: 'https://api.moonshot.cn', keyFormat: 'sk-' },
+    { value: 'zhipu', label: '智谱AI', endpoint: 'https://open.bigmodel.cn', keyFormat: '' },
+    { value: 'custom', label: '自定义', endpoint: '', keyFormat: '' },
+  ];
 
   const [agentModalVisible, setAgentModalVisible] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
@@ -129,13 +140,54 @@ export default function SettingsScreen() {
     setApiModalVisible(true);
   };
 
+  const handleTestApi = async () => {
+    if (!apiProvider.trim()) {
+      Alert.alert('提示', '请先选择 API Provider');
+      return;
+    }
+    if (!apiKeyInput.trim()) {
+      Alert.alert('提示', '请先输入 API Key');
+      return;
+    }
+
+    setIsTestingApi(true);
+    setApiTestResult(null);
+
+    try {
+      const provider = providerOptions.find(p => p.value === apiProvider);
+      const endpoint = provider?.endpoint || '';
+
+      if (!endpoint) {
+        throw new Error('该 Provider 需要配置自定义端点');
+      }
+
+      const response = await fetch(`${endpoint}/v1/models`, {
+        headers: {
+          'Authorization': `Bearer ${apiKeyInput.trim()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        setApiTestResult({ success: true, message: '连接成功！API Key 有效' });
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `错误码: ${response.status}`);
+      }
+    } catch (error: any) {
+      setApiTestResult({ success: false, message: error.message || '连接失败' });
+    } finally {
+      setIsTestingApi(false);
+    }
+  };
+
   const handleSaveApi = () => {
     if (!apiName.trim()) {
       Alert.alert('提示', '请输入 API 名称');
       return;
     }
     if (!apiProvider.trim()) {
-      Alert.alert('提示', '请输入 API Provider（如 deepseek、kimi）');
+      Alert.alert('提示', '请选择 API Provider');
       return;
     }
     if (!apiKeyInput.trim()) {
@@ -512,7 +564,19 @@ export default function SettingsScreen() {
               </View>
             </View>
 
+            {/* 测试结果提示 */}
+            {apiTestResult && (
+              <View style={[styles.testResult, apiTestResult.success ? styles.testSuccess : styles.testError]}>
+                <Text style={[styles.testResultText, apiTestResult.success ? styles.testSuccessText : styles.testErrorText]}>
+                  {apiTestResult.success ? '✓ ' : '✗ '}{apiTestResult.message}
+                </Text>
+              </View>
+            )}
+
             <View style={styles.modalActions}>
+              <Pressable style={styles.testBtn} onPress={handleTestApi} disabled={isTestingApi}>
+                <Text style={styles.testBtnText}>{isTestingApi ? '测试中...' : '测试连接'}</Text>
+              </Pressable>
               <Pressable style={styles.cancelBtn} onPress={() => setApiModalVisible(false)}>
                 <Text style={styles.cancelBtnText}>取消</Text>
               </Pressable>
@@ -1050,6 +1114,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#DC2626',
     marginTop: 8,
+  },
+  testResult: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+  },
+  testSuccess: {
+    backgroundColor: '#D1FAE5',
+  },
+  testError: {
+    backgroundColor: '#FEE2E2',
+  },
+  testResultText: {
+    fontSize: 14,
+  },
+  testSuccessText: {
+    color: '#065F46',
+  },
+  testErrorText: {
+    color: '#991B1B',
+  },
+  testBtn: {
+    flex: 1,
+    backgroundColor: '#3B82F6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  testBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
   modalActions: {
     flexDirection: 'row',
