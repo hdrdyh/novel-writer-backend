@@ -648,6 +648,34 @@ app.delete('/api/v1/agents/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// 添加 Agent
+app.post('/api/v1/agents', (req, res) => {
+  try {
+    const { name, role, prompt, enabled, order, apiId } = req.body;
+    
+    if (!name || !role || !prompt) {
+      return res.status(400).json({ error: '缺少必要参数: name, role, prompt' });
+    }
+    
+    const maxOrder = agents.length > 0 ? Math.max(...agents.map(a => a.order)) : 0;
+    
+    const newAgent: Agent = {
+      id: Date.now().toString(),
+      name,
+      role,
+      prompt,
+      enabled: enabled ?? true,
+      order: order ?? maxOrder + 1,
+      apiId: apiId ?? null,
+    };
+    
+    agents.push(newAgent);
+    res.json({ agent: newAgent });
+  } catch (error) {
+    res.status(400).json({ error: 'Invalid request body' });
+  }
+});
+
 // ============== 启动服务 ==============
 
 app.listen(port, () => {
