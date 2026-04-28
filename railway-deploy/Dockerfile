@@ -12,7 +12,10 @@ RUN npm install
 COPY server/src ./src
 
 # 暴露端口
-EXPOSE 9091
+EXPOSE 5000
+
+# 设置环境变量
+ENV PORT=5000
 
 # 启动命令
 CMD ["npm", "start"]

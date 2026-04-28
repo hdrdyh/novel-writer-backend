@@ -3,7 +3,7 @@ import cors from "cors";
 import { z } from "zod";
 
 const app = express();
-const port = process.env.PORT || 9091;
+const port = parseInt(process.env.PORT || '5000', 10);
 
 // Middleware
 app.use(cors());
