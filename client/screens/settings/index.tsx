@@ -245,24 +245,27 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteAgent = (agent: Agent) => {
+    // 先显示确认框
     Alert.alert('删除确认', `确定要删除「${agent.name}」吗？`, [
       { text: '取消', style: 'cancel' },
       {
         text: '删除',
         style: 'destructive',
         onPress: () => {
-          // 先删除前端（降级处理）
-          setAgents(prev => prev.filter(a => a.id !== agent.id));
-          Alert.alert('成功', 'Agent 已删除');
+          // 删除前端
+          const newList = agents.filter(a => a.id !== agent.id);
+          setAgents(newList);
           
-          // 然后调用API（如果失败不影响前端）
-          try {
-            fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/${agent.id}`, {
-              method: 'DELETE',
+          // 调用API删除
+          const deleteUrl = `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/${agent.id}`;
+          fetch(deleteUrl, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(() => {
+              Alert.alert('成功', 'Agent 已删除');
+            })
+            .catch(() => {
+              Alert.alert('提示', '前端已删除，后台同步失败');
             });
-          } catch (err) {
-            // API失败，静默处理
-          }
         },
       },
     ]);
