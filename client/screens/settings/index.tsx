@@ -89,6 +89,8 @@ export default function SettingsScreen() {
   const [editingApi, setEditingApi] = useState<APIConfig | null>(null);
   const [apiName, setApiName] = useState('');
   const [apiProvider, setApiProvider] = useState('deepseek');
+  const [apiModel, setApiModel] = useState('');
+  const [apiBaseUrl, setApiBaseUrl] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [isTestingApi, setIsTestingApi] = useState(false);
@@ -536,15 +538,68 @@ export default function SettingsScreen() {
               />
             </View>
 
+            {/* Provider 选择 */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Provider *</Text>
+              <View style={styles.providerGroup}>
+                {['openai', 'deepseek', 'kimi', 'siliconflow', 'custom'].map((p) => (
+                  <Pressable
+                    key={p}
+                    style={[styles.providerBtn, apiProvider === p && styles.providerBtnActive]}
+                    onPress={() => {
+                      setApiProvider(p);
+                      // 根据Provider自动填充Base URL和Model
+                      if (p === 'deepseek') {
+                        setApiBaseUrl('https://api.deepseek.com');
+                        setApiModel('deepseek-chat');
+                      } else if (p === 'openai') {
+                        setApiBaseUrl('https://api.openai.com/v1');
+                        setApiModel('gpt-4o-mini');
+                      } else if (p === 'kimi') {
+                        setApiBaseUrl('https://api.moonshot.cn/v1');
+                        setApiModel('moonshot-v1-8k');
+                      } else if (p === 'siliconflow') {
+                        setApiBaseUrl('https://api.siliconflow.cn/v1');
+                        setApiModel('Qwen/Qwen2.5-7B-Instruct');
+                      }
+                    }}
+                  >
+                    <Text style={[styles.providerBtnText, apiProvider === p && styles.providerBtnTextActive]}>
+                      {p === 'openai' ? 'OpenAI' : p === 'deepseek' ? 'DeepSeek' : p === 'kimi' ? 'Kimi' : p === 'siliconflow' ? '硅基流动' : '自定义'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Base URL 输入 */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Base URL</Text>
               <TextInput
                 style={styles.input}
-                value={apiProvider}
-                onChangeText={setApiProvider}
-                placeholder="如：deepseek"
+                value={apiBaseUrl}
+                onChangeText={setApiBaseUrl}
+                placeholder={apiProvider === 'deepseek' ? 'https://api.deepseek.com' : 'https://api.openai.com/v1'}
                 placeholderTextColor="#CCCCCC"
               />
+            </View>
+
+            {/* Model 输入 */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>模型名称 *</Text>
+              <TextInput
+                style={styles.input}
+                value={apiModel}
+                onChangeText={setApiModel}
+                placeholder={apiProvider === 'deepseek' ? 'deepseek-chat' : apiProvider === 'openai' ? 'gpt-4o-mini' : '请输入模型名称'}
+                placeholderTextColor="#CCCCCC"
+              />
+              <Text style={styles.inputHint}>
+                {apiProvider === 'deepseek' && '推荐: deepseek-chat'}
+                {apiProvider === 'openai' && '推荐: gpt-4o-mini'}
+                {apiProvider === 'kimi' && '推荐: moonshot-v1-8k'}
+                {apiProvider === 'siliconflow' && '推荐: Qwen/Qwen2.5-7B-Instruct'}
+              </Text>
             </View>
 
             <View style={styles.inputGroup}>
@@ -1302,6 +1357,39 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 12,
     alignItems: 'center',
+  },
+  providerGroup: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  providerBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  providerBtnActive: {
+    backgroundColor: '#111827',
+    borderColor: '#111827',
+  },
+  providerBtnText: {
+    fontSize: 13,
+    color: '#666666',
+  },
+  providerBtnTextActive: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  inputHint: {
+    fontSize: 12,
+    color: '#888888',
+    marginTop: 4,
+    marginBottom: 8,
   },
   moveCancelText: {
     fontSize: 15,
