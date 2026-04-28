@@ -42,7 +42,7 @@ interface Agent {
 // 内存存储（生产环境应使用数据库）
 const chapters: Map<string, Chapter> = new Map();
 const memories: Memory[] = [];
-const agents: Agent[] = [
+let agents: Agent[] = [
   {
     id: '1',
     name: '世界观架构师',
@@ -580,6 +580,33 @@ app.get('/api/v1/agents', (req, res) => {
   res.json({ agents });
 });
 
+// 调整 Agent 顺序（必须放在 /agents/:id 之前）
+app.put('/api/v1/agents/reorder', (req, res) => {
+  const schema = z.object({
+    orders: z.array(z.object({
+      id: z.string(),
+      order: z.number(),
+    })),
+  });
+
+  try {
+    const { orders } = schema.parse(req.body);
+    
+    orders.forEach(({ id, order }) => {
+      const agent = agents.find(a => a.id === id);
+      if (agent) {
+        agent.order = order;
+      }
+    });
+
+    // 按 order 排序返回
+    const sortedAgents = [...agents].sort((a, b) => a.order - b.order);
+    res.json({ agents: sortedAgents });
+  } catch (error) {
+    res.status(400).json({ error: 'Invalid request body' });
+  }
+});
+
 app.put('/api/v1/agents/:id', (req, res) => {
   const { id } = req.params;
   const schema = z.object({
@@ -619,33 +646,6 @@ app.delete('/api/v1/agents/:id', (req, res) => {
   
   agents.splice(index, 1);
   res.json({ success: true });
-});
-
-// 调整 Agent 顺序
-app.put('/api/v1/agents/reorder', (req, res) => {
-  const schema = z.object({
-    orders: z.array(z.object({
-      id: z.string(),
-      order: z.number(),
-    })),
-  });
-
-  try {
-    const { orders } = schema.parse(req.body);
-    
-    orders.forEach(({ id, order }) => {
-      const agent = agents.find(a => a.id === id);
-      if (agent) {
-        agent.order = order;
-      }
-    });
-
-    // 按 order 排序返回
-    const sortedAgents = [...agents].sort((a, b) => a.order - b.order);
-    res.json({ agents: sortedAgents });
-  } catch (error) {
-    res.status(400).json({ error: 'Invalid request body' });
-  }
 });
 
 // ============== 启动服务 ==============
