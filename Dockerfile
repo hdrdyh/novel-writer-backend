@@ -2,9 +2,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# 复制 package.json 和依赖文件
+# 复制 package.json
 COPY server/package.json ./
-COPY server/pnpm-lock.yaml ./
 
 # 安装依赖
 RUN npm install
