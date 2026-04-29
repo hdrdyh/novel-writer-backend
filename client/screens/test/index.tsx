@@ -1,13 +1,10 @@
 import { View, Text } from 'react-native';
-import { Screen } from '@/components/Screen';
 
 export default function TestScreen() {
   return (
-    <Screen>
-      <View style={{ flex: 1, backgroundColor: '#0f0c29', justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: '#fff', fontSize: 24 }}>测试页面</Text>
-        <Text style={{ color: '#6c63ff', fontSize: 18, marginTop: 20 }}>如果能看到这行字，说明UI正常</Text>
-      </View>
-    </Screen>
+    <View style={{ flex: 1, backgroundColor: '#1a1a2e', justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ color: '#ffffff', fontSize: 28, fontWeight: 'bold' }}>测试成功</Text>
+      <Text style={{ color: '#6c63ff', fontSize: 20, marginTop: 16 }}>如果你看到这行字，渲染正常</Text>
+    </View>
   );
 }
