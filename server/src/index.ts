@@ -411,7 +411,7 @@ const MemoryEntrySchema = z.object({
 app.post('/api/v1/writing/generate', async (req, res) => {
   // 禁用Express内置缓冲，确保SSE立即发送
   res.setHeader('X-Accel-Buffering', 'no');
-  res.flush?.();
+  (res as any).flush?.();
   const schema = z.object({
     chapterId: z.string(),
     chapterNumber: z.number(),
@@ -540,7 +540,7 @@ app.post('/api/v1/writing/generate', async (req, res) => {
       console.log('[STEP]', stepName, `${stepIndex}/${totalSteps}`);
       res.write(eventData);
       // 确保立即发送
-      res.flush?.();
+      (res as any).flush?.();
     };
 
     try {
@@ -1047,7 +1047,12 @@ app.get('/status', (_req, res) => {
   res.end('packager-status:running');
 });
 
-// 2. JS Bundle请求 - Expo Go请求 *.bundle 文件
+// 2. Metro HMR端点 (不支持热更新) - 必须在动态路由之前
+app.get('/onchange', (_req, res) => {
+  res.status(404).end();
+});
+
+// 3. JS Bundle请求 - Expo Go请求 *.bundle 文件
 app.get('*.bundle', (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const platform = url.searchParams.get('platform') || 'android';
@@ -1084,30 +1089,25 @@ app.get('*.bundle', (req, res) => {
   res.status(404).send('Bundle not found');
 });
 
-// 3. Source Map请求
+// 4. Source Map请求
 app.get('*.map', (_req, res) => {
   res.setHeader('Access-Control-Allow-Origin', 'devtools://devtools');
   res.status(404).send('Source map not available');
 });
 
-// 4. Assets请求
+// 5. Assets请求
 app.get('*.assets', (_req, res) => {
   res.status(404).send('Assets not available');
 });
 
-// 5. Symbolicate端点
+// 6. Symbolicate端点
 app.post('/symbolicate', (_req, res) => {
   res.end('{}');
 });
 
-// 6. Open stack frame端点
+// 7. Open stack frame端点
 app.post('/open-stack-frame', (_req, res) => {
   res.end('OK');
-});
-
-// 7. Metro HMR端点 (不支持热更新)
-app.get('/onchange', (_req, res) => {
-  res.status(404).end();
 });
 
 // ============== 前端静态文件 ==============

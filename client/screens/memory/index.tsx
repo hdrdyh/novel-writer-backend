@@ -11,7 +11,6 @@ import {
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen } from '@/components/Screen';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function MemoryScreen() {
@@ -55,57 +54,39 @@ export default function MemoryScreen() {
   return (
     <Screen>
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>记忆库</Text>
-            <Text style={styles.headerSubtitle}>
-              {memoryItems.length} 条记忆 · 上下文参考
-            </Text>
-          </View>
+          <Text style={styles.headerTitle}>记忆库</Text>
+          <Text style={styles.headerSubtitle}>
+            {memoryItems.length} 条记忆
+          </Text>
         </View>
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
           {memoryItems.length === 0 ? (
             <View style={styles.emptyState}>
-              <LinearGradient
-                colors={['rgba(108, 99, 255, 0.2)', 'rgba(0, 210, 255, 0.2)']}
-                style={styles.emptyGradient}
-              >
-                <Ionicons name="library-outline" size={64} color="#6C63FF" />
-              </LinearGradient>
+              <Ionicons name="library-outline" size={64} color="#333" />
               <Text style={styles.emptyTitle}>暂无记忆</Text>
-              <Text style={styles.emptySubtitle}>
-                创作章节后保存到记忆库
-              </Text>
+              <Text style={styles.emptySubtitle}>创作章节后保存到记忆库</Text>
             </View>
           ) : (
-            memoryItems.map((item, index) => (
+            memoryItems.map((item) => (
               <View key={item.id} style={styles.card}>
-                {/* Chapter Badge */}
                 <View style={styles.cardHeader}>
-                  <LinearGradient
-                    colors={['#6C63FF', '#00D2FF']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.chapterBadge}
-                  >
+                  <View style={styles.chapterBadge}>
                     <Text style={styles.chapterText}>第{item.chapterNumber}章</Text>
-                  </LinearGradient>
+                  </View>
                   <TouchableOpacity
                     style={styles.deleteBtn}
                     onPress={() => handleDelete(item.id)}
                   >
-                    <Ionicons name="trash-outline" size={18} color="#FF6B9D" />
+                    <Ionicons name="trash-outline" size={18} color="#888" />
                   </TouchableOpacity>
                 </View>
 
-                {/* Outline */}
                 <Text style={styles.outlineText} numberOfLines={2}>
                   {item.outline}
                 </Text>
 
-                {/* Summary */}
                 <View style={styles.summaryContainer}>
                   <Text style={styles.summaryLabel}>摘要</Text>
                   <Text style={styles.summaryText} numberOfLines={3}>
@@ -113,26 +94,17 @@ export default function MemoryScreen() {
                   </Text>
                 </View>
 
-                {/* Content Preview - Fixed */}
                 <TouchableOpacity
                   style={styles.previewBtn}
                   onPress={() => handlePreview(item)}
                   activeOpacity={0.7}
                 >
-                  <LinearGradient
-                    colors={['rgba(108, 99, 255, 0.15)', 'rgba(0, 210, 255, 0.1)']}
-                    style={styles.previewBtnGradient}
-                  >
-                    <Ionicons name="document-text-outline" size={16} color="#6C63FF" />
-                    <Text style={styles.previewBtnText}>正文预览</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#6C63FF" />
-                  </LinearGradient>
+                  <Ionicons name="document-text-outline" size={16} color="#888" />
+                  <Text style={styles.previewBtnText}>正文预览</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#888" />
                 </TouchableOpacity>
 
-                {/* Date */}
                 <Text style={styles.dateText}>
-                  <Ionicons name="time-outline" size={12} color="#666" />
-                  {' '}
                   {new Date(item.createdAt).toLocaleDateString('zh-CN')}
                 </Text>
               </View>
@@ -140,7 +112,6 @@ export default function MemoryScreen() {
           )}
         </ScrollView>
 
-        {/* Preview Modal */}
         <Modal
           visible={previewModal}
           animationType="slide"
@@ -148,14 +119,9 @@ export default function MemoryScreen() {
         >
           <View style={styles.previewContainer}>
             <View style={styles.previewHeader}>
-              <View>
-                <Text style={styles.previewTitle}>第{previewItem?.chapterNumber}章正文</Text>
-                <Text style={styles.previewSubtitle}>
-                  {previewItem?.outline?.substring(0, 50)}
-                </Text>
-              </View>
+              <Text style={styles.previewTitle}>第{previewItem?.chapterNumber}章正文</Text>
               <TouchableOpacity onPress={() => setPreviewModal(false)}>
-                <Ionicons name="close-circle" size={32} color="#666" />
+                <Ionicons name="close-circle" size={32} color="#888" />
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.previewScroll}>
@@ -173,12 +139,9 @@ export default function MemoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1A3E',
+    backgroundColor: '#000',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
@@ -189,7 +152,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   headerSubtitle: {
-    color: '#666',
+    color: '#888',
     fontSize: 14,
     marginTop: 4,
   },
@@ -204,31 +167,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 80,
   },
-  emptyGradient: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
   emptyTitle: {
     color: '#fff',
     fontSize: 20,
     fontWeight: '600',
+    marginTop: 24,
     marginBottom: 8,
   },
   emptySubtitle: {
-    color: '#666',
+    color: '#888',
     fontSize: 14,
   },
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 20,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: '#333',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -237,9 +193,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   chapterBadge: {
+    backgroundColor: '#333',
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 8,
   },
   chapterText: {
     color: '#fff',
@@ -250,29 +207,31 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 107, 157, 0.15)',
+    backgroundColor: '#1a1a1a',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
   },
   outlineText: {
-    color: '#ddd',
+    color: '#ccc',
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 12,
   },
   summaryContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 12,
+    backgroundColor: '#000',
+    borderRadius: 8,
     padding: 12,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   summaryLabel: {
-    color: '#6C63FF',
+    color: '#888',
     fontSize: 11,
     fontWeight: '600',
     marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
   summaryText: {
     color: '#888',
@@ -280,18 +239,19 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   previewBtn: {
-    marginBottom: 12,
-  },
-  previewBtnGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#333',
     gap: 8,
   },
   previewBtnText: {
-    color: '#6C63FF',
+    color: '#888',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -301,7 +261,7 @@ const styles = StyleSheet.create({
   },
   previewContainer: {
     flex: 1,
-    backgroundColor: '#1A1A3E',
+    backgroundColor: '#000',
     paddingTop: 60,
   },
   previewHeader: {
@@ -311,25 +271,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: '#333',
   },
   previewTitle: {
     color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
   },
-  previewSubtitle: {
-    color: '#666',
-    fontSize: 13,
-    marginTop: 4,
-    maxWidth: 280,
-  },
   previewScroll: {
     flex: 1,
     padding: 20,
   },
   previewContent: {
-    color: '#ccc',
+    color: '#fff',
     fontSize: 15,
     lineHeight: 26,
   },

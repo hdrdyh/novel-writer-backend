@@ -1,205 +1,194 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
   Alert,
-  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen } from '@/components/Screen';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-  ? 'https://novel-writer-backend-production-24e9.up.railway.app'
-  : 'http://localhost:5000';
+interface SettingItem {
+  key: string;
+  label: string;
+  description: string;
+  type: 'toggle' | 'action';
+  value: boolean;
+}
 
 export default function SettingsScreen() {
-  const [serverUrl, setServerUrl] = useState(API_BASE_URL);
-  const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('deepseek-v4-flash');
-  const [baseUrl, setBaseUrl] = useState('https://api.deepseek.com');
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-  const [agents, setAgents] = useState<any[]>([]);
+  const [settings, setSettings] = useState<SettingItem[]>([
+    {
+      key: 'autoSave',
+      label: '自动保存记忆',
+      description: '生成内容后自动保存到记忆库',
+      type: 'toggle',
+      value: true,
+    },
+    {
+      key: 'showAgentSteps',
+      label: '显示AI创作过程',
+      description: '展示多Agent协作的详细步骤',
+      type: 'toggle',
+      value: true,
+    },
+    {
+      key: 'streamOutput',
+      label: '流式输出',
+      description: '实时显示生成内容（建议开启）',
+      type: 'toggle',
+      value: true,
+    },
+  ]);
 
-  // 初始化加载设置
+  const [stats, setStats] = useState({
+    totalChapters: 0,
+    totalWords: 0,
+    totalMemory: 0,
+  });
+
   useEffect(() => {
-    const init = async () => {
+    const loadStats = async () => {
       try {
-        const saved = await AsyncStorage.getItem('llm_settings');
-        if (saved) {
-          const settings = JSON.parse(saved);
-          setApiKey(settings.apiKey || '');
-          setModel(settings.model || 'deepseek-v4-flash');
-          setBaseUrl(settings.baseUrl || 'https://api.deepseek.com');
-        }
-        const savedServer = await AsyncStorage.getItem('server_url');
-        if (savedServer) setServerUrl(savedServer);
+        const novelsData = await AsyncStorage.getItem('novels');
+        const memoryData = await AsyncStorage.getItem('memory');
+        const novels = novelsData ? JSON.parse(novelsData) : [];
+        const memory = memoryData ? JSON.parse(memoryData) : [];
+
+        let totalWords = 0;
+        novels.forEach((n: any) => {
+          totalWords += (n.content || '').length;
+        });
+
+        setStats({
+          totalChapters: novels.length,
+          totalWords,
+          totalMemory: memory.length,
+        });
       } catch (e) {}
     };
-    init();
+    loadStats();
   }, []);
 
-  const saveSettings = async () => {
-    try {
-      await AsyncStorage.setItem('llm_settings', JSON.stringify({
-        apiKey,
-        model,
-        baseUrl,
-      }));
-      await AsyncStorage.setItem('server_url', serverUrl);
-      Alert.alert('成功', '配置已保存');
-    } catch (e) {
-      Alert.alert('错误', '保存失败');
-    }
+  const handleToggle = (key: string) => {
+    setSettings((prev) =>
+      prev.map((s) => (s.key === key ? { ...s, value: !s.value } : s))
+    );
   };
 
-  const handleTestConnection = async () => {
-    setConnectionStatus('testing');
-    try {
-      const res = await fetch(`${serverUrl}/api/v1/health`);
-      if (res.ok) {
-        setConnectionStatus('success');
-        setTimeout(() => setConnectionStatus('idle'), 2000);
-      } else {
-        setConnectionStatus('error');
-      }
-    } catch {
-      setConnectionStatus('error');
-    }
+  const handleClearData = () => {
+    Alert.alert('确认', '确定清除所有本地数据吗？此操作不可恢复。', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '清除',
+        style: 'destructive',
+        onPress: async () => {
+          await AsyncStorage.multiRemove(['novels', 'memory', 'savedItems']);
+          setStats({ totalChapters: 0, totalWords: 0, totalMemory: 0 });
+          Alert.alert('完成', '所有本地数据已清除');
+        },
+      },
+    ]);
+  };
+
+  const handleExportData = () => {
+    Alert.alert('提示', '数据导出功能开发中');
   };
 
   return (
     <Screen>
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>设置</Text>
-          <Text style={styles.headerSubtitle}>配置AI写作助手</Text>
         </View>
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-          {/* Server Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>服务器配置</Text>
-            <View style={styles.card}>
-              <View style={styles.inputRow}>
-                <Ionicons name="server-outline" size={20} color="#6C63FF" />
-                <TextInput
-                  style={styles.input}
-                  value={serverUrl}
-                  onChangeText={setServerUrl}
-                  placeholder="输入服务器地址"
-                  placeholderTextColor="#555"
-                />
+          {/* Stats Section */}
+          <Text style={styles.sectionTitle}>创作统计</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.totalChapters}</Text>
+              <Text style={styles.statLabel}>章节</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.totalWords}</Text>
+              <Text style={styles.statLabel}>字数</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.totalMemory}</Text>
+              <Text style={styles.statLabel}>记忆</Text>
+            </View>
+          </View>
+
+          {/* Settings Section */}
+          <Text style={styles.sectionTitle}>创作偏好</Text>
+          {settings.map((setting) => (
+            <View key={setting.key} style={styles.settingCard}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>{setting.label}</Text>
+                <Text style={styles.settingDesc}>{setting.description}</Text>
               </View>
               <TouchableOpacity
                 style={[
-                  styles.testBtn,
-                  connectionStatus === 'success' && styles.testBtnSuccess,
-                  connectionStatus === 'error' && styles.testBtnError,
+                  styles.toggle,
+                  setting.value ? styles.toggleOn : styles.toggleOff,
                 ]}
-                onPress={handleTestConnection}
-                disabled={connectionStatus === 'testing'}
+                onPress={() => handleToggle(setting.key)}
               >
-                {connectionStatus === 'testing' ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons
-                      name={connectionStatus === 'success' ? 'checkmark-circle' : 'pulse-outline'}
-                      size={18}
-                      color="#fff"
-                    />
-                    <Text style={styles.testBtnText}>
-                      {connectionStatus === 'success' ? '连接成功' : '测试连接'}
-                    </Text>
-                  </>
-                )}
+                <View
+                  style={[
+                    styles.toggleThumb,
+                    setting.value ? styles.toggleThumbOn : styles.toggleThumbOff,
+                  ]}
+                />
               </TouchableOpacity>
             </View>
-          </View>
+          ))}
 
-          {/* LLM Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>AI模型配置</Text>
-            <View style={styles.card}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>API Key</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={apiKey}
-                  onChangeText={setApiKey}
-                  placeholder="输入API Key"
-                  placeholderTextColor="#555"
-                  secureTextEntry
-                />
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>模型名称</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={model}
-                  onChangeText={setModel}
-                  placeholder="deepseek-v4-flash"
-                  placeholderTextColor="#555"
-                />
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>API Base URL</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={baseUrl}
-                  onChangeText={setBaseUrl}
-                  placeholder="https://api.deepseek.com"
-                  placeholderTextColor="#555"
-                  keyboardType="url"
-                  autoCapitalize="none"
-                />
-              </View>
+          {/* Data Management */}
+          <Text style={styles.sectionTitle}>数据管理</Text>
+          <TouchableOpacity style={styles.actionCard} onPress={handleExportData}>
+            <Ionicons name="download-outline" size={22} color="#fff" />
+            <View style={styles.actionInfo}>
+              <Text style={styles.actionLabel}>导出数据</Text>
+              <Text style={styles.actionDesc}>将小说数据导出备份</Text>
             </View>
-          </View>
-
-          {/* Agents Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Agent配置</Text>
-            <View style={styles.card}>
-              <View style={styles.agentInfo}>
-                <Ionicons name="cube-outline" size={20} color="#00D2FF" />
-                <Text style={styles.agentText}>后端自动管理6个Agent</Text>
-              </View>
-              <View style={styles.agentGrid}>
-                {['策划师', '写手', '校对', '优化', '审核', '归档'].map((name, i) => (
-                  <View key={i} style={styles.agentBadge}>
-                    <Text style={styles.agentBadgeText}>{name}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          </View>
-
-          {/* Save Button */}
-          <TouchableOpacity style={styles.saveBtn} onPress={saveSettings} activeOpacity={0.8}>
-            <LinearGradient
-              colors={['#6C63FF', '#00D2FF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.saveBtnGradient}
-            >
-              <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-              <Text style={styles.saveBtnText}>保存配置</Text>
-            </LinearGradient>
+            <Ionicons name="chevron-forward" size={20} color="#555" />
           </TouchableOpacity>
 
-          {/* Version */}
-          <Text style={styles.version}>v1.0.0 · 心文AI写作</Text>
+          <TouchableOpacity
+            style={[styles.actionCard, styles.dangerCard]}
+            onPress={handleClearData}
+          >
+            <Ionicons name="trash-outline" size={22} color="#666" />
+            <View style={styles.actionInfo}>
+              <Text style={styles.actionLabelDanger}>清除所有数据</Text>
+              <Text style={styles.actionDesc}>删除所有本地小说和记忆</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#555" />
+          </TouchableOpacity>
+
+          {/* About */}
+          <Text style={styles.sectionTitle}>关于</Text>
+          <View style={styles.aboutCard}>
+            <View style={styles.aboutRow}>
+              <Text style={styles.aboutLabel}>应用名称</Text>
+              <Text style={styles.aboutValue}>写作大师</Text>
+            </View>
+            <View style={styles.aboutDivider} />
+            <View style={styles.aboutRow}>
+              <Text style={styles.aboutLabel}>版本</Text>
+              <Text style={styles.aboutValue}>1.0.0</Text>
+            </View>
+            <View style={styles.aboutDivider} />
+            <View style={styles.aboutRow}>
+              <Text style={styles.aboutLabel}>AI引擎</Text>
+              <Text style={styles.aboutValue}>多Agent协作</Text>
+            </View>
+          </View>
         </ScrollView>
       </View>
     </Screen>
@@ -209,22 +198,17 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1A3E',
+    backgroundColor: '#000',
   },
   header: {
     paddingHorizontal: 20,
     paddingTop: 60,
-    paddingBottom: 24,
+    paddingBottom: 20,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#fff',
-  },
-  headerSubtitle: {
-    color: '#666',
-    fontSize: 14,
-    marginTop: 4,
   },
   scrollView: {
     flex: 1,
@@ -233,123 +217,145 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 100,
   },
-  section: {
-    marginBottom: 24,
-  },
   sectionTitle: {
-    color: '#6C63FF',
-    fontSize: 12,
+    color: '#888',
+    fontSize: 13,
     fontWeight: '600',
     marginBottom: 12,
+    marginTop: 8,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
-  },
-  inputRow: {
+  statsGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
+    marginBottom: 28,
   },
-  input: {
+  statCard: {
     flex: 1,
-    color: '#fff',
-    fontSize: 15,
-    paddingVertical: 8,
-  },
-  testBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(108, 99, 255, 0.3)',
+    backgroundColor: '#1a1a1a',
     borderRadius: 12,
-    paddingVertical: 12,
-    marginTop: 16,
+    padding: 18,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
   },
-  testBtnSuccess: {
-    backgroundColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  testBtnError: {
-    backgroundColor: 'rgba(255, 107, 157, 0.3)',
-  },
-  testBtnText: {
+  statValue: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 28,
+    fontWeight: 'bold',
   },
-  inputGroup: {
-    marginBottom: 4,
-  },
-  inputLabel: {
+  statLabel: {
     color: '#888',
     fontSize: 12,
-    marginBottom: 8,
+    marginTop: 4,
   },
-  textInput: {
-    color: '#fff',
-    fontSize: 15,
-    paddingVertical: 8,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginVertical: 16,
-  },
-  agentInfo: {
+  settingCard: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
-  },
-  agentText: {
-    color: '#ddd',
-    fontSize: 14,
-  },
-  agentGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  agentBadge: {
-    backgroundColor: 'rgba(108, 99, 255, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 18,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.3)',
+    borderColor: '#333',
   },
-  agentBadgeText: {
-    color: '#00D2FF',
-    fontSize: 12,
-    fontWeight: '500',
+  settingInfo: {
+    flex: 1,
+    marginRight: 16,
   },
-  saveBtn: {
-    marginTop: 10,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  saveBtnGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-  },
-  saveBtnText: {
+  settingLabel: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
+    marginBottom: 4,
   },
-  version: {
-    color: '#444',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 30,
+  settingDesc: {
+    color: '#888',
+    fontSize: 13,
+  },
+  toggle: {
+    width: 52,
+    height: 30,
+    borderRadius: 15,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleOn: {
+    backgroundColor: '#fff',
+  },
+  toggleOff: {
+    backgroundColor: '#333',
+  },
+  toggleThumb: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+  },
+  toggleThumbOn: {
+    backgroundColor: '#000',
+    alignSelf: 'flex-end',
+  },
+  toggleThumbOff: {
+    backgroundColor: '#888',
+  },
+  actionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 18,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#333',
+    gap: 14,
+  },
+  dangerCard: {
+    borderColor: '#333',
+  },
+  actionInfo: {
+    flex: 1,
+  },
+  actionLabel: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  actionLabelDanger: {
+    color: '#888',
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  actionDesc: {
+    color: '#888',
+    fontSize: 13,
+  },
+  aboutCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  aboutRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  aboutDivider: {
+    height: 1,
+    backgroundColor: '#333',
+  },
+  aboutLabel: {
+    color: '#888',
+    fontSize: 15,
+  },
+  aboutValue: {
+    color: '#fff',
+    fontSize: 15,
   },
 });

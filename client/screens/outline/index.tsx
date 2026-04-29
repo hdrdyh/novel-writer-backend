@@ -90,18 +90,16 @@ export default function OutlineScreen() {
 
   return (
     <Screen style={styles.screen}>
-      {/* 顶部标题区 */}
       <View style={styles.header}>
         <Text style={styles.greeting}>创作空间</Text>
         <Text style={styles.title}>章节粗纲</Text>
         <Text style={styles.subtitle}>{chapters.length} 个章节</Text>
       </View>
 
-      {/* 章节列表 */}
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
         {chapters.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📝</Text>
+            <Feather name="file-text" size={48} color="#888" />
             <Text style={styles.emptyText}>暂无章节</Text>
             <Text style={styles.emptyHint}>点击下方按钮添加第一章节</Text>
           </View>
@@ -114,10 +112,10 @@ export default function OutlineScreen() {
                 </View>
                 <View style={styles.cardActions}>
                   <Pressable onPress={() => handleEditChapter(chapter)} style={styles.actionBtn}>
-                    <Feather name="edit-2" size={16} color="#8B8B9A" />
+                    <Feather name="edit-2" size={16} color="#888" />
                   </Pressable>
                   <Pressable onPress={() => handleDeleteChapter(chapter.id)} style={styles.actionBtn}>
-                    <Feather name="trash-2" size={16} color="#8B8B9A" />
+                    <Feather name="trash-2" size={16} color="#888" />
                   </Pressable>
                 </View>
               </View>
@@ -134,39 +132,34 @@ export default function OutlineScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* 添加按钮 */}
       <Pressable style={styles.fab} onPress={handleAddChapter}>
-        <Feather name="plus" size={28} color="#FFFFFF" />
+        <Feather name="plus" size={28} color="#fff" />
       </Pressable>
 
-      {/* 添加/编辑弹窗 */}
       <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{editingChapter ? '编辑章节' : '新增章节'}</Text>
-            
             <Text style={styles.inputLabel}>章节号</Text>
             <TextInput
               style={styles.input}
               value={chapterNumber}
               onChangeText={setChapterNumber}
               placeholder="输入章节号"
-              placeholderTextColor="#5C5C6E"
+              placeholderTextColor="#555"
               keyboardType="numeric"
             />
-            
             <Text style={styles.inputLabel}>章纲内容</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
               value={outline}
               onChangeText={setOutline}
               placeholder="描述本章的核心情节..."
-              placeholderTextColor="#5C5C6E"
+              placeholderTextColor="#555"
               multiline
               numberOfLines={5}
               textAlignVertical="top"
             />
-            
             <View style={styles.modalActions}>
               <Pressable style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
                 <Text style={styles.cancelBtnText}>取消</Text>
@@ -179,13 +172,10 @@ export default function OutlineScreen() {
         </View>
       </Modal>
 
-      {/* 确认弹窗 */}
       <Modal visible={confirmModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.confirmContent}>
-            <View style={styles.confirmIcon}>
-              <Feather name="play-circle" size={40} color="#6C63FF" />
-            </View>
+            <Feather name="play-circle" size={40} color="#fff" />
             <Text style={styles.confirmTitle}>开始写作</Text>
             <Text style={styles.confirmText}>确认开始写作第{selectedChapter?.chapterNumber}章？</Text>
             <View style={styles.modalActions}>
@@ -206,7 +196,7 @@ export default function OutlineScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#1A1A3E',
+    backgroundColor: '#000',
   },
   header: {
     paddingHorizontal: 24,
@@ -215,21 +205,19 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: 14,
-    color: '#6C63FF',
+    color: '#888',
     fontWeight: '600',
     letterSpacing: 2,
-    textTransform: 'uppercase',
   },
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#fff',
     marginTop: 8,
-    letterSpacing: -1,
   },
   subtitle: {
     fontSize: 14,
-    color: '#5C5C6E',
+    color: '#888',
     marginTop: 6,
   },
   list: {
@@ -240,27 +228,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 100,
   },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
   emptyText: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#fff',
+    marginTop: 16,
     marginBottom: 8,
   },
   emptyHint: {
     fontSize: 14,
-    color: '#5C5C6E',
+    color: '#888',
   },
   card: {
-    backgroundColor: '#252550',
-    borderRadius: 16,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#3A3A6E',
+    borderColor: '#333',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -269,15 +254,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   chapterBadge: {
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#333',
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: 8,
   },
   chapterBadgeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#fff',
   },
   cardActions: {
     flexDirection: 'row',
@@ -288,7 +273,7 @@ const styles = StyleSheet.create({
   },
   outlineText: {
     fontSize: 15,
-    color: '#A0A0B0',
+    color: '#ccc',
     lineHeight: 22,
     marginBottom: 16,
   },
@@ -299,16 +284,16 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 12,
-    color: '#5C5C6E',
+    color: '#888',
   },
   startBtn: {
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#fff',
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
   startBtnText: {
-    color: '#FFFFFF',
+    color: '#000',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -322,14 +307,9 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#6C63FF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
   },
   modalOverlay: {
     flex: 1,
@@ -338,68 +318,59 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#252550',
-    borderRadius: 20,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
     padding: 28,
     width: '88%',
     maxWidth: 400,
     borderWidth: 1,
-    borderColor: '#3A3A6E',
+    borderColor: '#333',
   },
   confirmContent: {
-    backgroundColor: '#252550',
-    borderRadius: 20,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
     padding: 32,
     width: '80%',
     maxWidth: 320,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#3A3A6E',
-  },
-  confirmIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#3A3A6E',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
+    borderColor: '#333',
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#fff',
     marginBottom: 24,
     textAlign: 'center',
   },
   confirmTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#fff',
+    marginTop: 16,
     marginBottom: 8,
   },
   confirmText: {
     fontSize: 15,
-    color: '#8B8B9A',
+    color: '#888',
     marginBottom: 24,
     textAlign: 'center',
   },
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#8B8B9A',
+    color: '#888',
     marginBottom: 8,
-    letterSpacing: 0.5,
   },
   input: {
-    backgroundColor: '#1A1A3E',
-    borderRadius: 12,
+    backgroundColor: '#000',
+    borderRadius: 8,
     padding: 16,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: '#fff',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#3A3A6E',
+    borderColor: '#333',
   },
   textArea: {
     minHeight: 120,
@@ -412,26 +383,26 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    backgroundColor: '#3A3A6E',
-    borderRadius: 12,
+    backgroundColor: '#333',
+    borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
   },
   cancelBtnText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#A0A0B0',
+    color: '#888',
   },
   saveBtn: {
     flex: 1,
-    backgroundColor: '#6C63FF',
-    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
   },
   saveBtnText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#000',
   },
 });

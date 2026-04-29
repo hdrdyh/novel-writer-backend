@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,26 +10,23 @@ import {
   Platform,
   KeyboardAvoidingView,
   Modal,
-  Keyboard,
   ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen } from '@/components/Screen';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import RNSSE from 'react-native-sse';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
 
-// Agent配置
 const AGENT_STEPS = [
-  { name: '世界观构建', color: '#6C63FF' },
-  { name: '人物设定', color: '#00D2FF' },
-  { name: '情节设计', color: '#FF6B9D' },
-  { name: '正文生成', color: '#FFD93D' },
-  { name: '审核校对', color: '#6BCB77' },
-  { name: '记忆存档', color: '#FF8C42' },
+  { name: '世界观构建' },
+  { name: '人物设定' },
+  { name: '情节设计' },
+  { name: '正文生成' },
+  { name: '审核校对' },
+  { name: '记忆存档' },
 ];
 
 export default function WritingScreen() {
@@ -115,7 +112,7 @@ export default function WritingScreen() {
         }
 
         try {
-          const json = JSON.parse(event.data);
+          const json = JSON.parse(event.data || '{}');
           if (json.type === 'step') {
             setCurrentStep(json.stepIndex);
           } else if (json.type === 'chunk' && json.content) {
@@ -125,9 +122,7 @@ export default function WritingScreen() {
             fullContent = json.content;
             setContent(fullContent);
           }
-        } catch (e) {
-          // 忽略解析错误
-        }
+        } catch (e) {}
       });
 
       sse.addEventListener('error', (error) => {
@@ -227,18 +222,9 @@ export default function WritingScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <LinearGradient
-              colors={['#6C63FF', '#00D2FF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.titleGradient}
-            >
-              <Text style={styles.headerTitle}>创作中心</Text>
-            </LinearGradient>
-          </View>
+          <Text style={styles.headerTitle}>创作中心</Text>
           <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteChapter}>
-            <Ionicons name="trash-outline" size={20} color="#FF6B9D" />
+            <Ionicons name="trash-outline" size={20} color="#888" />
           </TouchableOpacity>
         </View>
 
@@ -249,17 +235,17 @@ export default function WritingScreen() {
         >
           {/* Chapter Number */}
           <View style={styles.chapterBadge}>
-            <Ionicons name="document-text" size={16} color="#6C63FF" />
+            <Ionicons name="document-text" size={16} color="#888" />
             <Text style={styles.chapterText}>第 {chapterNumber} 章</Text>
           </View>
 
-          {/* Outline Input - Compact */}
+          {/* Outline Input */}
           <View style={styles.outlineSection}>
             <Text style={styles.sectionLabel}>章纲</Text>
             <TextInput
               style={styles.outlineInput}
               placeholder="输入本章章纲，描述本章主要情节..."
-              placeholderTextColor="#666"
+              placeholderTextColor="#555"
               value={outlineInput}
               onChangeText={setOutlineInput}
               multiline
@@ -272,43 +258,33 @@ export default function WritingScreen() {
             onPress={handleGenerate}
             disabled={isGenerating}
           >
-            <LinearGradient
-              colors={isGenerating ? ['#555', '#444'] : ['#6C63FF', '#00D2FF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.generateBtnGradient}
-            >
-              {isGenerating ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="bulb" size={20} color="#fff" />
-                  <Text style={styles.generateBtnText}>开始创作</Text>
-                </>
-              )}
-            </LinearGradient>
+            {isGenerating ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <>
+                <Ionicons name="bulb" size={20} color="#000" />
+                <Text style={styles.generateBtnText}>开始创作</Text>
+              </>
+            )}
           </TouchableOpacity>
 
           {/* Agent Status */}
           {isGenerating && (
             <View style={styles.agentStatus}>
-              <Text style={styles.agentStatusTitle}>
-                <Ionicons name="analytics" size={16} color="#6C63FF" /> AI创作进度
-              </Text>
+              <Text style={styles.agentStatusTitle}>AI创作进度</Text>
               <View style={styles.agentSteps}>
                 {AGENT_STEPS.slice(0, 3).map((step, idx) => (
                   <View key={idx} style={styles.agentStepItem}>
                     <View
                       style={[
                         styles.stepDot,
-                        { backgroundColor: step.color },
                         currentStep >= idx && styles.stepDotActive,
                       ]}
                     />
                     <Text
                       style={[
                         styles.stepText,
-                        currentStep >= idx && { color: step.color },
+                        currentStep >= idx && styles.stepTextActive,
                       ]}
                     >
                       {step.name}
@@ -337,7 +313,7 @@ export default function WritingScreen() {
                     setPreviewModal(true);
                   }}
                 >
-                  <Ionicons name="expand" size={16} color="#6C63FF" />
+                  <Ionicons name="expand" size={16} color="#888" />
                   <Text style={styles.previewBtnText}>全屏</Text>
                 </TouchableOpacity>
               </View>
@@ -350,16 +326,12 @@ export default function WritingScreen() {
               {/* Action Buttons */}
               <View style={styles.actionButtons}>
                 <TouchableOpacity style={styles.saveBtn} onPress={handleSaveToMemory}>
-                  <LinearGradient colors={['#6C63FF', '#6C63FF']} style={styles.saveBtnGradient}>
-                    <Ionicons name="cloud-upload" size={18} color="#fff" />
-                    <Text style={styles.saveBtnText}>存记忆</Text>
-                  </LinearGradient>
+                  <Ionicons name="cloud-upload" size={18} color="#000" />
+                  <Text style={styles.saveBtnText}>存记忆</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.saveBtn} onPress={handleSaveToLibrary}>
-                  <LinearGradient colors={['#00D2FF', '#00D2FF']} style={styles.saveBtnGradient}>
-                    <Ionicons name="bookmark" size={18} color="#fff" />
-                    <Text style={styles.saveBtnText}>存书架</Text>
-                  </LinearGradient>
+                  <Ionicons name="bookmark" size={18} color="#000" />
+                  <Text style={styles.saveBtnText}>存书架</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -379,7 +351,7 @@ export default function WritingScreen() {
               <TextInput
                 style={styles.modalInput}
                 placeholder="输入书名"
-                placeholderTextColor="#666"
+                placeholderTextColor="#555"
                 value={novelName}
                 onChangeText={setNovelName}
               />
@@ -421,7 +393,7 @@ export default function WritingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1A3E',
+    backgroundColor: '#000',
   },
   header: {
     flexDirection: 'row',
@@ -431,27 +403,20 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#fff',
   },
-  titleGradient: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
   deleteBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 107, 157, 0.15)',
+    backgroundColor: '#1a1a1a',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
   },
   scrollView: {
     flex: 1,
@@ -463,15 +428,17 @@ const styles = StyleSheet.create({
   chapterBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(108, 99, 255, 0.2)',
+    backgroundColor: '#1a1a1a',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 8,
     alignSelf: 'flex-start',
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   chapterText: {
-    color: '#6C63FF',
+    color: '#fff',
     fontSize: 15,
     fontWeight: '600',
     marginLeft: 6,
@@ -486,44 +453,44 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   outlineInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 12,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
     padding: 14,
     color: '#fff',
     fontSize: 15,
     minHeight: 60,
     textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: '#333',
   },
   generateBtn: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  generateBtnDisabled: {
-    opacity: 0.7,
-  },
-  generateBtnGradient: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     gap: 8,
+    marginBottom: 16,
+  },
+  generateBtnDisabled: {
+    opacity: 0.5,
   },
   generateBtnText: {
-    color: '#fff',
+    color: '#000',
     fontSize: 17,
     fontWeight: '600',
   },
   agentStatus: {
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
-    borderRadius: 12,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.3)',
+    borderColor: '#333',
   },
   agentStatusTitle: {
-    color: '#6C63FF',
+    color: '#fff',
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 12,
@@ -544,21 +511,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#333',
   },
   stepDotActive: {
-    backgroundColor: '#6C63FF',
-    shadowColor: '#6C63FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
+    backgroundColor: '#fff',
   },
   stepText: {
-    color: '#666',
+    color: '#555',
     fontSize: 12,
   },
+  stepTextActive: {
+    color: '#fff',
+  },
   currentStepText: {
-    color: '#00D2FF',
+    color: '#fff',
     fontSize: 13,
     marginTop: 10,
-    fontStyle: 'italic',
   },
   contentSection: {
     marginTop: 8,
@@ -575,20 +540,22 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   previewBtnText: {
-    color: '#6C63FF',
+    color: '#888',
     fontSize: 13,
   },
   contentCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 16,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
     padding: 16,
     maxHeight: 400,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   contentScroll: {
     maxHeight: 380,
   },
   contentText: {
-    color: '#ddd',
+    color: '#fff',
     fontSize: 15,
     lineHeight: 26,
   },
@@ -599,10 +566,8 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     flex: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  saveBtnGradient: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -610,17 +575,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   saveBtnText: {
-    color: '#fff',
+    color: '#000',
     fontSize: 15,
     fontWeight: '600',
   },
   emptyContent: {
     alignItems: 'center',
     paddingVertical: 60,
-    opacity: 0.5,
   },
   emptyText: {
-    color: '#555',
+    color: '#888',
     fontSize: 15,
     marginTop: 12,
   },
@@ -632,11 +596,13 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#252550',
-    borderRadius: 20,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
     padding: 24,
     width: '100%',
     maxWidth: 340,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   modalTitle: {
     color: '#fff',
@@ -646,12 +612,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   modalInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
+    backgroundColor: '#000',
+    borderRadius: 8,
     padding: 14,
     color: '#fff',
     fontSize: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   modalInfo: {
     color: '#888',
@@ -665,8 +633,8 @@ const styles = StyleSheet.create({
   modalCancelBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    backgroundColor: '#333',
     alignItems: 'center',
   },
   modalCancelText: {
@@ -676,18 +644,18 @@ const styles = StyleSheet.create({
   modalConfirmBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#6C63FF',
+    borderRadius: 8,
+    backgroundColor: '#fff',
     alignItems: 'center',
   },
   modalConfirmText: {
-    color: '#fff',
+    color: '#000',
     fontSize: 16,
     fontWeight: '600',
   },
   previewModalContainer: {
     flex: 1,
-    backgroundColor: '#1A1A3E',
+    backgroundColor: '#000',
     paddingTop: 60,
   },
   previewHeader: {
@@ -697,7 +665,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: '#333',
   },
   previewTitle: {
     color: '#fff',
@@ -709,7 +677,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   previewText: {
-    color: '#ccc',
+    color: '#fff',
     fontSize: 16,
     lineHeight: 28,
   },

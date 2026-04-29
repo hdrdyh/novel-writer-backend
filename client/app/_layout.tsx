@@ -1,15 +1,17 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Provider } from '@/components/Provider';
 import '../global.css';
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout() {
   return (
     <Provider>
       <View style={styles.container}>
-        {children}
+        <StatusBar style="light" />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+        </Stack>
       </View>
     </Provider>
   );
@@ -18,6 +20,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1A3E',
+    backgroundColor: '#000000',
   },
 });
