@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 
 const app = express();
-const port = parseInt(process.env.PORT || '5000', 10);
+const port = parseInt(process.env.PORT || '9091', 10);
 
 // Middleware
 app.use(cors());

@@ -2,142 +2,82 @@
 @import 'uniwind';
 
 @theme {
-  /* Primitive Colors */
   --white: oklch(100% 0 0);
   --black: oklch(0% 0 0);
-  
-  /* Glass Aurora Theme - AI Writing App */
-  /* Primary: Aurora Purple */
   --primary: oklch(0.72 0.21 285);
   --primary-foreground: oklch(0.98 0 0);
-  
-  /* Secondary: Ice Blue */
   --secondary: oklch(0.85 0.18 200);
   --secondary-foreground: oklch(0.15 0 0);
-  
-  /* Accent: Neon Pink */
   --accent: oklch(0.75 0.22 340);
   --accent-foreground: oklch(0.98 0 0);
-  
-  /* Background - Deep Space */
   --background: oklch(0.08 0.02 285);
   --foreground: oklch(0.95 0 0);
-  
-  /* Surface - Glass Cards */
   --surface: oklch(0.15 0.03 285 / 0.6);
   --surface-foreground: oklch(0.95 0 0);
-  
-  /* Muted */
   --muted: oklch(0.55 0.02 285);
   --muted-foreground: oklch(0.65 0.02 285);
-  
-  /* Border */
   --border: oklch(0.25 0.03 285 / 0.3);
   --radius: 1rem;
 }
 
 @layer theme {
   :root {
-    /* Deep Space Background */
-    --background: #0F0C29;
-    --foreground: #F0F0FF;
-    
-    /* Glass Card Surface */
-    --surface: rgba(30, 27, 75, 0.7);
-    --surface-foreground: #F0F0FF;
-    
-    /* Aurora Purple */
-    --primary: #6C63FF;
-    --primary-foreground: #FFFFFF;
-    
-    /* Ice Blue */
-    --secondary: #00D2FF;
-    --secondary-foreground: #0F0C29;
-    
-    /* Neon Pink */
-    --accent: #FF6B9D;
-    --accent-foreground: #FFFFFF;
-    
-    /* Muted Text */
-    --muted: rgba(255, 255, 255, 0.35);
-    --muted-foreground: rgba(255, 255, 255, 0.5);
-    
-    /* Border */
-    --border: rgba(255, 255, 255, 0.1);
-    --card: rgba(30, 27, 75, 0.7);
-    --card-foreground: #F0F0FF;
-    --popover: rgba(15, 12, 41, 0.95);
-    --popover-foreground: #F0F0FF;
-    --destructive: #FF4444;
-    --destructive-foreground: #FFFFFF;
-    
-    /* Input */
+    --background: #1a1a2e;
+    --foreground: #f0f0f0;
+    --surface: #16213e;
+    --surface-foreground: #f0f0f0;
+    --primary: #6c63ff;
+    --primary-foreground: #ffffff;
+    --secondary: #0f3460;
+    --secondary-foreground: #ffffff;
+    --accent: #e94560;
+    --accent-foreground: #ffffff;
+    --muted: rgba(255, 255, 255, 0.4);
+    --muted-foreground: rgba(255, 255, 255, 0.6);
+    --border: rgba(255, 255, 255, 0.15);
+    --card: #16213e;
+    --card-foreground: #f0f0f0;
+    --popover: #1a1a2e;
+    --popover-foreground: #f0f0f0;
+    --destructive: #ff4444;
+    --destructive-foreground: #ffffff;
     --input: rgba(255, 255, 255, 0.1);
-    --ring: #6C63FF;
+    --ring: #6c63ff;
   }
-  
+
   * {
     border-color: var(--border);
   }
-  
+
   body {
-    background: linear-gradient(135deg, #0F0C29 0%, #302B63 50%, #24243E 100%);
+    background: #1a1a2e;
     color: var(--foreground);
     min-height: 100vh;
   }
 }
 
-/* Custom Glass Effect Classes */
-.glass-card {
-  background: rgba(30, 27, 75, 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
+/* Simple Card */
+.simple-card {
+  background: #16213e;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
 }
 
-.glass-button {
-  background: linear-gradient(135deg, rgba(108, 99, 255, 0.8) 0%, rgba(0, 210, 255, 0.6) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
+/* Simple Button */
+.simple-button {
+  background: #6c63ff;
+  border: none;
+  border-radius: 8px;
 }
 
-.glass-input {
+/* Simple Input */
+.simple-input {
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
 }
 
-.glass-input:focus {
-  border-color: #6C63FF;
+.simple-input:focus {
+  border-color: #6c63ff;
   background: rgba(108, 99, 255, 0.1);
-}
-
-/* Neon Glow Effects */
-.neon-glow {
-  box-shadow: 0 0 20px rgba(108, 99, 255, 0.4), 0 0 40px rgba(108, 99, 255, 0.2);
-}
-
-.neon-glow-blue {
-  box-shadow: 0 0 20px rgba(0, 210, 255, 0.4), 0 0 40px rgba(0, 210, 255, 0.2);
-}
-
-/* Aurora Gradient Background */
-.aurora-bg {
-  background: linear-gradient(
-    135deg,
-    #0F0C29 0%,
-    #302B63 25%,
-    #24243E 50%,
-    #1a1a3e 75%,
-    #0F0C29 100%
-  );
-}
-
-/* Gradient Text */
-.gradient-text {
-  background: linear-gradient(135deg, #6C63FF 0%, #00D2FF 50%, #FF6B9D 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }

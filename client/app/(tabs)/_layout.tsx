@@ -90,18 +90,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="test"
-        options={{
-          title: '测试',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={styles.iconContainer}>
-              <Ionicons name="bug-outline" size={22} color={color} />
-              {focused && <View style={styles.indicator} />}
-            </View>
-          ),
-        }}
-      />
+
     </Tabs>
   );
 }

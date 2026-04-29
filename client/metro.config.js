@@ -32,7 +32,7 @@ config.resolver.blockList = [
   /.*node_modules\/\.pnpm\/.*_tmp_\d+.*/,
 ];
 
-const BACKEND_TARGET = 'http://localhost:5000';
+const BACKEND_TARGET = 'http://localhost:9091';
 
 const apiProxy = createProxyMiddleware({
   target: BACKEND_TARGET,
@@ -119,6 +119,20 @@ config.server = {
         next();
       })
       .use(metroMiddleware);
+  },
+};
+
+// 限制Metro内存占用
+config.transformer = {
+  ...config.transformer,
+  maxWorkers: 1, // 限制为1个worker
+  workerThreads: false, // 禁用worker线程
+};
+
+config.watcher = {
+  ...config.watcher,
+  healthCheck: {
+    enabled: false,
   },
 };
 
