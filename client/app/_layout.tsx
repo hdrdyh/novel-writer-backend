@@ -8,7 +8,9 @@ import '../global.css';
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <Provider>
-      {children}
+      <View style={styles.container}>
+        {children}
+      </View>
     </Provider>
   );
 }
