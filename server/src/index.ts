@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import { z } from "zod";
+import fs from "fs";
+import path from "path";
 
 const app = express();
 const port = parseInt(process.env.PORT || '5000', 10);
@@ -1033,10 +1035,83 @@ app.get('/api/v1/writing/status', (req, res) => {
   });
 });
 
+// ============== Metro Bundler 兼容协议 ==============
+// 让Expo Go/Coze扫码工具认为这是Metro开发服务器
+
+// 1. 状态检查 - Expo Go连接时首先请求此端点
+app.get('/status', (_req, res) => {
+  res.setHeader('X-React-Native-Project-Root', encodeURI('/workspace/projects/client'));
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.end('packager-status:running');
+});
+
+// 2. JS Bundle请求 - Expo Go请求 *.bundle 文件
+app.get('*.bundle', (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const platform = url.searchParams.get('platform') || 'android';
+  
+  const bundleDir = path.resolve('public/_expo/static/js');
+  
+  // 优先使用对应平台的bundle
+  const platformDir = path.join(bundleDir, platform);
+  if (fs.existsSync(platformDir)) {
+    const files = fs.readdirSync(platformDir);
+    const hbcFile = files.find(f => f.endsWith('.hbc'));
+    const jsFile = files.find(f => f.endsWith('.js'));
+    if (hbcFile) { res.sendFile(path.join(platformDir, hbcFile)); return; }
+    if (jsFile) { res.sendFile(path.join(platformDir, jsFile)); return; }
+  }
+  
+  // fallback: android
+  const androidDir = path.join(bundleDir, 'android');
+  if (fs.existsSync(androidDir)) {
+    const files = fs.readdirSync(androidDir);
+    const hbcFile = files.find(f => f.endsWith('.hbc'));
+    const jsFile = files.find(f => f.endsWith('.js'));
+    if (hbcFile) { res.sendFile(path.join(androidDir, hbcFile)); return; }
+    if (jsFile) { res.sendFile(path.join(androidDir, jsFile)); return; }
+  }
+  
+  // 最后fallback: web
+  const webDir = path.join(bundleDir, 'web');
+  if (fs.existsSync(webDir)) {
+    const files = fs.readdirSync(webDir).filter(f => f.endsWith('.js'));
+    if (files.length > 0) { res.sendFile(path.join(webDir, files[0])); return; }
+  }
+  
+  res.status(404).send('Bundle not found');
+});
+
+// 3. Source Map请求
+app.get('*.map', (_req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', 'devtools://devtools');
+  res.status(404).send('Source map not available');
+});
+
+// 4. Assets请求
+app.get('*.assets', (_req, res) => {
+  res.status(404).send('Assets not available');
+});
+
+// 5. Symbolicate端点
+app.post('/symbolicate', (_req, res) => {
+  res.end('{}');
+});
+
+// 6. Open stack frame端点
+app.post('/open-stack-frame', (_req, res) => {
+  res.end('OK');
+});
+
+// 7. Metro HMR端点 (不支持热更新)
+app.get('/onchange', (_req, res) => {
+  res.status(404).end();
+});
+
 // ============== 前端静态文件 ==============
-// 必须放在API路由之后，否则会拦截API请求
 app.use(express.static('public'));
-// SPA fallback: 所有非API请求返回index.html
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
   res.sendFile('index.html', { root: 'public' });
