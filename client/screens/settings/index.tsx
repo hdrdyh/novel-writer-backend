@@ -10,6 +10,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen } from '@/components/Screen';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeRouter } from '@/hooks/useSafeRouter';
 
 interface SettingItem {
   key: string;
@@ -20,6 +21,8 @@ interface SettingItem {
 }
 
 export default function SettingsScreen() {
+  const router = useSafeRouter();
+
   const [settings, setSettings] = useState<SettingItem[]>([
     {
       key: 'autoSave',
@@ -122,6 +125,20 @@ export default function SettingsScreen() {
               <Text style={styles.statLabel}>记忆</Text>
             </View>
           </View>
+
+          {/* 写作流水线入口 */}
+          <Text style={styles.sectionTitle}>核心功能</Text>
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push('/agent-config')}
+          >
+            <Ionicons name="git-branch-outline" size={22} color="#fff" />
+            <View style={styles.actionInfo}>
+              <Text style={styles.actionLabel}>写作流水线</Text>
+              <Text style={styles.actionDesc}>管理Agent、调整执行顺序、配置API</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#555" />
+          </TouchableOpacity>
 
           {/* Settings Section */}
           <Text style={styles.sectionTitle}>创作偏好</Text>
