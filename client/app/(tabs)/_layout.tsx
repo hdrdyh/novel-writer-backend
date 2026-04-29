@@ -1,18 +1,16 @@
 import { Tabs } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Platform, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Platform, StyleSheet, View, Text } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function TabLayout() {
-  const insets = useSafeAreaInsets();
-
   const tabBarStyle = {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ECECEC',
-    paddingBottom: Platform.OS === 'ios' ? insets.bottom : 8,
+    backgroundColor: 'rgba(15, 12, 41, 0.85)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
     paddingTop: 8,
-    height: 60 + (Platform.OS === 'ios' ? insets.bottom : 8),
+    height: 70 + (Platform.OS === 'ios' ? 20 : 8),
   };
 
   return (
@@ -20,11 +18,15 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle,
-        tabBarActiveTintColor: '#111111',
-        tabBarInactiveTintColor: '#CCCCCC',
+        tabBarActiveTintColor: '#00D2FF',
+        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.35)',
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: '600',
+          marginTop: 2,
+        },
+        tabBarIconStyle: {
+          marginBottom: -2,
         },
       }}
     >
@@ -32,26 +34,35 @@ export default function TabLayout() {
         name="index"
         options={{
           title: '粗纲',
-          tabBarIcon: ({ color }) => (
-            <Feather name="edit-3" size={22} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.iconContainer}>
+              <Ionicons name="document-text-outline" size={22} color={color} />
+              {focused && <View style={styles.indicator} />}
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="writing"
         options={{
-          title: '写作台',
-          tabBarIcon: ({ color }) => (
-            <Feather name="pen-tool" size={22} color={color} />
+          title: '写作',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.iconContainer}>
+              <Ionicons name="pencil" size={22} color={color} />
+              {focused && <View style={styles.indicator} />}
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="memory"
         options={{
-          title: '记忆库',
-          tabBarIcon: ({ color }) => (
-            <Feather name="database" size={22} color={color} />
+          title: '记忆',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.iconContainer}>
+              <Ionicons name="cloud-outline" size={22} color={color} />
+              {focused && <View style={styles.indicator} />}
+            </View>
           ),
         }}
       />
@@ -59,8 +70,11 @@ export default function TabLayout() {
         name="bookshelf"
         options={{
           title: '书架',
-          tabBarIcon: ({ color }) => (
-            <Feather name="book" size={22} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.iconContainer}>
+              <Ionicons name="library-outline" size={22} color={color} />
+              {focused && <View style={styles.indicator} />}
+            </View>
           ),
         }}
       />
@@ -68,11 +82,31 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: '设置',
-          tabBarIcon: ({ color }) => (
-            <Feather name="settings" size={22} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.iconContainer}>
+              <Ionicons name="settings-outline" size={22} color={color} />
+              {focused && <View style={styles.indicator} />}
+            </View>
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 24,
+  },
+  indicator: {
+    position: 'absolute',
+    top: -8,
+    width: 20,
+    height: 2.5,
+    borderRadius: 2,
+    backgroundColor: '#00D2FF',
+  },
+});

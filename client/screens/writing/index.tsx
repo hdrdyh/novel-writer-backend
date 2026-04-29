@@ -1,454 +1,423 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TextInput,
-  Pressable,
+  TouchableOpacity,
+  ScrollView,
   StyleSheet,
   Alert,
-  KeyboardAvoidingView,
   Platform,
+  KeyboardAvoidingView,
   Modal,
+  Keyboard,
+  ActivityIndicator,
 } from 'react-native';
-import { Screen } from '@/components/Screen';
-import { Feather } from '@expo/vector-icons';
-import { useSafeSearchParams, useSafeRouter } from '@/hooks/useSafeRouter';
 import { useFocusEffect } from 'expo-router';
-import RNSSE from 'react-native-sse';
-import { AgentStatusIcon } from '@/components/AgentStatusMonitor';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Screen } from '@/components/Screen';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
-// API地址：固定指向Railway后端
 const API_BASE_URL = 'https://novel-writer-backend-production-24e9.up.railway.app';
 
-// LLM配置（DeepSeek）
-const LLM_API_KEY = 'sk-2d333ed0b01a4fe899df1c7c6cbe5617';
-const LLM_MODEL = 'deepseek-v4-flash';
-const LLM_BASE_URL = 'https://api.deepseek.com';
-
-// Agent步骤
-const AGENT_STEPS = ['世界观构建', '人物设定', '情节设计', '正文生成', '审核校对', '记忆存档'];
-
-// 生成章节ID
-const generateChapterId = () => `ch-${Date.now()}`;
-
-// 保存章节到书架
-const saveChapterToBookshelf = async (
-  content: string,
-  chapterNum: string,
-  chapterOutline: string,
-  novelId?: string,
-  novelTitle?: string,
-  existingChapters: any[] = [],
-  existingNovels: any[] = []
-) => {
-  const now = Date.now();
-  const nowISO = new Date().toISOString();
-  const newChapter = {
-    id: now.toString(),
-    novelId: novelId || 'default',
-    novelTitle: novelTitle || '默认小说',
-    chapterNumber: parseInt(chapterNum) || 1,
-    chapterTitle: `第${chapterNum}章`,
-    outline: chapterOutline,
-    content: content,
-    summary: content.slice(0, 200),
-    createdAt: nowISO,
-  };
-  
-  await AsyncStorage.setItem('bookshelf_chapters', JSON.stringify([newChapter, ...existingChapters]));
-  
-  if (novelId === 'new' && novelTitle) {
-    const newNovel = { id: novelId, title: novelTitle };
-    await AsyncStorage.setItem('bookshelf_novels', JSON.stringify([newNovel, ...existingNovels]));
-  }
-};
+// Agent配置
+const AGENT_STEPS = [
+  { name: '世界观构建', color: '#6C63FF' },
+  { name: '人物设定', color: '#00D2FF' },
+  { name: '情节设计', color: '#FF6B9D' },
+  { name: '正文生成', color: '#FFD93D' },
+  { name: '审核校对', color: '#6BCB77' },
+  { name: '记忆存档', color: '#FF8C42' },
+];
 
 export default function WritingScreen() {
-  const params = useSafeSearchParams<{ chapterId?: string; chapterNumber?: string; outline?: string }>();
-  const contentScrollRef = useRef<ScrollView>(null);
-
-  // 状态
-  const [chapterNum, setChapterNum] = useState('1');
-  const [chapterOutline, setChapterOutline] = useState('');
+  const [chapterNumber, setChapterNumber] = useState(1);
+  const [outlineInput, setOutlineInput] = useState('');
   const [content, setContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
-  const [progressText, setProgressText] = useState('');
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editedContent, setEditedContent] = useState('');
-  const [saved, setSaved] = useState(false);
-  const [memoryContext, setMemoryContext] = useState<string[]>([]);
-  const [agentCount, setAgentCount] = useState(3);
-  
-  // 书架相关状态
-  const [showBookshelfModal, setShowBookshelfModal] = useState(false);
-  const [novels, setNovels] = useState<{id: string; title: string}[]>([]);
-  const [newBookTitle, setNewBookTitle] = useState('');
+  const [memoryItems, setMemoryItems] = useState<any[]>([]);
+  const [savedItems, setSavedItems] = useState<any[]>([]);
+  const [novels, setNovels] = useState<any[]>([]);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [novelName, setNovelName] = useState('');
+  const [previewModal, setPreviewModal] = useState(false);
+  const [previewContent, setPreviewContent] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
 
-  // 加载书架小说列表
-  useEffect(() => {
-    const loadNovels = async () => {
-      try {
-        const data = await AsyncStorage.getItem('bookshelf_novels');
-        if (data) {
-          setNovels(JSON.parse(data));
-        }
-      } catch (e) {}
-    };
-    loadNovels();
+  const loadMemory = useCallback(async () => {
+    try {
+      const data = await AsyncStorage.getItem('memory');
+      if (data) setMemoryItems(JSON.parse(data));
+    } catch (e) {}
   }, []);
 
-  // 保存章节到书架
-  const handleSaveToBookshelf = async (novelId?: string, novelTitle?: string) => {
-    if (!content) return;
-    
+  const loadNovels = useCallback(async () => {
     try {
-      const chaptersStr = await AsyncStorage.getItem('bookshelf_chapters');
-      const novelsStr = await AsyncStorage.getItem('bookshelf_novels');
-      const existingChapters = chaptersStr ? JSON.parse(chaptersStr) : [];
-      const existingNovels = novelsStr ? JSON.parse(novelsStr) : [];
-      
-      await saveChapterToBookshelf(content, chapterNum, chapterOutline, novelId, novelTitle, existingChapters, existingNovels);
-      
-      Alert.alert('保存成功', `已保存到「${novelTitle || '默认小说'}」第${chapterNum}章`, [
-        { text: '确定' }
-      ]);
-      setShowBookshelfModal(false);
-      setNewBookTitle('');
-    } catch (e) {
-      Alert.alert('保存失败', '无法保存到书架');
-    }
-  };
+      const data = await AsyncStorage.getItem('novels');
+      if (data) setNovels(JSON.parse(data));
+    } catch (e) {}
+  }, []);
 
-  // 步骤名称映射（根据agentCount动态）
-  const getStepNames = () => {
-    const steps = ['世界观构建', '人物设定', '情节设计', '正文生成'];
-    if (agentCount >= 5) steps.push('审核校对');
-    if (agentCount >= 6) steps.push('记忆存档');
-    return steps;
-  };
+  const loadSavedItems = useCallback(async () => {
+    try {
+      const data = await AsyncStorage.getItem('savedItems');
+      if (data) setSavedItems(JSON.parse(data));
+    } catch (e) {}
+  }, []);
 
-  const stepNameMap: Record<string, number> = {};
-
-  // 初始化steps
-  const AGENT_STEPS = getStepNames();
-  
-  // 初始化stepNameMap
-  useEffect(() => {
-    const names = getStepNames();
-    names.forEach((name, i) => { stepNameMap[name] = i; });
-  }, [agentCount]);
-
-  // 重置状态
   useFocusEffect(
     useCallback(() => {
-      if (params.chapterNumber && params.outline) {
-        setChapterNum(params.chapterNumber);
-        setChapterOutline(params.outline);
-      }
-      setContent('');
-      setIsGenerating(false);
-      setCurrentStep(-1);
-      setProgressText('');
-      setSaved(false);
-    }, [params.chapterNumber, params.outline])
+      loadMemory();
+      loadNovels();
+      loadSavedItems();
+    }, [loadMemory, loadNovels, loadSavedItems])
   );
 
-  // 开始生成
-  const startGenerating = () => {
-    if (!chapterOutline.trim()) {
-      Alert.alert('提示', '请输入章纲');
+  const handleGenerate = async () => {
+    if (!outlineInput.trim()) {
+      Alert.alert('提示', '请输入本章章纲');
       return;
     }
 
     setIsGenerating(true);
     setContent('');
     setCurrentStep(0);
-    setSaved(false);
-    setProgressText('连接服务器...');
 
-    const requestChapterId = generateChapterId();
-    const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': LLM_API_KEY,
-        'x-model': LLM_MODEL,
-        'x-base-url': LLM_BASE_URL,
-      },
-      body: JSON.stringify({
-        chapterId: requestChapterId,
-        chapterNumber: parseInt(chapterNum) || 1,
-        outline: chapterOutline,
-        memoryContext: memoryContext,
-        agentCount: agentCount,
-      }),
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/writing/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': 'sk-2d333ed0b01a4fe899df1c7c6cbe5617',
+          'x-model': 'deepseek-v4-flash',
+          'x-base-url': 'https://api.deepseek.com',
+        },
+        body: JSON.stringify({
+          chapterId: `ch${Date.now()}`,
+          chapterNumber,
+          outline: outlineInput,
+          memoryContext: memoryItems.slice(-2).map((m) => m.summary || m.content.substring(0, 500)),
+          agentCount: 3,
+        }),
+      });
 
-    sse.addEventListener('message', (event) => {
-      try {
-        if (!event.data) return;
-        const data = JSON.parse(event.data);
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No reader');
 
-        if (data.type === 'step') {
-          const idx = data.stepIndex ?? stepNameMap[data.stepName] ?? 0;
-          setCurrentStep(idx);
-          setProgressText(data.stepName || '处理中');
-        } else if (data.type === 'done') {
-          sse.close();
-          setIsGenerating(false);
-          setCurrentStep(6);
-          setProgressText('完成');
-        } else if (data.error) {
-          sse.close();
-          setIsGenerating(false);
-          setCurrentStep(-1);
-          setProgressText('失败');
-          Alert.alert('错误', data.error);
-        } else if (data.content) {
-          setContent(prev => prev + data.content);
-          setProgressText(`生成中 ${(content + data.content).length} 字`);
-          setTimeout(() => contentScrollRef.current?.scrollToEnd({ animated: false }), 10);
+      let fullContent = '';
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const json = JSON.parse(data);
+              if (json.type === 'step') {
+                setCurrentStep(json.stepIndex);
+              } else if (json.type === 'content' && json.content) {
+                fullContent += json.content;
+                setContent(fullContent);
+              }
+            } catch (e) {}
+          }
         }
-      } catch (e) { /* ignore */ }
-    });
+      }
 
-    sse.addEventListener('error', () => {
+      if (!fullContent) {
+        const text = await response.text();
+        try {
+          const json = JSON.parse(text);
+          if (json.content) {
+            fullContent = json.content;
+            setContent(fullContent);
+          }
+        } catch (e) {}
+      }
+    } catch (error) {
+      Alert.alert('错误', '生成失败，请检查网络连接');
+    } finally {
       setIsGenerating(false);
       setCurrentStep(-1);
-      setProgressText('连接失败');
-      Alert.alert('错误', '无法连接服务器');
-    });
-
-    sse.addEventListener('close', () => {
-      if (isGenerating) {
-        setIsGenerating(false);
-        setCurrentStep(-1);
-      }
-    });
+    }
   };
 
-  // 保存并加入记忆上下文
-  const handleSave = () => {
-    if (!content) return;
-    // 保存本章前500字作为记忆
-    const summary = content.slice(0, 500);
-    setMemoryContext(prev => [...prev, summary]);
-    Alert.alert('保存成功', `第${chapterNum}章已存入记忆库（衔接上下文已更新）`, [
-      { text: '确定', onPress: () => setSaved(true) }
+  const handleSaveToMemory = async () => {
+    if (!content.trim()) {
+      Alert.alert('提示', '先生成正文后再保存');
+      return;
+    }
+
+    const newItem = {
+      id: Date.now().toString(),
+      chapterNumber,
+      outline: outlineInput,
+      content: content.substring(0, 5000),
+      summary: content.substring(0, 200),
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [newItem, ...memoryItems];
+    setMemoryItems(updated);
+    await AsyncStorage.setItem('memory', JSON.stringify(updated));
+    Alert.alert('成功', '已保存到记忆库');
+  };
+
+  const handleSaveToLibrary = () => {
+    if (!content.trim()) {
+      Alert.alert('提示', '先生成正文后再保存');
+      return;
+    }
+    setNovelName(`小说第${Date.now() % 10000}`);
+    setShowSaveModal(true);
+  };
+
+  const confirmSaveToLibrary = async () => {
+    const newItem = {
+      id: Date.now().toString(),
+      title: novelName || `第${chapterNumber}章`,
+      chapterNumber,
+      outline: outlineInput,
+      content,
+      createdAt: new Date().toISOString(),
+      cover: `https://picsum.photos/seed/${Date.now()}/200/300`,
+    };
+
+    const updated = [newItem, ...savedItems];
+    setSavedItems(updated);
+    await AsyncStorage.setItem('savedItems', JSON.stringify(updated));
+    await AsyncStorage.setItem('novels', JSON.stringify(updated));
+
+    setShowSaveModal(false);
+    Alert.alert('成功', `已保存"${newItem.title}"到书架`);
+  };
+
+  const handleDeleteChapter = async () => {
+    Alert.alert('确认', '确定删除本章内容吗？', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: () => {
+          setContent('');
+          setOutlineInput('');
+        },
+      },
     ]);
   };
 
-  // 编辑
-  const handleEdit = () => {
-    setEditedContent(content);
-    setIsEditMode(true);
+  const handleDeleteMemory = async (id: string) => {
+    const updated = memoryItems.filter((m) => m.id !== id);
+    setMemoryItems(updated);
+    await AsyncStorage.setItem('memory', JSON.stringify(updated));
   };
 
-  const handleSaveEdit = () => {
-    setContent(editedContent);
-    setIsEditMode(false);
+  const handleUseMemory = (summary: string) => {
+    setOutlineInput((prev) => (prev ? prev + ' ' + summary : summary));
   };
 
   return (
     <Screen>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {/* 顶部 */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.container}
+      >
+        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>写作台</Text>
-            <AgentStatusIcon
-              currentStep={currentStep >= 0 ? AGENT_STEPS[currentStep] : '待机'}
-              isRunning={isGenerating}
-              stepCount={currentStep}
-              totalSteps={AGENT_STEPS.length}
-            />
+          <View style={styles.headerLeft}>
+            <LinearGradient
+              colors={['#6C63FF', '#00D2FF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.titleGradient}
+            >
+              <Text style={styles.headerTitle}>创作中心</Text>
+            </LinearGradient>
           </View>
-          {isGenerating && (
-            <View style={styles.progressRow}>
-              <View style={styles.stepDots}>
-                {AGENT_STEPS.map((_, i) => (
-                  <View key={i} style={[
-                    styles.dot,
-                    i < currentStep && styles.dotDone,
-                    i === currentStep && styles.dotActive,
-                  ]} />
-                ))}
-              </View>
-              <Text style={styles.progressText}>{progressText}</Text>
-            </View>
-          )}
+          <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteChapter}>
+            <Ionicons name="trash-outline" size={20} color="#FF6B9D" />
+          </TouchableOpacity>
         </View>
 
-        {/* 内容区 */}
-        <ScrollView ref={contentScrollRef} style={styles.container} contentContainerStyle={styles.contentContainer}>
-          {/* Agent数量选择 */}
-          <View style={styles.agentRow}>
-            <Text style={styles.label}>Agent数量：</Text>
-            <View style={styles.agentButtons}>
-              {[1, 2, 3, 4, 5, 6].map((n) => (
-                <Pressable
-                  key={n}
-                  style={[styles.agentBtn, agentCount === n && styles.agentBtnActive]}
-                  onPress={() => !isGenerating && setAgentCount(n)}
-                  disabled={isGenerating}
-                >
-                  <Text style={[styles.agentBtnText, agentCount === n && styles.agentBtnTextActive]}>{n}</Text>
-                </Pressable>
-              ))}
-            </View>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Chapter Number */}
+          <View style={styles.chapterBadge}>
+            <Ionicons name="document-text" size={16} color="#6C63FF" />
+            <Text style={styles.chapterText}>第 {chapterNumber} 章</Text>
           </View>
 
-          {/* 章号 */}
-          <View style={styles.numRow}>
-            <Text style={styles.label}>第</Text>
+          {/* Outline Input - Compact */}
+          <View style={styles.outlineSection}>
+            <Text style={styles.sectionLabel}>章纲</Text>
             <TextInput
-              style={styles.numInput}
-              value={chapterNum}
-              onChangeText={setChapterNum}
-              keyboardType="number-pad"
-              editable={!isGenerating}
-            />
-            <Text style={styles.label}>章</Text>
-          </View>
-
-          {/* 章纲 */}
-          <Text style={styles.sectionLabel}>章纲</Text>
-          <TextInput
-            style={styles.outlineInput}
-            value={chapterOutline}
-            onChangeText={setChapterOutline}
-            placeholder="输入本章章纲..."
-            placeholderTextColor="#CCCCCC"
-            multiline
-            editable={!isGenerating}
-          />
-
-          {/* 正文 */}
-          <Text style={styles.sectionLabel}>
-            正文 {content.length > 0 && <Text style={styles.wordCount}>{content.length}字</Text>}
-          </Text>
-
-          {isGenerating ? (
-            <View style={styles.contentBox}>
-              <Text style={styles.generatedText}>{content}</Text>
-              <View style={styles.cursor} />
-            </View>
-          ) : isEditMode ? (
-            <TextInput
-              style={[styles.contentBox, styles.editInput]}
-              value={editedContent}
-              onChangeText={setEditedContent}
+              style={styles.outlineInput}
+              placeholder="输入本章章纲，描述本章主要情节..."
+              placeholderTextColor="#666"
+              value={outlineInput}
+              onChangeText={setOutlineInput}
               multiline
-              autoFocus
             />
-          ) : content ? (
-            <Pressable style={styles.contentBox} onPress={handleEdit}>
-              <Text style={styles.generatedText}>{content}</Text>
-              <Text style={styles.editHint}>点击编辑</Text>
-            </Pressable>
+          </View>
+
+          {/* Generate Button */}
+          <TouchableOpacity
+            style={[styles.generateBtn, isGenerating && styles.generateBtnDisabled]}
+            onPress={handleGenerate}
+            disabled={isGenerating}
+          >
+            <LinearGradient
+              colors={isGenerating ? ['#555', '#444'] : ['#6C63FF', '#00D2FF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.generateBtnGradient}
+            >
+              {isGenerating ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="bulb" size={20} color="#fff" />
+                  <Text style={styles.generateBtnText}>开始创作</Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Agent Status */}
+          {isGenerating && (
+            <View style={styles.agentStatus}>
+              <Text style={styles.agentStatusTitle}>
+                <Ionicons name="analytics" size={16} color="#6C63FF" /> AI创作进度
+              </Text>
+              <View style={styles.agentSteps}>
+                {AGENT_STEPS.slice(0, 3).map((step, idx) => (
+                  <View key={idx} style={styles.agentStepItem}>
+                    <View
+                      style={[
+                        styles.stepDot,
+                        { backgroundColor: step.color },
+                        currentStep >= idx && styles.stepDotActive,
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.stepText,
+                        currentStep >= idx && { color: step.color },
+                      ]}
+                    >
+                      {step.name}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              {currentStep >= 0 && (
+                <Text style={styles.currentStepText}>
+                  正在：{AGENT_STEPS[Math.min(currentStep, 2)]?.name}
+                </Text>
+              )}
+            </View>
+          )}
+
+          {/* Content Display */}
+          {content ? (
+            <View style={styles.contentSection}>
+              <View style={styles.contentHeader}>
+                <Text style={styles.sectionLabel}>正文</Text>
+                <TouchableOpacity
+                  style={styles.previewBtn}
+                  onPress={() => {
+                    setPreviewContent(content);
+                    setPreviewTitle(`第${chapterNumber}章`);
+                    setPreviewModal(true);
+                  }}
+                >
+                  <Ionicons name="expand" size={16} color="#6C63FF" />
+                  <Text style={styles.previewBtnText}>全屏</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.contentCard}>
+                <ScrollView style={styles.contentScroll} nestedScrollEnabled>
+                  <Text style={styles.contentText}>{content}</Text>
+                </ScrollView>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.actionButtons}>
+                <TouchableOpacity style={styles.saveBtn} onPress={handleSaveToMemory}>
+                  <LinearGradient colors={['#6C63FF', '#6C63FF']} style={styles.saveBtnGradient}>
+                    <Ionicons name="cloud-upload" size={18} color="#fff" />
+                    <Text style={styles.saveBtnText}>存记忆</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveBtn} onPress={handleSaveToLibrary}>
+                  <LinearGradient colors={['#00D2FF', '#00D2FF']} style={styles.saveBtnGradient}>
+                    <Ionicons name="bookmark" size={18} color="#fff" />
+                    <Text style={styles.saveBtnText}>存书架</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
           ) : (
-            <View style={styles.emptyBox}>
-              <Feather name="feather" size={32} color="#DDDDDD" />
-              <Text style={styles.emptyText}>输入章纲后点击开始写作</Text>
+            <View style={styles.emptyContent}>
+              <Ionicons name="create-outline" size={48} color="#333" />
+              <Text style={styles.emptyText}>输入章纲，点击开始创作</Text>
             </View>
           )}
         </ScrollView>
 
-        {/* 底部按钮 */}
-        <View style={styles.actionBar}>
-          {isGenerating ? (
-            <View style={styles.generatingBar}>
-              <View style={styles.loadingDots}>
-                <View style={styles.loadDot} />
-                <View style={[styles.loadDot, styles.loadDotActive]} />
-                <View style={styles.loadDot} />
-              </View>
-              <Text style={styles.generatingText}>写作中...</Text>
-            </View>
-          ) : isEditMode ? (
-            <View style={styles.editBar}>
-              <Pressable style={styles.cancelBtn} onPress={() => setIsEditMode(false)}>
-                <Text style={styles.cancelText}>取消</Text>
-              </Pressable>
-              <Pressable style={styles.saveBtn} onPress={handleSaveEdit}>
-                <Text style={styles.saveText}>保存</Text>
-              </Pressable>
-            </View>
-          ) : content ? (
-            <View style={styles.doneBar3}>
-              <Pressable style={styles.editBtn} onPress={handleEdit}>
-                <Text style={styles.editText}>修改</Text>
-              </Pressable>
-              <Pressable style={[styles.saveToLibBtn, saved && styles.savedBtn]} onPress={handleSave}>
-                <Feather name="check-circle" size={16} color={saved ? '#FFFFFF' : '#111111'} />
-                <Text style={[styles.saveToLibText, saved && styles.savedText]}>
-                  {saved ? '已保存' : '存入记忆库'}
-                </Text>
-              </Pressable>
-              <Pressable style={styles.saveToShelfBtn} onPress={() => setShowBookshelfModal(true)}>
-                <Feather name="bookmark" size={16} color="#FFFFFF" />
-                <Text style={styles.saveToShelfText}>保存到书架</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable style={styles.startBtn} onPress={startGenerating}>
-              <Feather name="feather" size={18} color="#FFFFFF" />
-              <Text style={styles.startText}>开始写作</Text>
-            </Pressable>
-          )}
-        </View>
-
-        {/* 保存到书架弹窗 */}
-        <Modal visible={showBookshelfModal} transparent animationType="fade">
+        {/* Save Modal */}
+        <Modal visible={showSaveModal} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>保存到书架</Text>
-                <Pressable onPress={() => setShowBookshelfModal(false)}>
-                  <Feather name="x" size={20} color="#666666" />
-                </Pressable>
+              <Text style={styles.modalTitle}>保存到书架</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="输入书名"
+                placeholderTextColor="#666"
+                value={novelName}
+                onChangeText={setNovelName}
+              />
+              <Text style={styles.modalInfo}>章节：第{chapterNumber}章</Text>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setShowSaveModal(false)}
+                >
+                  <Text style={styles.modalCancelText}>取消</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmSaveToLibrary}>
+                  <Text style={styles.modalConfirmText}>确认保存</Text>
+                </TouchableOpacity>
               </View>
-              
-              <Text style={styles.modalSubtitle}>选择保存到哪本书</Text>
-              
-              {novels.length > 0 ? (
-                <ScrollView style={styles.novelList}>
-                  {novels.map(novel => (
-                    <Pressable key={novel.id} style={styles.novelItem} onPress={() => handleSaveToBookshelf(novel.id, novel.title)}>
-                      <Feather name="book" size={16} color="#666666" />
-                      <Text style={styles.novelTitle}>{novel.title}</Text>
-                    </Pressable>
-                  ))}
-                  <Pressable style={styles.newBookItem} onPress={() => handleSaveToBookshelf('new', newBookTitle)}>
-                    <Feather name="plus" size={16} color="#3B82F6" />
-                    <TextInput
-                      style={styles.newBookInput}
-                      placeholder="创建新书..."
-                      placeholderTextColor="#999999"
-                      value={newBookTitle}
-                      onChangeText={setNewBookTitle}
-                    />
-                  </Pressable>
-                </ScrollView>
-              ) : (
-                <View style={styles.emptyNovelList}>
-                  <Text style={styles.emptyText}>暂无小说</Text>
-                  <TextInput
-                    style={styles.newBookInput}
-                    placeholder="输入书名创建新书..."
-                    placeholderTextColor="#999999"
-                    value={newBookTitle}
-                    onChangeText={setNewBookTitle}
-                  />
-                  <Pressable style={styles.createBookBtn} onPress={() => handleSaveToBookshelf('new', newBookTitle)}>
-                    <Text style={styles.createBookText}>创建并保存</Text>
-                  </Pressable>
-                </View>
-              )}
             </View>
+          </View>
+        </Modal>
+
+        {/* Preview Modal */}
+        <Modal visible={previewModal} animationType="slide" onRequestClose={() => setPreviewModal(false)}>
+          <View style={styles.previewModalContainer}>
+            <View style={styles.previewHeader}>
+              <Text style={styles.previewTitle}>{previewTitle}</Text>
+              <TouchableOpacity onPress={() => setPreviewModal(false)}>
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.previewScroll}>
+              <Text style={styles.previewText}>{previewContent}</Text>
+            </ScrollView>
           </View>
         </Modal>
       </KeyboardAvoidingView>
@@ -457,90 +426,298 @@ export default function WritingScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, backgroundColor: '#FFFFFF' },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: '700', color: '#111111' },
-  progressRow: { marginTop: 8 },
-  stepDots: { flexDirection: 'row', gap: 6, marginBottom: 6 },
-  dot: { width: 24, height: 6, borderRadius: 3, backgroundColor: '#EEEEEE' },
-  dotDone: { backgroundColor: '#10B981' },
-  dotActive: { backgroundColor: '#3B82F6' },
-  progressText: { fontSize: 12, color: '#888888' },
-  
-  container: { flex: 1 },
-  contentContainer: { padding: 20 },
-  
-  numRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  label: { fontSize: 15, color: '#666666' },
-  numInput: { fontSize: 16, fontWeight: '600', color: '#111111', paddingHorizontal: 8, minWidth: 50, textAlign: 'center' },
-  
-  agentRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#F8F8F8', borderRadius: 10 },
-  agentButtons: { flexDirection: 'row', gap: 6, marginLeft: 8 },
-  agentBtn: { width: 32, height: 32, borderRadius: 6, backgroundColor: '#EEEEEE', alignItems: 'center', justifyContent: 'center' },
-  agentBtnActive: { backgroundColor: '#111111' },
-  agentBtnText: { fontSize: 14, fontWeight: '600', color: '#666666' },
-  agentBtnTextActive: { color: '#FFFFFF' },
-  
-  sectionLabel: { fontSize: 13, fontWeight: '600', color: '#999999', marginBottom: 8 },
-  wordCount: { fontWeight: '400', color: '#BBBBBB', marginLeft: 6 },
-  
+  container: {
+    flex: 1,
+    backgroundColor: '#0F0C29',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 16,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  titleGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  deleteBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 107, 157, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 100,
+  },
+  chapterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(108, 99, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+  },
+  chapterText: {
+    color: '#6C63FF',
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  outlineSection: {
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    color: '#888',
+    fontSize: 13,
+    marginBottom: 8,
+    fontWeight: '500',
+  },
   outlineInput: {
-    backgroundColor: '#F8F8F8', borderRadius: 10, padding: 12, fontSize: 14, color: '#111111',
-    minHeight: 44, marginBottom: 12, lineHeight: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    padding: 14,
+    color: '#fff',
+    fontSize: 15,
+    minHeight: 60,
+    textAlignVertical: 'top',
   },
-  
-  contentBox: {
-    backgroundColor: '#FFFFFF', borderRadius: 10, padding: 14, minHeight: 350,
-    borderWidth: 1, borderColor: '#EEEEEE',
+  generateBtn: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
   },
-  generatedText: { fontSize: 15, color: '#111111', lineHeight: 26 },
-  cursor: { width: 2, height: 16, backgroundColor: '#111111', marginTop: 4 },
-  editHint: { fontSize: 12, color: '#BBBBBB', textAlign: 'center', marginTop: 12 },
-  editInput: { borderColor: '#111111', textAlignVertical: 'top', minHeight: 300 },
-  
-  emptyBox: { backgroundColor: '#F8F8F8', borderRadius: 10, padding: 40, alignItems: 'center' },
-  emptyText: { fontSize: 14, color: '#BBBBBB', marginTop: 12 },
-  
-  actionBar: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
-  
-  startBtn: { backgroundColor: '#111111', borderRadius: 10, paddingVertical: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  startText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  
-  generatingBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  loadingDots: { flexDirection: 'row', gap: 6 },
-  loadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#DDDDDD' },
-  loadDotActive: { backgroundColor: '#111111' },
-  generatingText: { fontSize: 14, color: '#888888' },
-  
-  editBar: { flexDirection: 'row', gap: 12 },
-  cancelBtn: { flex: 1, backgroundColor: '#F5F5F5', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  cancelText: { fontSize: 15, fontWeight: '600', color: '#666666' },
-  saveBtn: { flex: 2, backgroundColor: '#111111', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  saveText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
-  
-  doneBar: { flexDirection: 'row', gap: 10 },
-  editBtn: { flex: 1, backgroundColor: '#F5F5F5', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  editText: { fontSize: 15, fontWeight: '600', color: '#666666' },
-  saveToLibBtn: { flex: 2, backgroundColor: '#F5F5F5', borderRadius: 10, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  saveToLibText: { fontSize: 15, fontWeight: '600', color: '#111111' },
-  savedBtn: { backgroundColor: '#10B981' },
-  savedText: { color: '#FFFFFF' },
-  
-  doneBar3: { flexDirection: 'row', gap: 8 },
-  saveToShelfBtn: { flex: 1.2, backgroundColor: '#111111', borderRadius: 10, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  saveToShelfText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
-  
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, width: '85%', maxHeight: '70%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#111111' },
-  modalSubtitle: { fontSize: 14, color: '#888888', marginBottom: 16 },
-  novelList: { maxHeight: 300 },
-  novelItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  novelTitle: { fontSize: 16, color: '#111111' },
-  newBookItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
-  newBookInput: { flex: 1, fontSize: 16, color: '#111111', padding: 0 },
-  emptyNovelList: { alignItems: 'center', paddingVertical: 20 },
-  createBookBtn: { backgroundColor: '#3B82F6', borderRadius: 10, paddingVertical: 14, paddingHorizontal: 24, marginTop: 16 },
-  createBookText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+  generateBtnDisabled: {
+    opacity: 0.7,
+  },
+  generateBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  generateBtnText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  agentStatus: {
+    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.3)',
+  },
+  agentStatusTitle: {
+    color: '#6C63FF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  agentSteps: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  agentStepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#333',
+  },
+  stepDotActive: {
+    backgroundColor: '#6C63FF',
+    shadowColor: '#6C63FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+  },
+  stepText: {
+    color: '#666',
+    fontSize: 12,
+  },
+  currentStepText: {
+    color: '#00D2FF',
+    fontSize: 13,
+    marginTop: 10,
+    fontStyle: 'italic',
+  },
+  contentSection: {
+    marginTop: 8,
+  },
+  contentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  previewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  previewBtnText: {
+    color: '#6C63FF',
+    fontSize: 13,
+  },
+  contentCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 16,
+    padding: 16,
+    maxHeight: 400,
+  },
+  contentScroll: {
+    maxHeight: 380,
+  },
+  contentText: {
+    color: '#ddd',
+    fontSize: 15,
+    lineHeight: 26,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  saveBtn: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  saveBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  emptyContent: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    opacity: 0.5,
+  },
+  emptyText: {
+    color: '#555',
+    fontSize: 15,
+    marginTop: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 14,
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  modalInfo: {
+    color: '#888',
+    fontSize: 14,
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: '#888',
+    fontSize: 16,
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#6C63FF',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  previewModalContainer: {
+    flex: 1,
+    backgroundColor: '#0F0C29',
+    paddingTop: 60,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  previewTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  previewScroll: {
+    flex: 1,
+    padding: 20,
+  },
+  previewText: {
+    color: '#ccc',
+    fontSize: 16,
+    lineHeight: 28,
+  },
 });
