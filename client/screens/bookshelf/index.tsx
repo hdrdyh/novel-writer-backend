@@ -69,10 +69,36 @@ export default function BookshelfScreen() {
 
   const loadNovels = async () => {
     try {
+      // 合并novels和bookshelf_novels的数据
       const stored = await AsyncStorage.getItem('novels');
+      const shelfNovels = await AsyncStorage.getItem('bookshelf_novels');
+      
+      let allNovels: Novel[] = [];
+      
       if (stored) {
-        setNovels(JSON.parse(stored));
-      } else {
+        allNovels = [...JSON.parse(stored)];
+      }
+      
+      if (shelfNovels) {
+        const shelf = JSON.parse(shelfNovels);
+        // 合并，避免重复
+        shelf.forEach((s: {id: string; title: string}) => {
+          if (!allNovels.find(n => n.id === s.id)) {
+            allNovels.push({
+              id: s.id,
+              title: s.title,
+              genre: '小说',
+              synopsis: '从写作台保存的章节',
+              createdAt: new Date().toISOString().split('T')[0],
+              updatedAt: new Date().toISOString().split('T')[0],
+              chapterCount: 1,
+              status: 'writing',
+            });
+          }
+        });
+      }
+      
+      if (allNovels.length === 0) {
         // 初始化示例数据
         const sampleNovels: Novel[] = [
           {
@@ -98,6 +124,8 @@ export default function BookshelfScreen() {
         ];
         setNovels(sampleNovels);
         await AsyncStorage.setItem('novels', JSON.stringify(sampleNovels));
+      } else {
+        setNovels(allNovels);
       }
     } catch (e) {
       console.error('加载小说失败:', e);
@@ -166,11 +194,36 @@ export default function BookshelfScreen() {
   const loadChapters = async (novelId: string) => {
     try {
       const stored = await AsyncStorage.getItem(`chapters_${novelId}`);
+      let loadedChapters: Chapter[] = [];
+      
       if (stored) {
-        setChapters(JSON.parse(stored));
-      } else {
-        setChapters([]);
+        loadedChapters = [...JSON.parse(stored)];
       }
+      
+      // 也读取bookshelf_chapters中的章节
+      const shelfChapters = await AsyncStorage.getItem('bookshelf_chapters');
+      if (shelfChapters) {
+        const shelf = JSON.parse(shelfChapters);
+        shelf.forEach((c: any) => {
+          if (c.novelId === novelId && !loadedChapters.find(existing => existing.id === c.id)) {
+            loadedChapters.push({
+              id: c.id,
+              novelId: c.novelId,
+              chapterNumber: c.chapterNumber,
+              outline: c.outline || '',
+              content: c.content,
+              summary: c.summary || c.content?.slice(0, 200) || '',
+              status: 'completed',
+              createdAt: c.createdAt,
+              updatedAt: c.createdAt,
+            });
+          }
+        });
+      }
+      
+      // 按章节号排序
+      loadedChapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
+      setChapters(loadedChapters);
     } catch (e) {
       console.error('加载章节失败:', e);
     }

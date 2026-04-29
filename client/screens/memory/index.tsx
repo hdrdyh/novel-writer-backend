@@ -37,6 +37,19 @@ export default function MemoryScreen() {
   ]);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedContentIds, setExpandedContentIds] = useState<Set<string>>(new Set());
+
+  const toggleContentExpand = (id: string) => {
+    setExpandedContentIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
 
   const handleUseMemory = (memory: MemoryChapter) => {
     Alert.alert(
@@ -116,9 +129,14 @@ export default function MemoryScreen() {
                   <View style={styles.expandedContent}>
                     <View style={styles.divider} />
                     <Text style={styles.contentLabel}>正文预览</Text>
-                    <Text style={styles.contentText} numberOfLines={6}>
+                    <Text style={styles.contentText} numberOfLines={expandedContentIds.has(memory.id) ? undefined : 6}>
                       {memory.content}
                     </Text>
+                    <Pressable onPress={() => toggleContentExpand(memory.id)}>
+                      <Text style={styles.expandText}>
+                        {expandedContentIds.has(memory.id) ? '收起' : '查看全部'}
+                      </Text>
+                    </Pressable>
 
                     <View style={styles.cardActions}>
                       <Pressable
@@ -254,6 +272,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#111111',
     lineHeight: 24,
+  },
+  expandText: {
+    fontSize: 14,
+    color: '#4A90D9',
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
   },
   cardActions: {
     flexDirection: 'row',
