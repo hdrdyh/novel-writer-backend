@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,8 +18,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen } from '@/components/Screen';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import RNSSE from 'react-native-sse';
 
-const API_BASE_URL = 'https://novel-writer-backend-production-24e9.up.railway.app';
+const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
 
 // Agent配置
 const AGENT_STEPS = [
@@ -85,8 +86,10 @@ export default function WritingScreen() {
     setContent('');
     setCurrentStep(0);
 
+    let fullContent = '';
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/writing/generate`, {
+      const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -103,50 +106,40 @@ export default function WritingScreen() {
         }),
       });
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No reader');
-
-      let fullContent = '';
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') continue;
-
-            try {
-              const json = JSON.parse(data);
-              if (json.type === 'step') {
-                setCurrentStep(json.stepIndex);
-              } else if (json.type === 'content' && json.content) {
-                fullContent += json.content;
-                setContent(fullContent);
-              }
-            } catch (e) {}
-          }
+      sse.addEventListener('message', (event) => {
+        if (event.data === '[DONE]') {
+          setIsGenerating(false);
+          setCurrentStep(-1);
+          sse.close();
+          return;
         }
-      }
 
-      if (!fullContent) {
-        const text = await response.text();
         try {
-          const json = JSON.parse(text);
-          if (json.content) {
+          const json = JSON.parse(event.data);
+          if (json.type === 'step') {
+            setCurrentStep(json.stepIndex);
+          } else if (json.type === 'chunk' && json.content) {
+            fullContent += json.content;
+            setContent(fullContent);
+          } else if (json.type === 'done' && json.content) {
             fullContent = json.content;
             setContent(fullContent);
           }
-        } catch (e) {}
-      }
+        } catch (e) {
+          // 忽略解析错误
+        }
+      });
+
+      sse.addEventListener('error', (error) => {
+        console.error('SSE Error:', error);
+        setIsGenerating(false);
+        setCurrentStep(-1);
+        Alert.alert('错误', '生成失败，请检查网络连接');
+      });
+
     } catch (error) {
+      console.error('Generate error:', error);
       Alert.alert('错误', '生成失败，请检查网络连接');
-    } finally {
       setIsGenerating(false);
       setCurrentStep(-1);
     }
