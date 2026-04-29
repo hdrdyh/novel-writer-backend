@@ -12,8 +12,6 @@ import {
 import { Screen } from '@/components/Screen';
 import { Feather } from '@expo/vector-icons';
 
-const EXPO_PUBLIC_BACKEND_BASE_URL = 'https://novel-writer-backend-production-24e9.up.railway.app';
-
 interface APIConfig {
   id: string;
   name: string;
@@ -33,6 +31,11 @@ interface Agent {
 }
 
 export default function SettingsScreen() {
+  // 后端服务器地址
+  const [serverUrl, setServerUrl] = useState('https://novel-writer-backend-production-24e9.up.railway.app');
+  const [isTestingServer, setIsTestingServer] = useState(false);
+  const [serverTestResult, setServerTestResult] = useState<{success: boolean; message: string} | null>(null);
+
   // API配置列表
   const [apis, setApis] = useState<APIConfig[]>([
     { id: '1', name: 'DeepSeek', provider: 'deepseek', apiKey: 'sk-xxx...xxx' },
@@ -51,7 +54,7 @@ export default function SettingsScreen() {
 
   const fetchAgents = async () => {
     try {
-      const res = await fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents`);
+      const res = await fetch(`${serverUrl}/api/v1/agents`);
       const data = await res.json();
       if (data.agents) {
         const mappedAgents: Agent[] = data.agents.map((a: any) => ({
@@ -82,6 +85,30 @@ export default function SettingsScreen() {
       memory: 'database',
     };
     return icons[role] || 'user';
+  };
+
+  // 测试后端服务器连接
+  const handleTestServer = async () => {
+    if (!serverUrl.trim()) {
+      Alert.alert('提示', '请输入服务器地址');
+      return;
+    }
+
+    setIsTestingServer(true);
+    setServerTestResult(null);
+
+    try {
+      const response = await fetch(`${serverUrl.trim()}/api/v1/health`);
+      if (response.ok) {
+        setServerTestResult({ success: true, message: '服务器连接成功！' });
+      } else {
+        throw new Error(`错误码: ${response.status}`);
+      }
+    } catch (error: any) {
+      setServerTestResult({ success: false, message: error.message || '连接失败' });
+    } finally {
+      setIsTestingServer(false);
+    }
   };
 
   // 弹窗状态
@@ -311,7 +338,7 @@ export default function SettingsScreen() {
           setAgents(newList);
           
           // 调用API删除
-          const deleteUrl = `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/${agent.id}`;
+          const deleteUrl = `${serverUrl}/api/v1/agents/${agent.id}`;
           fetch(deleteUrl, { method: 'DELETE' })
             .then(res => res.json())
             .then(() => {
@@ -379,7 +406,7 @@ export default function SettingsScreen() {
     
       // 同步到后端
       try {
-        const response = await fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/agents/reorder`, {
+        const response = await fetch(`${serverUrl}/api/v1/agents/reorder`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orders: newOrder.map(a => ({ id: a.id, order: a.order })) }),
@@ -417,6 +444,40 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* 服务器配置 */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>服务器配置</Text>
+          <View style={styles.serverCard}>
+            <View style={styles.serverInputRow}>
+              <TextInput
+                style={styles.serverInput}
+                value={serverUrl}
+                onChangeText={setServerUrl}
+                placeholder="输入后端服务器地址"
+                placeholderTextColor="#999999"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            <Pressable
+              style={[styles.testBtn, isTestingServer && styles.testBtnDisabled]}
+              onPress={handleTestServer}
+              disabled={isTestingServer}
+            >
+              <Text style={styles.testBtnText}>
+                {isTestingServer ? '测试中...' : '测试连接'}
+              </Text>
+            </Pressable>
+            {serverTestResult && (
+              <View style={[styles.testResult, serverTestResult.success ? styles.testResultSuccess : styles.testResultError]}>
+                <Text style={[styles.testResultText, serverTestResult.success ? styles.testResultTextSuccess : styles.testResultTextError]}>
+                  {serverTestResult.message}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
         {/* API管理 */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -1394,5 +1455,39 @@ const styles = StyleSheet.create({
   moveCancelText: {
     fontSize: 15,
     color: '#888888',
+  },
+  // 服务器配置样式
+  serverCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ECECEC',
+    padding: 16,
+    marginTop: 12,
+  },
+  serverInputRow: {
+    marginBottom: 12,
+  },
+  serverInput: {
+    backgroundColor: '#F7F7F7',
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 14,
+    color: '#111111',
+  },
+  testBtnDisabled: {
+    backgroundColor: '#CCCCCC',
+  },
+  testResultSuccess: {
+    backgroundColor: '#D1FAE5',
+  },
+  testResultError: {
+    backgroundColor: '#FEE2E2',
+  },
+  testResultTextSuccess: {
+    color: '#065F46',
+  },
+  testResultTextError: {
+    color: '#991B1B',
   },
 });

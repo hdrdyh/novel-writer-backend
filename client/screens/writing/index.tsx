@@ -97,50 +97,48 @@ export default function WritingScreen() {
     setEditedContent('');
     setGenerationProgress('正在连接...');
 
-    // 调用后端写作接口
-    fetch(`${API_BASE_URL}/api/v1/writing/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        chapterNum: chapterNum,
-        outline: chapterOutline,
-        context: ''  // 可以后续添加上下文
-      }),
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('请求失败');
-      }
-      setGenerationProgress('正在生成...');
-      
-      // 使用RNSSE处理SSE流
+    // 使用RNSSE处理SSE流
       const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': 'sk-2d333ed0b01a4fe899df1c7c6cbe5617',
+          'x-model': 'deepseek-v4-flash',
+          'x-base-url': 'https://api.deepseek.com',
         },
         body: JSON.stringify({
-          chapterNum: chapterNum,
+          chapterId: `chapter-${Date.now()}`,
+          chapterNumber: parseInt(chapterNum) || 1,
           outline: chapterOutline,
-          context: ''
+          memoryContext: []
         }),
       });
 
       sse.addEventListener('message', (event) => {
-        if (event.data === '[DONE]') {
-          sse.close();
-          setIsGenerating(false);
-          setGenerationProgress('生成完成');
-          setEditedContent(content);
-        } else {
-          setContent(prev => prev + event.data);
-          setGenerationProgress(`已生成 ${content.length} 字`);
-          // 滚动到底部
-          setTimeout(() => {
-            contentScrollRef.current?.scrollToEnd({ animated: false });
-          }, 10);
+        try {
+          if (!event.data) return;
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'done') {
+            sse.close();
+            setIsGenerating(false);
+            setGenerationProgress('生成完成');
+            setEditedContent(content);
+          } else if (data.error) {
+            sse.close();
+            setIsGenerating(false);
+            setGenerationProgress('生成失败');
+            Alert.alert('错误', data.error);
+          } else if (data.content) {
+            setContent(prev => prev + data.content);
+            setGenerationProgress(`已生成 ${(content + data.content).length} 字`);
+            // 滚动到底部
+            setTimeout(() => {
+              contentScrollRef.current?.scrollToEnd({ animated: false });
+            }, 10);
+          }
+        } catch (e) {
+          // 忽略解析错误
         }
       });
 
@@ -155,13 +153,6 @@ export default function WritingScreen() {
         setIsGenerating(false);
         setEditedContent(content);
       });
-    })
-    .catch(error => {
-      console.error('请求错误:', error);
-      setIsGenerating(false);
-      setGenerationProgress('生成失败');
-      Alert.alert('错误', '连接服务器失败，请检查网络');
-    });
   };
 
   const handleSave = () => {
