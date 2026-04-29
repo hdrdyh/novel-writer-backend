@@ -415,7 +415,6 @@ app.post('/api/v1/writing/generate', async (req, res) => {
     chapterNumber: z.number(),
     outline: z.string(),
     memoryContext: z.array(z.union([z.string(), MemoryEntrySchema])).optional(),
-    agentCount: z.number().min(1).max(6).optional().default(3),
   });
 
   try {
@@ -544,62 +543,41 @@ app.post('/api/v1/writing/generate', async (req, res) => {
 
     try {
       // ====== 执行多Agent工作流 ======
-      // agentCount决定前置Agent数量，步骤总数 = agentCount + 1(正文) + (>=5审核) + (>=6记忆)
-      const agentCount = data.agentCount || 3;
-      let totalSteps = agentCount + 1; // 前置Agent + 正文生成
-      if (agentCount >= 5) totalSteps++; // 审核
-      if (agentCount >= 6) totalSteps++; // 记忆
+      // 根据实际执行的步骤确定总数
+      const actualSteps = workflowSteps.length;
       
-      // 发送初始步骤信息
-      sendStep(0, totalSteps, workflowSteps[0].name, `开始${workflowSteps[0].name}...`);
-      
-      // 动态构建上下文
-      let contextParts: string[] = [];
-      
-      // 执行前置Agent（世界观、人物、情节，最多3个）
-      for (let i = 0; i < agentCount && i < 3; i++) {
+      // 步骤1-3: 世界观、人物、情节（快速执行，不流式输出）
+      for (let i = 0; i < 3; i++) {
         const step = workflowSteps[i];
-        
-        // 更新当前步骤
-        sendStep(i, totalSteps, step.name, `正在${step.name}...`);
+        sendStep(i, actualSteps, step.name, `正在${step.name}...`);
         
         const memoryContext = data.memoryContext?.join('\n') || '';
         const fullPrompt = `${step.prompt}\n\n【章纲】${data.outline}\n\n${memoryContext ? `【记忆上下文】\n${memoryContext}` : ''}`;
         
         const output = await callLLMComplete(config, '', fullPrompt);
         workflowSteps[i].output = output;
-        contextParts.push(output);
         
-        sendStep(i, totalSteps, step.name, `${step.name}完成`);
+        sendStep(i, actualSteps, step.name, output.slice(0, 50) + (output.length > 50 ? '...' : ''));
       }
 
-      // 正文生成（步骤索引 = agentCount）
-      const writingStepIndex = agentCount;
-      sendStep(writingStepIndex, totalSteps, '正文生成', '正在生成小说正文...');
-        const reviewPrompt = `${reviewStep.prompt}\n\n【正文】\n${finalContent.slice(0, 2000)}${finalContent.length > 2000 ? '...' : ''}`;
-        const reviewResult = await callLLMComplete(config, '', reviewPrompt);
-        workflowSteps[4].output = reviewResult;
-        sendStep(4, actualSteps, reviewStep.name, '审核完成');
-      }
+      // 步骤4: 正文生成（流式输出，这是主要的小说内容）
+      sendStep(3, actualSteps, '正文生成', '正在生成小说正文...');
       
-      // 记忆存档
-      if (doMemory) {
-        const memoryStep = workflowSteps[5];
-        sendStep(5, actualSteps, memoryStep.name, `正在存档...`);
-        const memoryPrompt = `${memoryStep.prompt}\n\n【正文】\n${finalContent}`;
-        const memoryResult = await callLLMComplete(config, '', memoryPrompt);
-        workflowSteps[5].output = memoryResult;
-        sendStep(5, actualSteps, memoryStep.name, '存档完成');
-      }
+      const writingStep = workflowSteps[3];
+      const contextPrompt = `【世界观补充】
+${workflowSteps[0].output}
 
-      // 流式输出正文（所有情况都执行）
-      sendStep(writingStepIndex, totalSteps, '正文生成', '正在生成小说正文...');
-        
-        const writingStep = workflowSteps[3];
-        const contextPrompt = contextParts.map((p, idx) => {
-          const names = ['世界观补充', '主角设定', '本章情节'];
-          return `【${names[idx] || '补充设定'}】\n${p}`;
-        }).join('\n\n') + `\n\n【章纲】${data.outline}\n\n${data.memoryContext?.length ? `【记忆上下文】\n${data.memoryContext.join('\n')}` : ''}`;
+【主角设定】
+${workflowSteps[1].output}
+
+【本章情节】
+${workflowSteps[2].output}
+
+【章纲】
+${data.outline}
+
+${data.memoryContext?.length ? `【记忆上下文】\n${data.memoryContext.join('\n')}` : ''}
+
 请根据以上设定创作本章正文。`;
 
       const response = await fetch(`${config.baseUrl}/v1/chat/completions`, {
@@ -668,27 +646,21 @@ app.post('/api/v1/writing/generate', async (req, res) => {
       }
 
       workflowSteps[3].output = fullContent;
-      sendStep(writingStepIndex, totalSteps, '正文生成', '正文生成完成');
+      sendStep(3, actualSteps, '正文生成', '正文生成完成');
 
-      // 审核校对（仅agentCount>=5时执行）
-      if (agentCount >= 5) {
-        const reviewStepIndex = agentCount + 1;
-        sendStep(reviewStepIndex, totalSteps, '审核校对', '正在审核内容...');
-        const reviewPrompt = `${workflowSteps[4].prompt}\n\n【正文】\n${fullContent.slice(0, 2000)}${fullContent.length > 2000 ? '...' : ''}`;
-        const reviewResult = await callLLMComplete(config, '', reviewPrompt);
-        workflowSteps[4].output = reviewResult;
-        sendStep(reviewStepIndex, totalSteps, '审核校对', '审核完成');
-      }
+      // 步骤5: 审核校对（快速执行）
+      sendStep(4, actualSteps, '审核校对', '正在审核内容...');
+      const reviewPrompt = `${workflowSteps[4].prompt}\n\n【正文】\n${fullContent.slice(0, 2000)}${fullContent.length > 2000 ? '...' : ''}`;
+      const reviewResult = await callLLMComplete(config, '', reviewPrompt);
+      workflowSteps[4].output = reviewResult;
+      sendStep(4, actualSteps, '审核校对', reviewResult.slice(0, 50) + (reviewResult.length > 50 ? '...' : ''));
 
-      // 记忆存档（仅agentCount>=6时执行）
-      if (agentCount >= 6) {
-        const memoryStepIndex = agentCount + 2;
-        sendStep(memoryStepIndex, totalSteps, '记忆存档', '正在存档记忆...');
-        const memoryPrompt = `${workflowSteps[5].prompt}\n\n【正文】\n${fullContent}`;
-        const memoryResult = await callLLMComplete(config, '', memoryPrompt);
-        workflowSteps[5].output = memoryResult;
-        sendStep(memoryStepIndex, totalSteps, '记忆存档', '存档完成');
-      }
+      // 步骤6: 记忆存档（快速执行）
+      sendStep(5, actualSteps, '记忆存档', '正在存档记忆...');
+      const memoryPrompt = `${workflowSteps[5].prompt}\n\n【正文】\n${fullContent}`;
+      const memoryResult = await callLLMComplete(config, '', memoryPrompt);
+      workflowSteps[5].output = memoryResult;
+      sendStep(5, actualSteps, '记忆存档', memoryResult.slice(0, 50) + (memoryResult.length > 50 ? '...' : ''));
 
       // 最终过滤和保存
       const { filtered, violations } = filterContent(fullContent);
@@ -1059,6 +1031,15 @@ app.get('/api/v1/writing/status', (req, res) => {
     totalSteps: 6,
     message: '就绪',
   });
+});
+
+// ============== 前端静态文件 ==============
+// 必须放在API路由之后，否则会拦截API请求
+app.use(express.static('public'));
+// SPA fallback: 所有非API请求返回index.html
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile('index.html', { root: 'public' });
 });
 
 // ============== 启动服务 ==============

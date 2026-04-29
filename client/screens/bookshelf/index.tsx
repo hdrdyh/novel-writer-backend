@@ -15,6 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// API地址：固定指向Railway后端
 const API_BASE_URL = 'https://novel-writer-backend-production-24e9.up.railway.app';
 
 interface Novel {
