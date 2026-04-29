@@ -11,6 +11,9 @@ RUN npm install
 # 复制源代码
 COPY server/src ./src
 
+# 复制前端静态文件
+COPY server/public ./public
+
 # 暴露端口
 EXPOSE 5000
 
