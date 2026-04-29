@@ -421,7 +421,7 @@ export default function WritingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F0C29',
+    backgroundColor: '#1A1A3E',
   },
   header: {
     flexDirection: 'row',
@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#252550',
     borderRadius: 20,
     padding: 24,
     width: '100%',
@@ -687,7 +687,7 @@ const styles = StyleSheet.create({
   },
   previewModalContainer: {
     flex: 1,
-    backgroundColor: '#0F0C29',
+    backgroundColor: '#1A1A3E',
     paddingTop: 60,
   },
   previewHeader: {

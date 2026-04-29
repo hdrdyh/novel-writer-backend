@@ -1,1 +1,1 @@
-export { default } from "@/screens/outline";
+export { default } from "@/screens/hometest";

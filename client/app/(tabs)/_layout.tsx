@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 export default function TabLayout() {
   const tabBarStyle = {
-    backgroundColor: 'rgba(15, 12, 41, 0.85)',
+    backgroundColor: 'rgba(26, 26, 62, 0.85)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.08)',
     paddingBottom: Platform.OS === 'ios' ? 20 : 8,

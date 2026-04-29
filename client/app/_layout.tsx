@@ -18,6 +18,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F0C29',
+    backgroundColor: '#1A1A3E',
   },
 });

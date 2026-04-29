@@ -173,7 +173,7 @@ export default function MemoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F0C29',
+    backgroundColor: '#1A1A3E',
   },
   header: {
     flexDirection: 'row',
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   },
   previewContainer: {
     flex: 1,
-    backgroundColor: '#0F0C29',
+    backgroundColor: '#1A1A3E',
     paddingTop: 60,
   },
   previewHeader: {

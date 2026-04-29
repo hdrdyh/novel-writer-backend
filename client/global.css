@@ -1,95 +1,25 @@
-@import 'tailwindcss';
-@import 'uniwind';
-
-@theme {
-  --white: #ffffff;
-  --black: #000000;
-  --primary: #6c63ff;
-  --primary-foreground: #ffffff;
-  --secondary: #0f3460;
-  --secondary-foreground: #ffffff;
-  --accent: #e94560;
-  --accent-foreground: #ffffff;
-  --background: #1a1a2e;
-  --foreground: #f0f0f0;
-  --surface: #16213e;
-  --surface-foreground: #f0f0f0;
-  --muted: rgba(255, 255, 255, 0.4);
-  --muted-foreground: rgba(255, 255, 255, 0.6);
-  --border: rgba(255, 255, 255, 0.15);
-  --radius: 1rem;
-}
-
 :root {
-  --background: #1a1a2e;
-  --foreground: #f0f0f0;
-  --surface: #16213e;
-  --surface-foreground: #f0f0f0;
-  --primary: #6c63ff;
-  --primary-foreground: #ffffff;
-  --secondary: #0f3460;
-  --secondary-foreground: #ffffff;
-  --accent: #e94560;
-  --accent-foreground: #ffffff;
-  --muted: rgba(255, 255, 255, 0.4);
-  --muted-foreground: rgba(255, 255, 255, 0.6);
-  --border: rgba(255, 255, 255, 0.15);
-  --card: #16213e;
-  --card-foreground: #f0f0f0;
-  --popover: #1a1a2e;
-  --popover-foreground: #f0f0f0;
-  --destructive: #ff4444;
-  --destructive-foreground: #ffffff;
-  --input: rgba(255, 255, 255, 0.1);
-  --ring: #6c63ff;
-}
-
-* {
-  border-color: var(--border);
+  --color-background: #000000;
+  --color-foreground: #ffffff;
+  --color-card: #1a1a1a;
+  --color-border: #333333;
+  --color-muted: #888888;
+  --color-accent: #6c63ff;
 }
 
 body {
-  background: #1a1a2e;
-  color: var(--foreground);
+  background-color: #000000;
+  color: #ffffff;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  background-color: #000000;
+  color: #ffffff;
   min-height: 100vh;
 }
 
-/* Simple Card */
-.simple-card {
-  background: #16213e;
-  border-radius: 1rem;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-/* Simple Button */
-.simple-button {
-  background: #6c63ff;
-  color: #ffffff;
-  padding: 10px 20px;
-  border-radius: 0.5rem;
-  font-weight: 600;
-}
-
-/* Simple Input */
-.simple-input {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0.5rem;
-  padding: 10px 14px;
-  color: #f0f0f0;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 4px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+* {
+  box-sizing: border-box;
 }
