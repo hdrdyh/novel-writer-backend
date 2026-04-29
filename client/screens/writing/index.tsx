@@ -15,6 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import { useSafeSearchParams, useSafeRouter } from '@/hooks/useSafeRouter';
 import { useFocusEffect } from 'expo-router';
 import RNSSE from 'react-native-sse';
+import { AgentStatusIcon } from '@/components/AgentStatusMonitor';
 
 // 获取后端地址
 // 重要：确保后端服务可通过此地址访问
@@ -40,6 +41,10 @@ export default function WritingScreen() {
   const [savedChapters, setSavedChapters] = useState<string[]>([]);
   const [generationProgress, setGenerationProgress] = useState('');
   const [currentChapterInfo, setCurrentChapterInfo] = useState('');  // 当前写作的章节信息
+
+  // Agent执行状态
+  const [currentAgentStep, setCurrentAgentStep] = useState(0);
+  const agentSteps = ['世界观构建', '人物设定', '情节设计', '文笔润色', '审核校对', '记忆存档'];
 
   // 如果有参数（从粗纲页跳转），使用参数初始化；否则清空
   useFocusEffect(
@@ -95,7 +100,25 @@ export default function WritingScreen() {
     setIsGenerating(true);
     setContent('');
     setEditedContent('');
+    setCurrentAgentStep(0);
     setGenerationProgress('正在连接...');
+
+    // 模拟Agent执行步骤
+    const agentIntervals = [
+      { step: 0, delay: 500, text: '世界观架构师工作中...' },
+      { step: 1, delay: 1200, text: '人物设定师工作中...' },
+      { step: 2, delay: 2000, text: '情节设计师工作中...' },
+      { step: 3, delay: 2800, text: '文笔润色师工作中...' },
+      { step: 4, delay: 3500, text: '审核校对师工作中...' },
+      { step: 5, delay: 4000, text: '开始生成正文...' },
+    ];
+
+    agentIntervals.forEach(({ step, delay, text }) => {
+      setTimeout(() => {
+        setCurrentAgentStep(step);
+        setGenerationProgress(text);
+      }, delay);
+    });
 
     // 使用RNSSE处理SSE流
       const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
@@ -122,12 +145,14 @@ export default function WritingScreen() {
           if (data.type === 'done') {
             sse.close();
             setIsGenerating(false);
+            setCurrentAgentStep(5); // 最后一步完成
             setGenerationProgress('生成完成');
             setEditedContent(content);
           } else if (data.error) {
             sse.close();
             setIsGenerating(false);
             setGenerationProgress('生成失败');
+            setCurrentAgentStep(-1);
             Alert.alert('错误', data.error);
           } else if (data.content) {
             setContent(prev => prev + data.content);
@@ -236,15 +261,36 @@ export default function WritingScreen() {
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <Text style={styles.title}>写作台</Text>
-            {savedChapters.includes(`第${chapterNum}章`) && (
-              <View style={styles.savedBadge}>
-                <Feather name="check-circle" size={14} color="#059669" />
-                <Text style={styles.savedBadgeText}>已保存</Text>
-              </View>
-            )}
+            {/* Agent执行状态监控 */}
+            <AgentStatusIcon
+              currentStep={agentSteps[currentAgentStep] || '准备中'}
+              isRunning={isGenerating}
+              stepCount={currentAgentStep}
+              totalSteps={agentSteps.length}
+            />
           </View>
           {isGenerating && (
-            <Text style={styles.progressText}>{generationProgress}</Text>
+            <View style={styles.progressRow}>
+              <View style={styles.agentProgressBar}>
+                {agentSteps.map((step, idx) => (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.agentProgressDot,
+                      idx < currentAgentStep && styles.agentProgressDotDone,
+                      idx === currentAgentStep && styles.agentProgressDotActive,
+                    ]}
+                  />
+                ))}
+              </View>
+              <Text style={styles.progressText}>{generationProgress}</Text>
+            </View>
+          )}
+          {savedChapters.includes(`第${chapterNum}章`) && (
+            <View style={styles.savedBadge}>
+              <Feather name="check-circle" size={14} color="#059669" />
+              <Text style={styles.savedBadgeText}>已保存</Text>
+            </View>
           )}
         </View>
 
@@ -406,6 +452,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#888888',
     marginTop: 8,
+  },
+  progressRow: {
+    marginTop: 8,
+  },
+  agentProgressBar: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6,
+  },
+  agentProgressDot: {
+    width: 20,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E5E7EB',
+  },
+  agentProgressDotDone: {
+    backgroundColor: '#10B981',
+  },
+  agentProgressDotActive: {
+    backgroundColor: '#3B82F6',
   },
   container: {
     flex: 1,
