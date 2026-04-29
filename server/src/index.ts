@@ -1118,8 +1118,18 @@ app.get('*', (req, res, next) => {
 });
 
 // ============== 启动服务 ==============
-
-app.listen(port, () => {
-  console.log(`✍️ 小说写作服务已启动: http://localhost:${port}/`);
+// 9091: API + 静态页面（备用）
+app.listen(9091, () => {
+  console.log(`✍️ 小说写作服务已启动: http://localhost:9091/`);
   console.log(`📝 API 端点: /api/v1/`);
+});
+
+// 5000: 静态页面（给Coze预览窗口用，替代Metro）
+const previewApp = express();
+previewApp.use(express.static('public'));
+previewApp.get('*', (_req, res) => {
+  res.sendFile('index.html', { root: 'public' });
+});
+previewApp.listen(5000, () => {
+  console.log(`🖥️ 预览服务已启动: http://localhost:5000/`);
 });
