@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,401 +17,272 @@ import { useFocusEffect } from 'expo-router';
 import RNSSE from 'react-native-sse';
 import { AgentStatusIcon } from '@/components/AgentStatusMonitor';
 
-// 获取后端地址
-// 重要：确保后端服务可通过此地址访问
+// 云端后端地址
 const API_BASE_URL = 'https://novel-writer-backend-production-24e9.up.railway.app';
 
+// LLM配置（DeepSeek）
+const LLM_API_KEY = 'sk-2d333ed0b01a4fe899df1c7c6cbe5617';
+const LLM_MODEL = 'deepseek-v4-flash';
+const LLM_BASE_URL = 'https://api.deepseek.com';
+
+// Agent步骤
+const AGENT_STEPS = ['世界观构建', '人物设定', '情节设计', '正文生成', '审核校对', '记忆存档'];
+
 export default function WritingScreen() {
-  const params = useSafeSearchParams<{
-    chapterId?: string;
-    chapterNumber?: string;
-    outline?: string;
-  }>();
-  const router = useSafeRouter();
-  const scrollRef = useRef<ScrollView>(null);
-  const contentScrollRef = useRef<ScrollView>(null);  // 生成内容的滚动引用
+  const params = useSafeSearchParams<{ chapterId?: string; chapterNumber?: string; outline?: string }>();
+  const contentScrollRef = useRef<ScrollView>(null);
 
-  const [chapterNum, setChapterNum] = useState('');  // 跳转后为空状态
-  const [chapterOutline, setChapterOutline] = useState('');  // 跳转后为空状态
+  // 状态
+  const [chapterNum, setChapterNum] = useState('1');
+  const [chapterOutline, setChapterOutline] = useState('');
   const [content, setContent] = useState('');
-  const [editedContent, setEditedContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [currentStep, setCurrentStep] = useState(-1);
+  const [progressText, setProgressText] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
-  const [savedChapters, setSavedChapters] = useState<string[]>([]);
-  const [generationProgress, setGenerationProgress] = useState('');
-  const [currentChapterInfo, setCurrentChapterInfo] = useState('');  // 当前写作的章节信息
+  const [editedContent, setEditedContent] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [memoryContext, setMemoryContext] = useState<string[]>([]);
 
-  // Agent执行状态
-  const [currentAgentStep, setCurrentAgentStep] = useState(0);
-  const agentSteps = ['世界观构建', '人物设定', '情节设计', '文笔润色', '审核校对', '记忆存档'];
+  // 步骤名称映射
+  const stepNameMap: Record<string, number> = {
+    '世界观构建': 0, '人物设定': 1, '情节设计': 2,
+    '正文生成': 3, '审核校对': 4, '记忆存档': 5,
+  };
 
-  // 如果有参数（从粗纲页跳转），使用参数初始化；否则清空
+  // 重置状态
   useFocusEffect(
     useCallback(() => {
       if (params.chapterNumber && params.outline) {
-        // 从粗纲页跳转过来，使用传入的参数
         setChapterNum(params.chapterNumber);
         setChapterOutline(params.outline);
-        setCurrentChapterInfo(`第${params.chapterNumber}章`);
-        setContent('');
-        setEditedContent('');
-      } else {
-        // 直接进入页面，清空状态
-        setChapterNum('');
-        setChapterOutline('');
-        setContent('');
-        setEditedContent('');
       }
+      setContent('');
       setIsGenerating(false);
-      setIsEditMode(false);
-      setGenerationProgress('');
-      setSavedChapters([]);
+      setCurrentStep(-1);
+      setProgressText('');
+      setSaved(false);
     }, [params.chapterNumber, params.outline])
   );
 
-  const handleGenerate = () => {
-    if (!chapterOutline) {
-      Alert.alert('提示', '请先输入章纲内容');
-      return;
-    }
-
-    Alert.alert(
-      '确认开始写作',
-      `是否开始写作第${chapterNum || '?'}章？`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '确认',
-          onPress: () => {
-            startGenerating();
-          },
-        },
-      ]
-    );
-  };
-
+  // 开始生成
   const startGenerating = () => {
-    if (!chapterOutline) {
-      Alert.alert('提示', '请先输入章纲内容');
+    if (!chapterOutline.trim()) {
+      Alert.alert('提示', '请输入章纲');
       return;
     }
 
     setIsGenerating(true);
     setContent('');
-    setEditedContent('');
-    setCurrentAgentStep(0);
-    setGenerationProgress('正在连接...');
+    setCurrentStep(0);
+    setSaved(false);
+    setProgressText('连接服务器...');
 
-    // 模拟Agent执行步骤
-    const agentIntervals = [
-      { step: 0, delay: 500, text: '世界观架构师工作中...' },
-      { step: 1, delay: 1200, text: '人物设定师工作中...' },
-      { step: 2, delay: 2000, text: '情节设计师工作中...' },
-      { step: 3, delay: 2800, text: '文笔润色师工作中...' },
-      { step: 4, delay: 3500, text: '审核校对师工作中...' },
-      { step: 5, delay: 4000, text: '开始生成正文...' },
-    ];
-
-    agentIntervals.forEach(({ step, delay, text }) => {
-      setTimeout(() => {
-        setCurrentAgentStep(step);
-        setGenerationProgress(text);
-      }, delay);
+    const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': LLM_API_KEY,
+        'x-model': LLM_MODEL,
+        'x-base-url': LLM_BASE_URL,
+      },
+      body: JSON.stringify({
+        chapterId: `ch-${Date.now()}`,
+        chapterNumber: parseInt(chapterNum) || 1,
+        outline: chapterOutline,
+        memoryContext: memoryContext,
+      }),
     });
 
-    // 使用RNSSE处理SSE流
-      const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': 'sk-2d333ed0b01a4fe899df1c7c6cbe5617',
-          'x-model': 'deepseek-v4-flash',
-          'x-base-url': 'https://api.deepseek.com',
-        },
-        body: JSON.stringify({
-          chapterId: `chapter-${Date.now()}`,
-          chapterNumber: parseInt(chapterNum) || 1,
-          outline: chapterOutline,
-          memoryContext: []
-        }),
-      });
+    sse.addEventListener('message', (event) => {
+      try {
+        if (!event.data) return;
+        const data = JSON.parse(event.data);
 
-      sse.addEventListener('message', (event) => {
-        try {
-          if (!event.data) return;
-          const data = JSON.parse(event.data);
-          
-          if (data.type === 'done') {
-            sse.close();
-            setIsGenerating(false);
-            setCurrentAgentStep(5); // 最后一步完成
-            setGenerationProgress('生成完成');
-            setEditedContent(content);
-          } else if (data.error) {
-            sse.close();
-            setIsGenerating(false);
-            setGenerationProgress('生成失败');
-            setCurrentAgentStep(-1);
-            Alert.alert('错误', data.error);
-          } else if (data.content) {
-            setContent(prev => prev + data.content);
-            setGenerationProgress(`已生成 ${(content + data.content).length} 字`);
-            // 滚动到底部
-            setTimeout(() => {
-              contentScrollRef.current?.scrollToEnd({ animated: false });
-            }, 10);
-          }
-        } catch (e) {
-          // 忽略解析错误
+        if (data.type === 'step') {
+          const idx = data.stepIndex ?? stepNameMap[data.stepName] ?? 0;
+          setCurrentStep(idx);
+          setProgressText(data.stepName || '处理中');
+        } else if (data.type === 'done') {
+          sse.close();
+          setIsGenerating(false);
+          setCurrentStep(6);
+          setProgressText('完成');
+        } else if (data.error) {
+          sse.close();
+          setIsGenerating(false);
+          setCurrentStep(-1);
+          setProgressText('失败');
+          Alert.alert('错误', data.error);
+        } else if (data.content) {
+          setContent(prev => prev + data.content);
+          setProgressText(`生成中 ${(content + data.content).length} 字`);
+          setTimeout(() => contentScrollRef.current?.scrollToEnd({ animated: false }), 10);
         }
-      });
+      } catch (e) { /* ignore */ }
+    });
 
-      sse.addEventListener('error', (error) => {
-        console.error('SSE错误:', error);
-        setIsGenerating(false);
-        setGenerationProgress('生成失败');
-        Alert.alert('错误', '生成失败，请重试');
-      });
+    sse.addEventListener('error', () => {
+      setIsGenerating(false);
+      setCurrentStep(-1);
+      setProgressText('连接失败');
+      Alert.alert('错误', '无法连接服务器');
+    });
 
-      sse.addEventListener('close', () => {
+    sse.addEventListener('close', () => {
+      if (isGenerating) {
         setIsGenerating(false);
-        setEditedContent(content);
-      });
+        setCurrentStep(-1);
+      }
+    });
   };
 
+  // 保存并加入记忆上下文
   const handleSave = () => {
-    if (!content) {
-      Alert.alert('提示', '请先生成内容');
-      return;
-    }
-
-    Alert.alert(
-      '保存到记忆库',
-      '确定将本章保存到记忆库？',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '保存',
-          onPress: async () => {
-            setIsSaving(true);
-            // 模拟保存
-            setTimeout(() => {
-              setSavedChapters(prev => [...prev, `第${chapterNum}章`]);
-              setIsSaving(false);
-              Alert.alert('成功', `第${chapterNum}章已存入记忆库`, [
-                {
-                  text: '确定',
-                  onPress: () => {
-                    // 保存成功后清空所有内容
-                    setContent('');
-                    setEditedContent('');
-                    setChapterOutline('');
-                    setCurrentChapterInfo('');
-                  }
-                }
-              ]);
-            }, 500);
-          },
-        },
-      ]
-    );
+    if (!content) return;
+    // 保存本章前500字作为记忆
+    const summary = content.slice(0, 500);
+    setMemoryContext(prev => [...prev, summary]);
+    Alert.alert('保存成功', `第${chapterNum}章已存入记忆库（衔接上下文已更新）`, [
+      { text: '确定', onPress: () => setSaved(true) }
+    ]);
   };
 
+  // 编辑
   const handleEdit = () => {
-    setIsEditMode(true);
     setEditedContent(content);
+    setIsEditMode(true);
   };
 
   const handleSaveEdit = () => {
     setContent(editedContent);
     setIsEditMode(false);
-    Alert.alert('已保存修改');
-  };
-
-  const handleCancelEdit = () => {
-    setIsEditMode(false);
-    setEditedContent(content);
-  };
-
-  const handleReset = () => {
-    Alert.alert(
-      '重新生成',
-      '确定要重新生成本章内容吗？',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '确定',
-          onPress: () => {
-            setContent('');
-            setEditedContent('');
-            startGenerating();
-          },
-        },
-      ]
-    );
   };
 
   return (
     <Screen>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* 顶部 */}
         <View style={styles.header}>
-          <View style={styles.headerTop}>
+          <View style={styles.headerRow}>
             <Text style={styles.title}>写作台</Text>
-            {/* Agent执行状态监控 */}
             <AgentStatusIcon
-              currentStep={agentSteps[currentAgentStep] || '准备中'}
+              currentStep={currentStep >= 0 ? AGENT_STEPS[currentStep] : '待机'}
               isRunning={isGenerating}
-              stepCount={currentAgentStep}
-              totalSteps={agentSteps.length}
+              stepCount={currentStep}
+              totalSteps={AGENT_STEPS.length}
             />
           </View>
           {isGenerating && (
             <View style={styles.progressRow}>
-              <View style={styles.agentProgressBar}>
-                {agentSteps.map((step, idx) => (
-                  <View
-                    key={idx}
-                    style={[
-                      styles.agentProgressDot,
-                      idx < currentAgentStep && styles.agentProgressDotDone,
-                      idx === currentAgentStep && styles.agentProgressDotActive,
-                    ]}
-                  />
+              <View style={styles.stepDots}>
+                {AGENT_STEPS.map((_, i) => (
+                  <View key={i} style={[
+                    styles.dot,
+                    i < currentStep && styles.dotDone,
+                    i === currentStep && styles.dotActive,
+                  ]} />
                 ))}
               </View>
-              <Text style={styles.progressText}>{generationProgress}</Text>
-            </View>
-          )}
-          {savedChapters.includes(`第${chapterNum}章`) && (
-            <View style={styles.savedBadge}>
-              <Feather name="check-circle" size={14} color="#059669" />
-              <Text style={styles.savedBadgeText}>已保存</Text>
+              <Text style={styles.progressText}>{progressText}</Text>
             </View>
           )}
         </View>
 
-        <ScrollView
-          ref={scrollRef}
-          style={styles.container}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* 章纲输入区 */}
-          <View style={styles.outlineSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>本章章纲</Text>
-              <Text style={styles.chapterBadge}>第{chapterNum || '?'}章</Text>
-            </View>
-            <View style={styles.outlineCard}>
-              <TextInput
-                style={styles.outlineInput}
-                value={chapterOutline}
-                onChangeText={setChapterOutline}
-                placeholder="输入本章章纲..."
-                placeholderTextColor="#CCCCCC"
-                multiline
-              />
-            </View>
+        {/* 内容区 */}
+        <ScrollView ref={contentScrollRef} style={styles.container} contentContainerStyle={styles.contentContainer}>
+          {/* 章号 */}
+          <View style={styles.numRow}>
+            <Text style={styles.label}>第</Text>
+            <TextInput
+              style={styles.numInput}
+              value={chapterNum}
+              onChangeText={setChapterNum}
+              keyboardType="number-pad"
+              editable={!isGenerating}
+            />
+            <Text style={styles.label}>章</Text>
           </View>
 
-          {/* 内容生成区 */}
-          <View style={styles.contentSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>正文</Text>
-              {content.length > 0 && (
-                <Text style={styles.wordCount}>{content.length} 字</Text>
-              )}
+          {/* 章纲 */}
+          <Text style={styles.sectionLabel}>章纲</Text>
+          <TextInput
+            style={styles.outlineInput}
+            value={chapterOutline}
+            onChangeText={setChapterOutline}
+            placeholder="输入本章章纲..."
+            placeholderTextColor="#CCCCCC"
+            multiline
+            editable={!isGenerating}
+          />
+
+          {/* 正文 */}
+          <Text style={styles.sectionLabel}>
+            正文 {content.length > 0 && <Text style={styles.wordCount}>{content.length}字</Text>}
+          </Text>
+
+          {isGenerating ? (
+            <View style={styles.contentBox}>
+              <Text style={styles.generatedText}>{content}</Text>
+              <View style={styles.cursor} />
             </View>
-
-            {isGenerating ? (
-              <View style={styles.generatingCard}>
-                <View style={styles.generatingIndicator}>
-                  <Feather name="feather" size={24} color="#111111" />
-                  <Text style={styles.generatingText}>正在写作...</Text>
-                </View>
-                <ScrollView ref={contentScrollRef} style={styles.generatingContent} showsVerticalScrollIndicator={false}>
-                  <Text style={styles.generatedText}>{content}</Text>
-                  <View style={styles.cursor} />
-                </ScrollView>
-              </View>
-            ) : isEditMode ? (
-              <View style={styles.editCard}>
-                <TextInput
-                  style={styles.editInput}
-                  value={editedContent}
-                  onChangeText={setEditedContent}
-                  multiline
-                  autoFocus
-                />
-              </View>
-            ) : content ? (
-              <Pressable style={styles.contentCard} onPress={handleEdit}>
-                <Text style={styles.contentText}>{content}</Text>
-                <View style={styles.editHint}>
-                  <Feather name="edit-2" size={12} color="#888888" />
-                  <Text style={styles.editHintText}>点击编辑</Text>
-                </View>
-              </Pressable>
-            ) : (
-              <View style={styles.emptyCard}>
-                <Feather name="file-plus" size={48} color="#CCCCCC" />
-                <Text style={styles.emptyText}>点击下方按钮开始写作</Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.bottomSpacer} />
+          ) : isEditMode ? (
+            <TextInput
+              style={[styles.contentBox, styles.editInput]}
+              value={editedContent}
+              onChangeText={setEditedContent}
+              multiline
+              autoFocus
+            />
+          ) : content ? (
+            <Pressable style={styles.contentBox} onPress={handleEdit}>
+              <Text style={styles.generatedText}>{content}</Text>
+              <Text style={styles.editHint}>点击编辑</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.emptyBox}>
+              <Feather name="feather" size={32} color="#DDDDDD" />
+              <Text style={styles.emptyText}>输入章纲后点击开始写作</Text>
+            </View>
+          )}
         </ScrollView>
 
-        {/* 底部操作区 */}
+        {/* 底部按钮 */}
         <View style={styles.actionBar}>
           {isGenerating ? (
             <View style={styles.generatingBar}>
-              <View style={styles.generatingDots}>
-                <View style={styles.dot} />
-                <View style={[styles.dot, styles.dotActive]} />
-                <View style={styles.dot} />
+              <View style={styles.loadingDots}>
+                <View style={styles.loadDot} />
+                <View style={[styles.loadDot, styles.loadDotActive]} />
+                <View style={styles.loadDot} />
               </View>
-              <Text style={styles.generatingLabel}>AI 写作中</Text>
+              <Text style={styles.generatingText}>写作中...</Text>
             </View>
           ) : isEditMode ? (
             <View style={styles.editBar}>
-              <Pressable style={styles.cancelEditBtn} onPress={handleCancelEdit}>
-                <Text style={styles.cancelEditText}>取消</Text>
+              <Pressable style={styles.cancelBtn} onPress={() => setIsEditMode(false)}>
+                <Text style={styles.cancelText}>取消</Text>
               </Pressable>
-              <Pressable style={styles.saveEditBtn} onPress={handleSaveEdit}>
-                <Text style={styles.saveEditText}>保存修改</Text>
+              <Pressable style={styles.saveBtn} onPress={handleSaveEdit}>
+                <Text style={styles.saveText}>保存</Text>
               </Pressable>
             </View>
           ) : content ? (
-            <View style={styles.contentActions}>
-              <Pressable style={styles.secondaryBtn} onPress={handleReset}>
-                <Feather name="refresh-cw" size={16} color="#111111" />
-                <Text style={styles.secondaryBtnText}>重新生成</Text>
+            <View style={styles.doneBar}>
+              <Pressable style={styles.editBtn} onPress={handleEdit}>
+                <Text style={styles.editText}>修改</Text>
               </Pressable>
-              <Pressable style={styles.secondaryBtn} onPress={handleEdit}>
-                <Feather name="edit-3" size={16} color="#111111" />
-                <Text style={styles.secondaryBtnText}>修改</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.primaryBtn, isSaving && styles.primaryBtnDisabled]}
-                onPress={handleSave}
-                disabled={isSaving}
-              >
-                <Feather name="download" size={16} color="#FFFFFF" />
-                <Text style={styles.primaryBtnText}>
-                  {isSaving ? '保存中...' : '保存到记忆库'}
+              <Pressable style={[styles.saveToLibBtn, saved && styles.savedBtn]} onPress={handleSave}>
+                <Feather name="check-circle" size={16} color={saved ? '#FFFFFF' : '#111111'} />
+                <Text style={[styles.saveToLibText, saved && styles.savedText]}>
+                  {saved ? '已保存' : '存入记忆库'}
                 </Text>
               </Pressable>
             </View>
           ) : (
-            <Pressable style={styles.generateBtn} onPress={handleGenerate}>
-              <Feather name="feather" size={20} color="#FFFFFF" />
-              <Text style={styles.generateBtnText}>开始写作</Text>
+            <Pressable style={styles.startBtn} onPress={startGenerating}>
+              <Feather name="feather" size={18} color="#FFFFFF" />
+              <Text style={styles.startText}>开始写作</Text>
             </Pressable>
           )}
         </View>
@@ -421,311 +292,65 @@ export default function WritingScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111111',
-    letterSpacing: -0.5,
-  },
-  savedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  savedBadgeText: {
-    fontSize: 12,
-    color: '#059669',
-    fontWeight: '600',
-  },
-  progressText: {
-    fontSize: 13,
-    color: '#888888',
-    marginTop: 8,
-  },
-  progressRow: {
-    marginTop: 8,
-  },
-  agentProgressBar: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 6,
-  },
-  agentProgressDot: {
-    width: 20,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#E5E7EB',
-  },
-  agentProgressDotDone: {
-    backgroundColor: '#10B981',
-  },
-  agentProgressDotActive: {
-    backgroundColor: '#3B82F6',
-  },
-  container: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 20,
-  },
-  outlineSection: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#888888',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  chapterBadge: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#111111',
-    backgroundColor: '#F7F7F7',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  wordCount: {
-    fontSize: 12,
-    color: '#888888',
-  },
-  outlineCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ECECEC',
-    padding: 16,
-    minHeight: 80,
-  },
+  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, backgroundColor: '#FFFFFF' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  title: { fontSize: 24, fontWeight: '700', color: '#111111' },
+  progressRow: { marginTop: 8 },
+  stepDots: { flexDirection: 'row', gap: 6, marginBottom: 6 },
+  dot: { width: 24, height: 6, borderRadius: 3, backgroundColor: '#EEEEEE' },
+  dotDone: { backgroundColor: '#10B981' },
+  dotActive: { backgroundColor: '#3B82F6' },
+  progressText: { fontSize: 12, color: '#888888' },
+  
+  container: { flex: 1 },
+  contentContainer: { padding: 20 },
+  
+  numRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  label: { fontSize: 15, color: '#666666' },
+  numInput: { fontSize: 16, fontWeight: '600', color: '#111111', paddingHorizontal: 8, minWidth: 50, textAlign: 'center' },
+  
+  sectionLabel: { fontSize: 13, fontWeight: '600', color: '#999999', marginBottom: 8 },
+  wordCount: { fontWeight: '400', color: '#BBBBBB', marginLeft: 6 },
+  
   outlineInput: {
-    fontSize: 15,
-    color: '#111111',
-    lineHeight: 22,
+    backgroundColor: '#F8F8F8', borderRadius: 10, padding: 14, fontSize: 15, color: '#111111',
+    minHeight: 70, marginBottom: 20, lineHeight: 22,
   },
-  contentSection: {
-    flex: 1,
+  
+  contentBox: {
+    backgroundColor: '#FFFFFF', borderRadius: 10, padding: 14, minHeight: 250,
+    borderWidth: 1, borderColor: '#EEEEEE',
   },
-  generatingCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ECECEC',
-    padding: 16,
-    minHeight: 300,
-  },
-  generatingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ECECEC',
-  },
-  generatingText: {
-    fontSize: 14,
-    color: '#888888',
-  },
-  generatingContent: {
-    minHeight: 200,
-    maxHeight: 400,
-  },
-  generatedText: {
-    fontSize: 15,
-    color: '#111111',
-    lineHeight: 26,
-  },
-  cursor: {
-    width: 2,
-    height: 16,
-    backgroundColor: '#111111',
-    marginTop: 2,
-  },
-  editCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#111111',
-    padding: 16,
-    minHeight: 300,
-  },
-  editInput: {
-    fontSize: 15,
-    color: '#111111',
-    lineHeight: 26,
-    minHeight: 280,
-  },
-  contentCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ECECEC',
-    padding: 16,
-    minHeight: 300,
-  },
-  contentText: {
-    fontSize: 15,
-    color: '#111111',
-    lineHeight: 26,
-  },
-  editHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    marginTop: 16,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ECECEC',
-  },
-  editHintText: {
-    fontSize: 12,
-    color: '#888888',
-  },
-  emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ECECEC',
-    padding: 48,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#888888',
-    marginTop: 16,
-  },
-  bottomSpacer: {
-    height: 20,
-  },
-  actionBar: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ECECEC',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    paddingBottom: 24,
-  },
-  generateBtn: {
-    backgroundColor: '#111111',
-    borderRadius: 12,
-    paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  generateBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  generatingBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  generatingDots: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#CCCCCC',
-  },
-  dotActive: {
-    backgroundColor: '#111111',
-  },
-  generatingLabel: {
-    fontSize: 14,
-    color: '#888888',
-  },
-  editBar: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  cancelEditBtn: {
-    flex: 1,
-    backgroundColor: '#F7F7F7',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  cancelEditText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111111',
-  },
-  saveEditBtn: {
-    flex: 2,
-    backgroundColor: '#111111',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  saveEditText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  contentActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  secondaryBtn: {
-    backgroundColor: '#F7F7F7',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  secondaryBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#111111',
-  },
-  primaryBtn: {
-    backgroundColor: '#111111',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  primaryBtnDisabled: {
-    opacity: 0.6,
-  },
-  primaryBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
+  generatedText: { fontSize: 15, color: '#111111', lineHeight: 26 },
+  cursor: { width: 2, height: 16, backgroundColor: '#111111', marginTop: 4 },
+  editHint: { fontSize: 12, color: '#BBBBBB', textAlign: 'center', marginTop: 12 },
+  editInput: { borderColor: '#111111', textAlignVertical: 'top', minHeight: 300 },
+  
+  emptyBox: { backgroundColor: '#F8F8F8', borderRadius: 10, padding: 40, alignItems: 'center' },
+  emptyText: { fontSize: 14, color: '#BBBBBB', marginTop: 12 },
+  
+  actionBar: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+  
+  startBtn: { backgroundColor: '#111111', borderRadius: 10, paddingVertical: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  startText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  
+  generatingBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  loadingDots: { flexDirection: 'row', gap: 6 },
+  loadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#DDDDDD' },
+  loadDotActive: { backgroundColor: '#111111' },
+  generatingText: { fontSize: 14, color: '#888888' },
+  
+  editBar: { flexDirection: 'row', gap: 12 },
+  cancelBtn: { flex: 1, backgroundColor: '#F5F5F5', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  cancelText: { fontSize: 15, fontWeight: '600', color: '#666666' },
+  saveBtn: { flex: 2, backgroundColor: '#111111', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  saveText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+  
+  doneBar: { flexDirection: 'row', gap: 10 },
+  editBtn: { flex: 1, backgroundColor: '#F5F5F5', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  editText: { fontSize: 15, fontWeight: '600', color: '#666666' },
+  saveToLibBtn: { flex: 2, backgroundColor: '#F5F5F5', borderRadius: 10, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  saveToLibText: { fontSize: 15, fontWeight: '600', color: '#111111' },
+  savedBtn: { backgroundColor: '#10B981' },
+  savedText: { color: '#FFFFFF' },
 });
