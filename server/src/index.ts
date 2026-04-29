@@ -1033,6 +1033,15 @@ app.get('/api/v1/writing/status', (req, res) => {
   });
 });
 
+// ============== 前端静态文件 ==============
+// 必须放在API路由之后，否则会拦截API请求
+app.use(express.static('public'));
+// SPA fallback: 所有非API请求返回index.html
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile('index.html', { root: 'public' });
+});
+
 // ============== 启动服务 ==============
 
 app.listen(port, () => {
