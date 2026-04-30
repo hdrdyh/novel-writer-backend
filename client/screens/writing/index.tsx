@@ -500,13 +500,13 @@ export default function WritingScreen() {
             <>
               {/* 章节切换 + 加载进度条 */}
               <View style={styles.chapterBadge}>
-                <Ionicons name="document-text" size={16} color="#888" />
+                <Ionicons name="document-text" size={16} color="#8888AA" />
                 <Text style={styles.chapterText}>第 {chapterNumber} 章</Text>
                 <TouchableOpacity onPress={() => switchChapter(chapterNumber - 1)}>
-                  <Ionicons name="remove-circle-outline" size={20} color="#888" style={{ marginLeft: 8 }} />
+                  <Ionicons name="remove-circle-outline" size={20} color="#8888AA" style={{ marginLeft: 8 }} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => switchChapter(chapterNumber + 1)}>
-                  <Ionicons name="add-circle-outline" size={20} color="#888" />
+                  <Ionicons name="add-circle-outline" size={20} color="#8888AA" />
                 </TouchableOpacity>
               </View>
               {switchingChapter && (
@@ -524,7 +524,7 @@ export default function WritingScreen() {
                 </View>
               ) : (
                 <View style={styles.noOutlineHint}>
-                  <Ionicons name="information-circle-outline" size={20} color="#666" />
+                  <Ionicons name="information-circle-outline" size={20} color="#6B6B8D" />
                   <Text style={styles.noOutlineHintText}>请先在大纲页生成细纲，然后点击&ldquo;开始写作&rdquo;进入创作</Text>
                 </View>
               )}
@@ -535,7 +535,7 @@ export default function WritingScreen() {
                 disabled={isGenerating || !outlineInput}
               >
                 {isGenerating ? (
-                  <ActivityIndicator color="#000" />
+                  <ActivityIndicator color="#7C5CFF" />
                 ) : (
                   <>
                     <Ionicons name="bulb" size={20} color={!outlineInput ? GC.border : GC.bgBase} />
@@ -553,7 +553,7 @@ export default function WritingScreen() {
                   <View style={styles.agentSteps}>
                     {activeAgentNames.map((name, idx) => (
                       <View key={`${name}-${idx}`} style={styles.agentStepItem}>
-                        {currentAgentIdx > idx && <Ionicons name="checkmark-circle" size={14} color="#4ade80" />}
+                        {currentAgentIdx > idx && <Ionicons name="checkmark-circle" size={14} color="#62FAD3" />}
                         {currentAgentIdx === idx && <ActivityIndicator size={14} color="#7C5CFF" />}
                         {currentAgentIdx < idx && <View style={styles.stepDotPending} />}
                         <Text style={[
@@ -587,7 +587,7 @@ export default function WritingScreen() {
                         setPreviewModal(true);
                       }}
                     >
-                      <Ionicons name="expand" size={16} color="#888" />
+                      <Ionicons name="expand" size={16} color="#8888AA" />
                       <Text style={styles.previewBtnText}>全屏</Text>
                     </TouchableOpacity>
                   </View>
@@ -609,7 +609,7 @@ export default function WritingScreen() {
                       <Text style={styles.rewriteBtnText}>重写</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.saveBtn} onPress={handleSaveAsChapter}>
-                      <Ionicons name="bookmark" size={18} color="#000" />
+                      <Ionicons name="bookmark" size={18} color="#fff" />
                       <Text style={styles.saveBtnText}>保存</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -627,7 +627,7 @@ export default function WritingScreen() {
               ) : (
                 !isGenerating && (
                   <View style={styles.emptyContent}>
-                    <Ionicons name="create-outline" size={48} color="#333" />
+                    <Ionicons name="create-outline" size={48} color="#8888AA" />
                     <Text style={styles.emptyText}>
                       {outlineInput ? '点击"开始创作"，AI将根据细纲生成正文' : '从大纲页点击"开始写作"进入创作'}
                     </Text>
@@ -667,7 +667,7 @@ export default function WritingScreen() {
                             handleGenerate(item.outline, item.chapterNumber);
                           }}
                         >
-                          <Ionicons name="play" size={16} color="#000" />
+                          <Ionicons name="play" size={16} color="#fff" />
                           <Text style={{ color: GC.bgBase, fontSize: 12, fontWeight: '600' }}>创作</Text>
                         </TouchableOpacity>
                       )}
@@ -688,7 +688,7 @@ export default function WritingScreen() {
                               setPreviewModal(true);
                             }}
                           >
-                            <Ionicons name="eye-outline" size={18} color="#888" />
+                            <Ionicons name="eye-outline" size={18} color="#8888AA" />
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.queueActionBtn}
@@ -704,7 +704,7 @@ export default function WritingScreen() {
                             style={styles.queueActionBtn}
                             onPress={() => handleSaveQueueItem(idx)}
                           >
-                            <Ionicons name="bookmark-outline" size={18} color="#4ade80" />
+                            <Ionicons name="bookmark-outline" size={18} color="#62FAD3" />
                           </TouchableOpacity>
                           {/* 重写按钮 - 醒目 */}
                           {!isGenerating && (
@@ -749,7 +749,7 @@ export default function WritingScreen() {
               {/* 开始生成按钮 */}
               {!isGenerating && (
                 <TouchableOpacity style={styles.generateBtn} onPress={handleGenerateAll}>
-                  <Ionicons name="play" size={20} color="#000" />
+                  <Ionicons name="play" size={20} color="#fff" />
                   <Text style={styles.generateBtnText}>开始全部生成</Text>
                 </TouchableOpacity>
               )}
@@ -763,7 +763,7 @@ export default function WritingScreen() {
                   <View style={styles.agentSteps}>
                     {activeAgentNames.map((name, idx) => (
                       <View key={`${name}-${idx}`} style={styles.agentStepItem}>
-                        {currentAgentIdx > idx && <Ionicons name="checkmark-circle" size={14} color="#4ade80" />}
+                        {currentAgentIdx > idx && <Ionicons name="checkmark-circle" size={14} color="#62FAD3" />}
                         {currentAgentIdx === idx && <ActivityIndicator size={14} color="#7C5CFF" />}
                         {currentAgentIdx < idx && <View style={styles.stepDotPending} />}
                         <Text style={[
@@ -798,7 +798,7 @@ export default function WritingScreen() {
               <TextInput
                 style={styles.modalInput}
                 placeholder="输入章节数量"
-                placeholderTextColor="#555"
+                placeholderTextColor="#6B6B8D"
                 value={multiCount}
                 onChangeText={setMultiCount}
                 keyboardType="number-pad"
@@ -836,7 +836,7 @@ export default function WritingScreen() {
               <TextInput
                 style={styles.modalInput}
                 placeholder={`${params.novelName || '我的小说'} - 第${chapterNumber}章`}
-                placeholderTextColor="#555"
+                placeholderTextColor="#6B6B8D"
                 value={novelName}
                 onChangeText={setNovelName}
               />
@@ -864,7 +864,7 @@ export default function WritingScreen() {
               <TextInput
                 style={styles.reportFeedbackInput}
                 placeholder="对本次协作有什么意见？"
-                placeholderTextColor="#555"
+                placeholderTextColor="#6B6B8D"
                 value={reportFeedback}
                 onChangeText={setReportFeedback}
                 multiline

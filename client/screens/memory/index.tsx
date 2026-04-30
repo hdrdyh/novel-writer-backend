@@ -168,7 +168,7 @@ export default function MemoryScreen() {
             style={styles.addBtn}
             onPress={() => setShowAddModal(true)}
           >
-            <Ionicons name="add" size={24} color="#000" />
+            <Ionicons name="add" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
 
@@ -195,7 +195,7 @@ export default function MemoryScreen() {
           />
         ) : (
           <View style={styles.emptyState}>
-            <Ionicons name="bulb-outline" size={48} color="#333" />
+            <Ionicons name="bulb-outline" size={48} color="#8888AA" />
             <Text style={styles.emptyText}>记忆库为空</Text>
             <Text style={styles.emptySubText}>点击右上角 + 添加人物、世界观、情节等设定</Text>
           </View>
@@ -208,7 +208,7 @@ export default function MemoryScreen() {
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>添加记忆</Text>
                 <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                  <Ionicons name="close" size={24} color="#888" />
+                  <Ionicons name="close" size={24} color="#8888AA" />
                 </TouchableOpacity>
               </View>
 
@@ -279,7 +279,7 @@ export default function MemoryScreen() {
                     <View style={{ flexDirection: 'row', gap: 12 }}>
                       {!editMode && (
                         <TouchableOpacity onPress={() => setEditMode(true)}>
-                          <Ionicons name="create-outline" size={22} color="#888" />
+                          <Ionicons name="create-outline" size={22} color="#8888AA" />
                         </TouchableOpacity>
                       )}
                       <TouchableOpacity
@@ -288,7 +288,7 @@ export default function MemoryScreen() {
                           setEditMode(false);
                         }}
                       >
-                        <Ionicons name="close" size={24} color="#888" />
+                        <Ionicons name="close" size={24} color="#8888AA" />
                       </TouchableOpacity>
                     </View>
                   </View>

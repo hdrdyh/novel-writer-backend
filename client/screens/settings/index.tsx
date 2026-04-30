@@ -179,7 +179,7 @@ export default function SettingsScreen() {
               <Text style={styles.actionLabel}>写作流水线</Text>
               <Text style={styles.actionDesc}>管理Agent、调整执行顺序、配置API</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#555" />
+            <Ionicons name="chevron-forward" size={20} color="#6B6B8D" />
           </TouchableOpacity>
 
           {/* Settings Section */}
@@ -215,7 +215,7 @@ export default function SettingsScreen() {
               <Text style={styles.actionLabel}>导出数据</Text>
               <Text style={styles.actionDesc}>将小说数据导出备份</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#555" />
+            <Ionicons name="chevron-forward" size={20} color="#6B6B8D" />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -227,7 +227,7 @@ export default function SettingsScreen() {
               <Text style={styles.actionLabelDanger}>清除所有数据</Text>
               <Text style={styles.actionDesc}>删除所有本地小说和记忆</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#555" />
+            <Ionicons name="chevron-forward" size={20} color="#6B6B8D" />
           </TouchableOpacity>
 
           {/* About */}

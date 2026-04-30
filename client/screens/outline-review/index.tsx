@@ -482,7 +482,7 @@ export default function OutlineReviewScreen() {
         </Pressable>
         <Text style={styles.topTitle}>{stageName}评审</Text>
         <Pressable onPress={() => setShowPreview(!showPreview)} style={styles.previewToggle}>
-          <Feather name={showPreview ? 'message-circle' : 'eye'} size={18} color="#888" />
+          <Feather name={showPreview ? 'message-circle' : 'eye'} size={18} color="#8888AA" />
         </Pressable>
       </View>
 
@@ -502,7 +502,7 @@ export default function OutlineReviewScreen() {
           >
             {messages.length === 0 && !loading && (
               <View style={styles.emptyState}>
-                <Feather name="message-circle" size={48} color="#555" />
+                <Feather name="message-circle" size={48} color="#6B6B8D" />
                 <Text style={styles.emptyText}>点击下方按钮开始AI评审</Text>
                 {reviewConfig.focusDirection ? (
                   <Text style={styles.focusHint}>评审重点：{reviewConfig.focusDirection}</Text>
@@ -546,7 +546,7 @@ export default function OutlineReviewScreen() {
                     <Text style={[styles.msgSender, { color: agentColor }]}>{msg.senderName}</Text>
                     {adoptedIds.includes(msg.id) && (
                       <View style={styles.adoptedTag}>
-                        <Feather name="check-circle" size={12} color="#4ade80" />
+                        <Feather name="check-circle" size={12} color="#62FAD3" />
                         <Text style={styles.adoptedTagText}>已采纳</Text>
                       </View>
                     )}
@@ -563,7 +563,7 @@ export default function OutlineReviewScreen() {
             })}
             {loading && (
               <View style={styles.loadingBubble}>
-                <ActivityIndicator size="small" color="#888" />
+                <ActivityIndicator size="small" color="#8888AA" />
                 <Text style={styles.loadingText}>Agent思考中...</Text>
               </View>
             )}
@@ -573,7 +573,7 @@ export default function OutlineReviewScreen() {
           <View style={styles.bottomBar}>
             {messages.length === 0 ? (
               <Pressable style={styles.startReviewBtn} onPress={handleStartReview} disabled={loading}>
-                <Feather name="zap" size={18} color="#000" />
+                <Feather name="zap" size={18} color="#fff" />
                 <Text style={styles.startReviewText}>开始AI评审</Text>
               </Pressable>
             ) : (
@@ -595,19 +595,19 @@ export default function OutlineReviewScreen() {
                 <View style={styles.actionRow}>
                   {!loading && (
                     <Pressable style={styles.regenerateBtn} onPress={handleStartReview}>
-                      <Feather name="refresh-cw" size={14} color="#888" />
+                      <Feather name="refresh-cw" size={14} color="#8888AA" />
                       <Text style={styles.regenerateText}>重新评审</Text>
                     </Pressable>
                   )}
                   {adoptHistory.length > 0 && (
                     <Pressable style={styles.undoBtn} onPress={handleUndo}>
-                      <Feather name="rotate-ccw" size={14} color="#888" />
+                      <Feather name="rotate-ccw" size={14} color="#8888AA" />
                       <Text style={styles.undoText}>撤销采纳</Text>
                     </Pressable>
                   )}
                   {adoptedIds.length > 0 && (
                     <Pressable style={[styles.confirmBtn, applying && { opacity: 0.5 }]} onPress={handleConfirm} disabled={applying}>
-                      <Feather name="check-circle" size={14} color="#000" />
+                      <Feather name="check-circle" size={14} color="#fff" />
                       <Text style={styles.confirmText}>{applying ? 'AI修改中...' : '确定修改'}</Text>
                     </Pressable>
                   )}

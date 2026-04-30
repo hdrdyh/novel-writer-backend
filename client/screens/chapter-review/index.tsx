@@ -526,7 +526,7 @@ export default function ChapterReviewScreen() {
             >
               {!reviewStarted && (
                 <View style={styles.startCard}>
-                  <Ionicons name="chatbubbles-outline" size={40} color="#333" />
+                  <Ionicons name="chatbubbles-outline" size={40} color="#8888AA" />
                   <Text style={styles.startTitle}>AI评审</Text>
                   <Text style={styles.startDesc}>
                     各Agent独立评审本章内容，提出改进建议。{'\n'}你可以逐条采纳，也可以参与讨论。
@@ -535,7 +535,7 @@ export default function ChapterReviewScreen() {
                     <Text style={styles.focusHint}>评审重点：{reviewConfig.focusDirection}</Text>
                   ) : null}
                   <TouchableOpacity style={styles.startBtn} onPress={handleStartReview}>
-                    <Ionicons name="play" size={20} color="#000" />
+                    <Ionicons name="play" size={20} color="#fff" />
                     <Text style={styles.startBtnText}>开始评审</Text>
                   </TouchableOpacity>
                 </View>
@@ -595,7 +595,7 @@ export default function ChapterReviewScreen() {
 
               {isReviewing && (
                 <View style={styles.reviewingIndicator}>
-                  <ActivityIndicator color="#fff" size="small" />
+                  <ActivityIndicator color="#7C5CFF" size="small" />
                   <Text style={styles.reviewingText}>Agent评审中...</Text>
                 </View>
               )}
@@ -612,7 +612,7 @@ export default function ChapterReviewScreen() {
                 )}
                 {!isReviewing && adoptedHistory.length > 0 && (
                   <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirmChanges}>
-                    <Ionicons name="checkmark-done" size={18} color="#000" />
+                    <Ionicons name="checkmark-done" size={18} color="#fff" />
                     <Text style={styles.confirmBtnText}>确定修改</Text>
                   </TouchableOpacity>
                 )}
@@ -631,7 +631,7 @@ export default function ChapterReviewScreen() {
                 <TextInput
                   style={styles.inputField}
                   placeholder="说说你的想法，Agent会回复你..."
-                  placeholderTextColor="#555"
+                  placeholderTextColor="#6B6B8D"
                   value={userInput}
                   onChangeText={setUserInput}
                   multiline

@@ -117,7 +117,7 @@ export default function BookshelfScreen() {
       }}
     >
       <View style={styles.novelCover}>
-        <Ionicons name="book" size={28} color="#555" />
+        <Ionicons name="book" size={28} color="#6B6B8D" />
       </View>
       <View style={styles.novelInfo}>
         <Text style={styles.novelTitle} numberOfLines={1}>
@@ -130,7 +130,7 @@ export default function BookshelfScreen() {
           {item.createdAt ? new Date(Number(item.createdAt)).toLocaleDateString() : '未保存'}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={20} color="#555" />
+      <Ionicons name="chevron-forward" size={20} color="#6B6B8D" />
     </TouchableOpacity>
   );
 
@@ -159,7 +159,7 @@ export default function BookshelfScreen() {
           />
         ) : (
           <View style={styles.emptyState}>
-            <Ionicons name="library-outline" size={48} color="#333" />
+            <Ionicons name="library-outline" size={48} color="#8888AA" />
             <Text style={styles.emptyText}>书架空空如也</Text>
             <Text style={styles.emptySubText}>在创作中心写作并保存章节，或点右上角导入已有小说</Text>
             <TouchableOpacity style={styles.emptyImportBtn} onPress={() => setImportModalVisible(true)}>
@@ -235,7 +235,7 @@ export default function BookshelfScreen() {
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>导入小说</Text>
                   <Pressable onPress={() => setImportModalVisible(false)}>
-                    <Feather name="x" size={22} color="#888" />
+                    <Feather name="x" size={22} color="#8888AA" />
                   </Pressable>
                 </View>
                 <View style={styles.modalBody}>

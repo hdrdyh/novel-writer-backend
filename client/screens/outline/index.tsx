@@ -295,7 +295,7 @@ export default function OutlineScreen() {
           </View>
           {locked && (
             <View style={styles.lockedBadge}>
-              <Feather name="lock" size={12} color="#4ade80" />
+              <Feather name="lock" size={12} color="#62FAD3" />
               <Text style={styles.lockedText}>已定稿</Text>
             </View>
           )}
@@ -310,9 +310,9 @@ export default function OutlineScreen() {
           {!locked && canEdit && (
             <Pressable style={styles.aiBtn} onPress={() => handleAIExpand(stage)} disabled={loading}>
               {loading ? (
-                <ActivityIndicator size="small" color="#000" />
+                <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Feather name="zap" size={14} color="#000" />
+                <Feather name="zap" size={14} color="#fff" />
               )}
               <Text style={styles.aiBtnText}>AI扩写</Text>
             </Pressable>
@@ -325,13 +325,13 @@ export default function OutlineScreen() {
           )}
           {!locked && canEdit && (
             <Pressable style={styles.lockBtn} onPress={() => handleLock(stage)}>
-              <Feather name="check-circle" size={14} color="#4ade80" />
+              <Feather name="check-circle" size={14} color="#62FAD3" />
               <Text style={styles.lockBtnText}>定稿</Text>
             </Pressable>
           )}
           {locked && (
             <Pressable style={styles.unlockBtn} onPress={() => handleUnlock(stage)}>
-              <Feather name="unlock" size={14} color="#888" />
+              <Feather name="unlock" size={14} color="#8888AA" />
               <Text style={styles.unlockBtnText}>解锁</Text>
             </Pressable>
           )}
@@ -362,11 +362,11 @@ export default function OutlineScreen() {
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
         {/* 小说名 */}
         <View style={styles.novelNameRow}>
-          <Feather name="book" size={16} color="#888" />
+          <Feather name="book" size={16} color="#8888AA" />
           <TextInput
             style={styles.novelNameInput}
             placeholder="输入小说名称"
-            placeholderTextColor="#555"
+            placeholderTextColor="#6B6B8D"
             value={data.title}
             onChangeText={(text: string) => saveData({ ...data, title: text })}
           />
@@ -385,7 +385,7 @@ export default function OutlineScreen() {
               value={data.outline}
               onChangeText={(text) => saveData({ ...data, outline: text })}
               placeholder="写出你的核心概念，AI帮你扩展为完整大纲..."
-              placeholderTextColor="#555"
+              placeholderTextColor="#6B6B8D"
               multiline
               numberOfLines={8}
               textAlignVertical="top"
@@ -419,7 +419,7 @@ export default function OutlineScreen() {
                   }}
                   keyboardType="numeric"
                   placeholder="300"
-                  placeholderTextColor="#555"
+                  placeholderTextColor="#6B6B8D"
                   maxLength={5}
                 />
                 <Text style={styles.chapterCountUnit}>章</Text>
@@ -442,7 +442,7 @@ export default function OutlineScreen() {
                   </View>
                   <Text style={styles.listItemText} numberOfLines={2}>{item}</Text>
                   {!data.roughLocked && (
-                    <Feather name="edit-2" size={14} color="#888" style={styles.listItemIcon} />
+                    <Feather name="edit-2" size={14} color="#8888AA" style={styles.listItemIcon} />
                   )}
                 </Pressable>
               ))
@@ -454,7 +454,7 @@ export default function OutlineScreen() {
                 setEditText('');
                 setEditModalVisible(true);
               }}>
-                <Feather name="plus" size={16} color="#888" />
+                <Feather name="plus" size={16} color="#8888AA" />
                 <Text style={styles.addItemText}>添加章节</Text>
               </Pressable>
             )}
@@ -487,7 +487,7 @@ export default function OutlineScreen() {
                   </View>
                   <Text style={styles.listItemText} numberOfLines={3}>{item}</Text>
                   {!data.detailLocked && (
-                    <Feather name="edit-2" size={14} color="#888" style={styles.listItemIcon} />
+                    <Feather name="edit-2" size={14} color="#8888AA" style={styles.listItemIcon} />
                   )}
                 </Pressable>
               ))
@@ -498,7 +498,7 @@ export default function OutlineScreen() {
         {/* 开始写作按钮 */}
         {data.detailLocked && (
           <Pressable style={styles.startWritingBtn} onPress={handleStartWriting}>
-            <Feather name="pen-tool" size={20} color="#000" />
+            <Feather name="pen-tool" size={20} color="#fff" />
             <Text style={styles.startWritingText}>开始写作</Text>
           </Pressable>
         )}
@@ -516,7 +516,7 @@ export default function OutlineScreen() {
               value={editText}
               onChangeText={setEditText}
               placeholder="输入内容..."
-              placeholderTextColor="#555"
+              placeholderTextColor="#6B6B8D"
               multiline
               numberOfLines={6}
               textAlignVertical="top"
@@ -549,7 +549,7 @@ export default function OutlineScreen() {
                   导入{importStage === 'outline' ? '大纲' : importStage === 'rough' ? '粗纲' : '细纲'}
                 </Text>
                 <Pressable onPress={() => setImportModalVisible(false)}>
-                  <Feather name="x" size={22} color="#888" />
+                  <Feather name="x" size={22} color="#8888AA" />
                 </Pressable>
               </View>
               <View style={styles.modalBody}>
@@ -567,7 +567,7 @@ export default function OutlineScreen() {
                   value={importText}
                   onChangeText={setImportText}
                   placeholder={importStage === 'outline' ? '粘贴大纲内容...' : '每行一条，粘贴内容...'}
-                  placeholderTextColor="#555"
+                  placeholderTextColor="#6B6B8D"
                   autoCapitalize="none"
                 />
               </View>

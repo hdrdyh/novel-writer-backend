@@ -105,17 +105,17 @@ function ApiConfigModal({
             <View style={m.modalContent}>
               <View style={m.modalHeader}>
                 <Text style={m.modalTitle}>{data ? '编辑API' : '添加API'}</Text>
-                <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#888" /></TouchableOpacity>
+                <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#8888AA" /></TouchableOpacity>
               </View>
               <ScrollView style={m.modalBody}>
                 <Text style={m.fieldLabel}>名称</Text>
-                <TextInput style={m.fieldInput} placeholder="如：DeepSeek" placeholderTextColor="#555" value={name} onChangeText={setName} />
+                <TextInput style={m.fieldInput} placeholder="如：DeepSeek" placeholderTextColor="#6B6B8D" value={name} onChangeText={setName} />
                 <Text style={m.fieldLabel}>API Key</Text>
-                <TextInput style={m.fieldInput} placeholder="sk-xxxx" placeholderTextColor="#555" value={apiKey} onChangeText={setApiKey} autoCapitalize="none" />
+                <TextInput style={m.fieldInput} placeholder="sk-xxxx" placeholderTextColor="#6B6B8D" value={apiKey} onChangeText={setApiKey} autoCapitalize="none" />
                 <Text style={m.fieldLabel}>Base URL</Text>
-                <TextInput style={m.fieldInput} placeholder="https://api.deepseek.com" placeholderTextColor="#555" value={baseUrl} onChangeText={setBaseUrl} autoCapitalize="none" />
+                <TextInput style={m.fieldInput} placeholder="https://api.deepseek.com" placeholderTextColor="#6B6B8D" value={baseUrl} onChangeText={setBaseUrl} autoCapitalize="none" />
                 <Text style={m.fieldLabel}>模型名称</Text>
-                <TextInput style={m.fieldInput} placeholder="deepseek-chat" placeholderTextColor="#555" value={model} onChangeText={setModel} autoCapitalize="none" />
+                <TextInput style={m.fieldInput} placeholder="deepseek-chat" placeholderTextColor="#6B6B8D" value={model} onChangeText={setModel} autoCapitalize="none" />
               </ScrollView>
               <View style={m.modalFooter}>
                 <TouchableOpacity style={[m.modalBtn, m.cancelBtn]} onPress={onClose}><Text style={m.cancelBtnText}>取消</Text></TouchableOpacity>
@@ -178,17 +178,17 @@ function CollabAgentEditModal({
             <View style={[m.modalContent, { maxHeight: '90%' }]}>
               <View style={m.modalHeader}>
                 <Text style={m.modalTitle}>编辑 {preset?.name || 'Agent'}</Text>
-                <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#888" /></TouchableOpacity>
+                <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#8888AA" /></TouchableOpacity>
               </View>
               <ScrollView style={m.modalBody}>
                 <Text style={m.fieldLabel}>名称</Text>
-                <TextInput style={m.fieldInput} placeholder="Agent名称" placeholderTextColor="#555" value={name} onChangeText={setName} />
+                <TextInput style={m.fieldInput} placeholder="Agent名称" placeholderTextColor="#6B6B8D" value={name} onChangeText={setName} />
 
                 <Text style={m.fieldLabel}>规则 Prompt</Text>
                 <TextInput
                   style={[m.fieldInput, m.promptInput]}
                   placeholder="编写Agent的执行规则和prompt..."
-                  placeholderTextColor="#555"
+                  placeholderTextColor="#6B6B8D"
                   value={prompt}
                   onChangeText={setPrompt}
                   multiline
@@ -277,16 +277,16 @@ function ReviewAgentEditModal({
             <View style={[m.modalContent, { maxHeight: '90%' }]}>
               <View style={m.modalHeader}>
                 <Text style={m.modalTitle}>{agent ? '编辑评审Agent' : '添加评审Agent'}</Text>
-                <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#888" /></TouchableOpacity>
+                <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#8888AA" /></TouchableOpacity>
               </View>
               <ScrollView style={m.modalBody}>
                 <Text style={m.fieldLabel}>名称</Text>
-                <TextInput style={m.fieldInput} placeholder="Agent名称" placeholderTextColor="#555" value={name} onChangeText={setName} />
+                <TextInput style={m.fieldInput} placeholder="Agent名称" placeholderTextColor="#6B6B8D" value={name} onChangeText={setName} />
                 <Text style={m.fieldLabel}>规则 Prompt</Text>
                 <TextInput
                   style={[m.fieldInput, m.promptInput]}
                   placeholder="编写评审规则..."
-                  placeholderTextColor="#555"
+                  placeholderTextColor="#6B6B8D"
                   value={prompt}
                   onChangeText={setPrompt}
                   multiline
@@ -794,7 +794,7 @@ export default function AgentConfigScreen() {
                       thumbColor={agent.enabled ? GC.textPrimary : GC.textMuted}
                     />
                     <TouchableOpacity onPress={() => handleDeleteReviewAgent(agent)} style={s.iconBtn}>
-                      <Ionicons name="trash-outline" size={18} color="#666" />
+                      <Ionicons name="trash-outline" size={18} color="#6B6B8D" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -817,7 +817,7 @@ export default function AgentConfigScreen() {
               <TextInput
                 style={s.reviewInput}
                 placeholder="如：重点检查前后矛盾和节奏拖沓..."
-                placeholderTextColor="#555"
+                placeholderTextColor="#6B6B8D"
                 value={reviewConfig.focusDirection}
                 onChangeText={(text) => saveReviewConfig({ ...reviewConfig, focusDirection: text })}
                 multiline
@@ -866,13 +866,13 @@ export default function AgentConfigScreen() {
                   </View>
                   <View style={s.apiActions}>
                     <TouchableOpacity onPress={() => testApiConnection(cfg)} style={s.iconBtn}>
-                      <Ionicons name="flash-outline" size={18} color="#888" />
+                      <Ionicons name="flash-outline" size={18} color="#8888AA" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => handleEditApi(cfg)} style={s.iconBtn}>
-                      <Ionicons name="pencil" size={18} color="#888" />
+                      <Ionicons name="pencil" size={18} color="#8888AA" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => handleDeleteApi(cfg)} style={s.iconBtn}>
-                      <Ionicons name="trash-outline" size={18} color="#666" />
+                      <Ionicons name="trash-outline" size={18} color="#6B6B8D" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -916,7 +916,7 @@ export default function AgentConfigScreen() {
             <View style={[m.modalContent, { maxHeight: '80%' }]}>
               <View style={m.modalHeader}>
                 <Text style={m.modalTitle}>智能搭配</Text>
-                <TouchableOpacity onPress={() => setSmartMatchVisible(false)}><Ionicons name="close" size={24} color="#888" /></TouchableOpacity>
+                <TouchableOpacity onPress={() => setSmartMatchVisible(false)}><Ionicons name="close" size={24} color="#8888AA" /></TouchableOpacity>
               </View>
               <ScrollView style={m.modalBody}>
                 {smartMatchLoading ? (
