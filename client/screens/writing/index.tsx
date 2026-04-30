@@ -549,7 +549,7 @@ export default function WritingScreen() {
               {/* Agent 协作进度区 */}
               {isGenerating && activeAgentNames.length > 0 && (
                 <View style={styles.agentStatus}>
-                  <Text style={styles.agentStatusTitle}>Agent 协作进度</Text>
+                  <Text style={styles.agentStatusTitle}>协作进度</Text>
                   <View style={styles.agentSteps}>
                     {activeAgentNames.map((name, idx) => (
                       <View key={`${name}-${idx}`} style={styles.agentStepItem}>
@@ -569,7 +569,7 @@ export default function WritingScreen() {
                   </View>
                   {currentAgentIdx >= 0 && currentAgentIdx < activeAgentNames.length && (
                     <Text style={styles.currentStepText}>
-                      正在执行：{activeAgentNames[currentAgentIdx]} ({currentAgentIdx + 1}/{activeAgentNames.length})
+                      正在执行：{activeAgentNames[currentAgentIdx]}（{currentAgentIdx + 1}/{activeAgentNames.length}）
                     </Text>
                   )}
                 </View>
@@ -779,7 +779,7 @@ export default function WritingScreen() {
                   </View>
                   {currentAgentIdx >= 0 && currentAgentIdx < activeAgentNames.length && (
                     <Text style={styles.currentStepText}>
-                      正在执行：{activeAgentNames[currentAgentIdx]} ({currentAgentIdx + 1}/{activeAgentNames.length})
+                      正在执行：{activeAgentNames[currentAgentIdx]}（{currentAgentIdx + 1}/{activeAgentNames.length}）
                     </Text>
                   )}
                 </View>

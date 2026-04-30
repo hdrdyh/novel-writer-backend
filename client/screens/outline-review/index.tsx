@@ -278,7 +278,7 @@ export default function OutlineReviewScreen() {
 
   // 单个Agent评审
   const reviewWithAgent = async (agent: Agent): Promise<void> => {
-    const agentName = agent.name || 'Agent';
+    const agentName = agent.name || '评审助手';
     const thinkingId = `thinking_${new Date().getTime()}_${Math.random()}`;
     setMessages((prev) => [
       ...prev,
@@ -302,7 +302,7 @@ export default function OutlineReviewScreen() {
   const handleStartReview = async () => {
     const agents = getEnabledReviewAgents();
     if (agents.length === 0) {
-      Alert.alert('提示', '请先在写作流水线的评审团中启用Agent');
+      Alert.alert('提示', '请先在写作流水线的评审团中启用评审助手');
       return;
     }
     if (apiConfigs.length === 0) {
@@ -315,13 +315,13 @@ export default function OutlineReviewScreen() {
     setAdoptedIds([]);
     setAdoptHistory([]);
 
-    addSystemMessage(`开始${stageName}评审（${agents.length}位Agent参与）...`);
+    addSystemMessage(`开始${stageName}评审（${agents.length}位评审助手参与）...`);
 
     for (const agent of agents) {
       await reviewWithAgent(agent);
     }
 
-    addSystemMessage('所有Agent已发言完毕，你可以采纳建议或继续讨论。');
+    addSystemMessage('所有评审助手已发言完毕，你可以采纳建议或继续讨论。');
     setLoading(false);
   };
 
@@ -345,7 +345,7 @@ export default function OutlineReviewScreen() {
 
     const agentIndex = messages.filter((m) => m.sender === 'agent' && m.content !== '正在思考...').length % agents.length;
     const agent = agents[agentIndex];
-    const agentName = agent.name || 'Agent';
+    const agentName = agent.name || '评审助手';
 
     const thinkingId = `discuss_${new Date().getTime()}_${Math.random()}`;
     setMessages(prev => [
@@ -564,7 +564,7 @@ export default function OutlineReviewScreen() {
             {loading && (
               <View style={styles.loadingBubble}>
                 <ActivityIndicator size="small" color="#8888AA" />
-                <Text style={styles.loadingText}>Agent思考中...</Text>
+                <Text style={styles.loadingText}>思考中...</Text>
               </View>
             )}
           </ScrollView>

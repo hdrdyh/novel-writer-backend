@@ -344,7 +344,7 @@ export default function OutlineScreen() {
             <View style={[styles.agentProgressFill, { width: `${((currentAgentIdx + 1) / activeAgentNames.length) * 100}%` }]} />
           </View>
           <Text style={styles.agentProgressText}>
-            Agent {currentAgentIdx + 1}/{activeAgentNames.length}: {activeAgentNames[currentAgentIdx] || '处理中...'}
+            协作进度 {currentAgentIdx + 1}/{activeAgentNames.length}: {activeAgentNames[currentAgentIdx] || '处理中...'}
           </Text>
         </View>
       )}

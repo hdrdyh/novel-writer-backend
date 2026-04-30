@@ -163,7 +163,7 @@ function CollabAgentEditModal({
 
   const handleSave = () => {
     if (!name.trim()) {
-      Alert.alert('提示', '请填写Agent名称');
+      Alert.alert('提示', '请填写助手名称');
       return;
     }
     onSave({ name: name.trim(), prompt: prompt.trim(), apiId });
@@ -177,17 +177,17 @@ function CollabAgentEditModal({
           <View style={m.modalContainer}>
             <View style={[m.modalContent, { maxHeight: '90%' }]}>
               <View style={m.modalHeader}>
-                <Text style={m.modalTitle}>编辑 {preset?.name || 'Agent'}</Text>
+                <Text style={m.modalTitle}>编辑 {preset?.name || '助手'}</Text>
                 <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#8888AA" /></TouchableOpacity>
               </View>
               <ScrollView style={m.modalBody}>
                 <Text style={m.fieldLabel}>名称</Text>
-                <TextInput style={m.fieldInput} placeholder="Agent名称" placeholderTextColor="#6B6B8D" value={name} onChangeText={setName} />
+                <TextInput style={m.fieldInput} placeholder="助手名称" placeholderTextColor="#6B6B8D" value={name} onChangeText={setName} />
 
                 <Text style={m.fieldLabel}>规则 Prompt</Text>
                 <TextInput
                   style={[m.fieldInput, m.promptInput]}
-                  placeholder="编写Agent的执行规则和prompt..."
+                  placeholder="编写助手的执行规则和prompt..."
                   placeholderTextColor="#6B6B8D"
                   value={prompt}
                   onChangeText={setPrompt}
@@ -262,7 +262,7 @@ function ReviewAgentEditModal({
 
   const handleSave = () => {
     if (!name.trim()) {
-      Alert.alert('提示', '请填写Agent名称');
+      Alert.alert('提示', '请填写助手名称');
       return;
     }
     onSave({ name: name.trim(), prompt: prompt.trim(), apiId });
@@ -276,12 +276,12 @@ function ReviewAgentEditModal({
           <View style={m.modalContainer}>
             <View style={[m.modalContent, { maxHeight: '90%' }]}>
               <View style={m.modalHeader}>
-                <Text style={m.modalTitle}>{agent ? '编辑评审Agent' : '添加评审Agent'}</Text>
+                <Text style={m.modalTitle}>{agent ? '编辑评审助手' : '添加评审助手'}</Text>
                 <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#8888AA" /></TouchableOpacity>
               </View>
               <ScrollView style={m.modalBody}>
                 <Text style={m.fieldLabel}>名称</Text>
-                <TextInput style={m.fieldInput} placeholder="Agent名称" placeholderTextColor="#6B6B8D" value={name} onChangeText={setName} />
+                <TextInput style={m.fieldInput} placeholder="助手名称" placeholderTextColor="#6B6B8D" value={name} onChangeText={setName} />
                 <Text style={m.fieldLabel}>规则 Prompt</Text>
                 <TextInput
                   style={[m.fieldInput, m.promptInput]}
@@ -466,7 +466,7 @@ export default function AgentConfigScreen() {
   };
 
   const handleResetAgentConfigs = () => {
-    Alert.alert('确认', '确定重置所有协作Agent为默认配置吗？', [
+    Alert.alert('确认', '确定重置所有协作助手为默认配置吗？', [
       { text: '取消', style: 'cancel' },
       {
         text: '重置',
@@ -510,8 +510,8 @@ export default function AgentConfigScreen() {
         body: JSON.stringify({
           model: firstApi.model,
           messages: [
-            { role: 'system', content: '你是小说写作AI助手，负责推荐最佳Agent协作方案。' },
-            { role: 'user', content: `我正在写一部小说，有以下可用Agent：\n${PRESET_AGENTS.map((p) => `- ${p.name}(${p.id}): ${p.description}`).join('\n')}\n\n请根据小说创作的最佳实践，推荐哪些Agent应该启用、哪些可以关闭。格式要求：每行一个Agent，格式为"启用/关闭 Agent名: 理由"。限200字以内。` },
+            { role: 'system', content: '你是小说写作AI助手，负责推荐最佳助手协作方案。' },
+            { role: 'user', content: `我正在写一部小说，有以下可用助手：\n${PRESET_AGENTS.map((p) => `- ${p.name}: ${p.description}`).join('\n')}\n\n请根据小说创作的最佳实践，推荐哪些助手应该启用、哪些可以关闭。格式要求：每行一个助手，格式为"启用/关闭 助手名: 理由"。限200字以内。` },
           ],
           max_tokens: 500,
         }),
@@ -556,7 +556,7 @@ export default function AgentConfigScreen() {
     });
     saveAgentConfigs(next);
     setSmartMatchVisible(false);
-    Alert.alert('成功', '已根据AI建议调整Agent配置');
+    Alert.alert('成功', '已根据AI建议调整助手配置');
   };
 
   // ============== 评审团Agent操作 ==============
@@ -591,7 +591,7 @@ export default function AgentConfigScreen() {
   };
 
   const handleDeleteReviewAgent = (agent: ReviewAgent) => {
-    Alert.alert('确认', `确定删除评审Agent "${agent.name}" 吗？`, [
+    Alert.alert('确认', `确定删除评审助手 "${agent.name}" 吗？`, [
       { text: '取消', style: 'cancel' },
       { text: '删除', style: 'destructive', onPress: () => saveReviewAgents(reviewAgents.filter((a) => a.id !== agent.id)) },
     ]);
@@ -603,7 +603,7 @@ export default function AgentConfigScreen() {
   };
 
   const handleResetReviewAgents = () => {
-    Alert.alert('确认', '确定重置评审团Agent为默认吗？', [
+    Alert.alert('确认', '确定重置评审团为默认吗？', [
       { text: '取消', style: 'cancel' },
       {
         text: '重置',
@@ -713,14 +713,14 @@ export default function AgentConfigScreen() {
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>Agent配置</Text>
+          <Text style={s.headerTitle}>助手配置</Text>
           <View style={{ width: 40 }} />
         </View>
 
         {/* Tab切换 */}
         <View style={s.tabBar}>
           {([
-            { key: 'collab' as const, label: '协作Agent' },
+            { key: 'collab' as const, label: '协作助手' },
             { key: 'review' as const, label: '评审团' },
             { key: 'api' as const, label: 'API配置' },
           ]).map((tab) => (
@@ -774,9 +774,9 @@ export default function AgentConfigScreen() {
           {activeTab === 'review' && (
             <>
               <View style={s.sectionHeader}>
-                <Text style={s.sectionTitle}>评审团Agent</Text>
+                <Text style={s.sectionTitle}>评审团助手</Text>
               </View>
-              <Text style={s.sectionDesc}>只有启用的评审Agent会在AI评审时参与讨论</Text>
+              <Text style={s.sectionDesc}>只有启用的评审助手会在AI评审时参与讨论</Text>
 
               {reviewAgents.map((agent) => (
                 <View key={agent.id} style={[s.agentCard, !agent.enabled && s.agentCardDisabled]}>
@@ -802,7 +802,7 @@ export default function AgentConfigScreen() {
 
               <TouchableOpacity style={s.addBtn} onPress={handleAddReviewAgent}>
                 <Ionicons name="add" size={20} color="#fff" />
-                <Text style={s.addBtnText}>添加评审Agent</Text>
+                <Text style={s.addBtnText}>添加评审助手</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={s.resetBtn} onPress={handleResetReviewAgents}>

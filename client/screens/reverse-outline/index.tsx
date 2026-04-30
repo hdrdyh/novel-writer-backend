@@ -271,7 +271,7 @@ export default function ReverseOutlineScreen() {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#fff" />
             <Text style={styles.loadingText}>{progress}</Text>
-            <Text style={styles.loadingHint}>每个Agent正在使用您配置的API分析文本...</Text>
+            <Text style={styles.loadingHint}>每位助手正在使用您配置的API分析文本...</Text>
           </View>
         )}
 

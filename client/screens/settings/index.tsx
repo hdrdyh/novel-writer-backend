@@ -28,7 +28,7 @@ export default function SettingsScreen() {
     {
       key: 'showAgentSteps',
       label: '显示AI创作过程',
-      description: '展示多Agent协作的详细步骤',
+      description: '展示多助手协作的详细步骤',
       type: 'toggle',
       value: true,
     },
@@ -177,7 +177,7 @@ export default function SettingsScreen() {
             <Ionicons name="git-branch-outline" size={22} color="#fff" />
             <View style={styles.actionInfo}>
               <Text style={styles.actionLabel}>写作流水线</Text>
-              <Text style={styles.actionDesc}>管理Agent、调整执行顺序、配置API</Text>
+              <Text style={styles.actionDesc}>管理助手、调整执行顺序、配置API</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#6B6B8D" />
           </TouchableOpacity>
@@ -245,7 +245,7 @@ export default function SettingsScreen() {
             <View style={styles.aboutDivider} />
             <View style={styles.aboutRow}>
               <Text style={styles.aboutLabel}>AI引擎</Text>
-              <Text style={styles.aboutValue}>多Agent协作</Text>
+              <Text style={styles.aboutValue}>多助手协作</Text>
             </View>
           </View>
         </ScrollView>

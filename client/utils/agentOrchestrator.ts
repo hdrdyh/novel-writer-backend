@@ -267,7 +267,7 @@ export async function orchestrateAgents(params: OrchestrationParams): Promise<vo
   const agents = getActiveAgentsForStage(stage, userAgentOverrides);
 
   if (agents.length === 0) {
-    onError('没有可用的Agent，请检查Agent配置');
+    onError('没有可用的助手，请检查助手配置');
     return;
   }
 
@@ -285,7 +285,7 @@ export async function orchestrateAgents(params: OrchestrationParams): Promise<vo
     // 解析API配置
     const apiConfig = resolveApiConfig(agent, apiConfigs, defaultApi);
     if (!apiConfig || !apiConfig.apiKey || !apiConfig.baseUrl || !apiConfig.model) {
-      onError(`Agent "${agent.name}" 的API配置不完整，请检查`);
+      onError(`助手 "${agent.name}" 的API配置不完整，请检查`);
       return;
     }
 
@@ -306,7 +306,7 @@ export async function orchestrateAgents(params: OrchestrationParams): Promise<vo
         maxTokens
       );
     } catch (e: any) {
-      onError(`Agent "${agent.name}" 执行失败：${e.message || '未知错误'}`);
+      onError(`助手 "${agent.name}" 执行失败：${e.message || '未知错误'}`);
       return;
     }
 

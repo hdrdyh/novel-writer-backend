@@ -282,7 +282,7 @@ export default function ChapterReviewScreen() {
 
   // 单个Agent评审
   const reviewWithAgent = async (agent: any): Promise<void> => {
-    const agentName = agent.name || 'Agent';
+    const agentName = agent.name || '评审助手';
 
     const thinkingId = `thinking_${new Date().getTime()}_${Math.random()}`;
     setMessages((prev) => [
@@ -316,7 +316,7 @@ export default function ChapterReviewScreen() {
 
     const activeReviewAgents = getReviewAgents();
     if (activeReviewAgents.length === 0) {
-      Alert.alert('提示', '没有可用的评审Agent，请先在写作流水线的评审团中启用Agent');
+      Alert.alert('提示', '没有可用的评审助手，请先在写作流水线的评审团中启用助手');
       return;
     }
 
@@ -326,13 +326,13 @@ export default function ChapterReviewScreen() {
     setAdoptedHistory([]);
     setContentSnapshots([currentContent]);
 
-    addSystemMessage(`开始评审第${chapterNumber}章（${activeReviewAgents.length}位Agent参与）...`);
+    addSystemMessage(`开始评审第${chapterNumber}章（${activeReviewAgents.length}位评审助手参与）...`);
 
     for (const agent of activeReviewAgents) {
       await reviewWithAgent(agent);
     }
 
-    addSystemMessage('所有Agent已发言完毕，你可以采纳建议或继续讨论。');
+    addSystemMessage('所有评审助手已发言完毕，你可以采纳建议或继续讨论。');
     setIsReviewing(false);
   };
 
@@ -361,7 +361,7 @@ export default function ChapterReviewScreen() {
     // 轮流选一个Agent回复
     const agentIndex = messages.filter((m) => m.type === 'agent' && m.content !== '正在思考...').length % activeReviewAgents.length;
     const agent = activeReviewAgents[agentIndex];
-    const agentName = agent.name || 'Agent';
+    const agentName = agent.name || '评审助手';
 
     const thinkingId = `discuss_${new Date().getTime()}_${Math.random()}`;
     setMessages((prev) => [
@@ -529,7 +529,7 @@ export default function ChapterReviewScreen() {
                   <Ionicons name="chatbubbles-outline" size={40} color="#8888AA" />
                   <Text style={styles.startTitle}>AI评审</Text>
                   <Text style={styles.startDesc}>
-                    各Agent独立评审本章内容，提出改进建议。{'\n'}你可以逐条采纳，也可以参与讨论。
+                    各评审助手独立评审本章内容，提出改进建议。{'\n'}你可以逐条采纳，也可以参与讨论。
                   </Text>
                   {reviewConfig.focusDirection ? (
                     <Text style={styles.focusHint}>评审重点：{reviewConfig.focusDirection}</Text>
@@ -596,7 +596,7 @@ export default function ChapterReviewScreen() {
               {isReviewing && (
                 <View style={styles.reviewingIndicator}>
                   <ActivityIndicator color="#7C5CFF" size="small" />
-                  <Text style={styles.reviewingText}>Agent评审中...</Text>
+                  <Text style={styles.reviewingText}>评审中...</Text>
                 </View>
               )}
             </ScrollView>
@@ -630,7 +630,7 @@ export default function ChapterReviewScreen() {
               <View style={styles.inputBar}>
                 <TextInput
                   style={styles.inputField}
-                  placeholder="说说你的想法，Agent会回复你..."
+                  placeholder="说说你的想法，评审助手会回复你..."
                   placeholderTextColor="#6B6B8D"
                   value={userInput}
                   onChangeText={setUserInput}
