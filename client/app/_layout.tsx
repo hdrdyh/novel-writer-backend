@@ -14,6 +14,7 @@ export default function RootLayout() {
           <Stack.Screen name="agent-config" />
           <Stack.Screen name="chapter-review" />
           <Stack.Screen name="outline-review" />
+          <Stack.Screen name="reverse-outline" />
         </Stack>
       </View>
     </Provider>

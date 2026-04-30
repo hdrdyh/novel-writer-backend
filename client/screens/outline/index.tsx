@@ -8,6 +8,10 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
@@ -43,6 +47,9 @@ export default function OutlineScreen() {
   const [editIndex, setEditIndex] = useState(-1); // 当前编辑的粗纲/细纲索引
   const [editText, setEditText] = useState('');
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importStage, setImportStage] = useState<OutlineStage>('outline');
+  const [importText, setImportText] = useState('');
 
   // 加载本地数据
   const loadData = useCallback(async () => {
@@ -215,6 +222,30 @@ export default function OutlineScreen() {
     });
   }, [data, router]);
 
+  // 导入文本
+  const handleImport = useCallback((stage: OutlineStage) => {
+    setImportStage(stage);
+    setImportText('');
+    setImportModalVisible(true);
+  }, []);
+
+  const handleImportSave = useCallback(() => {
+    if (!importText.trim()) {
+      Alert.alert('提示', '请粘贴内容');
+      return;
+    }
+    if (importStage === 'outline') {
+      saveData({ ...data, outline: importText.trim() });
+    } else if (importStage === 'rough') {
+      const lines = importText.split('\n').filter((l: string) => l.trim());
+      saveData({ ...data, rough: lines });
+    } else {
+      const lines = importText.split('\n').filter((l: string) => l.trim());
+      saveData({ ...data, detail: lines });
+    }
+    setImportModalVisible(false);
+  }, [importText, importStage, data, saveData]);
+
   // 渲染阶段卡片
   const renderStageCard = (
     stage: OutlineStage,
@@ -243,6 +274,12 @@ export default function OutlineScreen() {
           )}
         </View>
         <View style={styles.stageActions}>
+          {!locked && canEdit && (
+            <Pressable style={styles.importBtn} onPress={() => handleImport(stage)}>
+              <Feather name="upload" size={14} color="#fff" />
+              <Text style={styles.importBtnText}>导入</Text>
+            </Pressable>
+          )}
           {!locked && canEdit && (
             <Pressable style={styles.aiBtn} onPress={() => handleAIExpand(stage)} disabled={loading}>
               {loading ? (
@@ -438,6 +475,51 @@ export default function OutlineScreen() {
           </View>
         </View>
       )}
+
+      {/* 导入Modal */}
+      <Modal visible={importModalVisible} transparent animationType="slide">
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  导入{importStage === 'outline' ? '大纲' : importStage === 'rough' ? '粗纲' : '细纲'}
+                </Text>
+                <Pressable onPress={() => setImportModalVisible(false)}>
+                  <Feather name="x" size={22} color="#888" />
+                </Pressable>
+              </View>
+              <View style={styles.modalBody}>
+                <Text style={{ color: '#888', fontSize: 13, marginBottom: 8 }}>
+                  {importStage === 'outline'
+                    ? '粘贴大纲内容，整体骨架文本'
+                    : importStage === 'rough'
+                      ? '粘贴粗纲，每行一条章节概括'
+                      : '粘贴细纲，每行一条章节详细情节'}
+                </Text>
+                <TextInput
+                  style={[styles.textArea, { flex: 1 }]}
+                  multiline
+                  textAlignVertical="top"
+                  value={importText}
+                  onChangeText={setImportText}
+                  placeholder={importStage === 'outline' ? '粘贴大纲内容...' : '每行一条，粘贴内容...'}
+                  placeholderTextColor="#555"
+                  autoCapitalize="none"
+                />
+              </View>
+              <View style={styles.modalFooter}>
+                <Pressable style={styles.cancelBtn} onPress={() => setImportModalVisible(false)}>
+                  <Text style={styles.cancelBtnText}>取消</Text>
+                </Pressable>
+                <Pressable style={styles.saveBtn} onPress={handleImportSave}>
+                  <Text style={styles.saveBtnText}>导入</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </Screen>
   );
 }
@@ -533,6 +615,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
+  },
+  importBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  importBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
   },
   aiBtn: {
     flexDirection: 'row',
@@ -745,5 +841,29 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#000',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalBody: {
+    flex: 1,
+  },
+  textArea: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 14,
+    color: '#fff',
+    minHeight: 200,
+    textAlignVertical: 'top',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 16,
   },
 });
