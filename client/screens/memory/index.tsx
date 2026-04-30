@@ -1,3 +1,4 @@
+import { GC } from '@/utils/glassColors';
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
@@ -222,7 +223,7 @@ export default function MemoryScreen() {
                     ]}
                     onPress={() => setNewType(t.value)}
                   >
-                    <Ionicons name={t.icon as any} size={16} color={newType === t.value ? t.color : '#888'} />
+                    <Ionicons name={t.icon as any} size={16} color={newType === t.value ? t.color : GC.textSecondary} />
                     <Text style={[styles.typeOptionText, newType === t.value && { color: t.color }]}>
                       {t.label}
                     </Text>
@@ -352,7 +353,7 @@ export default function MemoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: GC.bgBase },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -361,12 +362,12 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
   },
-  headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#fff' },
+  headerTitle: { fontSize: 28, fontWeight: 'bold', color: GC.textPrimary },
   addBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -380,7 +381,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   statItem: { alignItems: 'center', gap: 4 },
-  statCount: { color: '#888', fontSize: 13, fontWeight: '600' },
+  statCount: { color: GC.textSecondary, fontSize: 13, fontWeight: '600' },
 
   // 列表
   listContent: { paddingHorizontal: 20, paddingBottom: 20 },
@@ -388,12 +389,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 12,
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#222',
+    borderColor: GC.bgCard,
   },
   memoryCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   typeIcon: {
@@ -404,8 +405,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   memoryCardInfo: { flex: 1 },
-  memoryName: { color: '#fff', fontSize: 16, fontWeight: '600', marginBottom: 4 },
-  memoryDesc: { color: '#888', fontSize: 13, lineHeight: 18 },
+  memoryName: { color: GC.textPrimary, fontSize: 16, fontWeight: '600', marginBottom: 4 },
+  memoryDesc: { color: GC.textSecondary, fontSize: 13, lineHeight: 18 },
   typeBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -415,7 +416,7 @@ const styles = StyleSheet.create({
 
   // 空状态
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 100 },
-  emptyText: { color: '#888', fontSize: 16, marginTop: 16 },
+  emptyText: { color: GC.textSecondary, fontSize: 16, marginTop: 16 },
   emptySubText: { color: '#555', fontSize: 13, marginTop: 8, textAlign: 'center' },
 
   // 弹窗
@@ -426,11 +427,11 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#111',
+    backgroundColor: GC.bgElevated,
     borderRadius: 16,
     padding: 24,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -438,8 +439,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  modalTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  modalLabel: { color: '#888', fontSize: 13, marginBottom: 6, fontWeight: '500' },
+  modalTitle: { color: GC.textPrimary, fontSize: 20, fontWeight: 'bold' },
+  modalLabel: { color: GC.textSecondary, fontSize: 13, marginBottom: 6, fontWeight: '500' },
 
   // 类型选择
   typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
@@ -451,19 +452,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
-  typeOptionText: { color: '#888', fontSize: 13 },
+  typeOptionText: { color: GC.textSecondary, fontSize: 13 },
 
   modalInput: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 8,
     padding: 14,
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 15,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -474,18 +475,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
-  modalCancelText: { color: '#888', fontSize: 15 },
+  modalCancelText: { color: GC.textSecondary, fontSize: 15 },
   modalConfirmBtn: {
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
   },
-  modalConfirmText: { color: '#000', fontSize: 15, fontWeight: '600' },
+  modalConfirmText: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
 
   // 详情
   detailDesc: { color: '#ddd', fontSize: 15, lineHeight: 26, marginBottom: 12 },

@@ -143,7 +143,7 @@ const KeyboardAwareScrollable = ({
 
 const RawScreen = ({
   children,
-  backgroundColor = '#000000',
+  backgroundColor = '#070A14',
   statusBarStyle = 'light',
   statusBarColor = 'transparent',
   safeAreaEdges = ['top', 'left', 'right', 'bottom'],

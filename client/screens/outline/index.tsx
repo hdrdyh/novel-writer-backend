@@ -14,6 +14,7 @@ import {
   Platform,
   TouchableOpacity,
 } from 'react-native';
+import { GC, GlassCardStyle } from '@/utils/glassColors';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { Feather } from '@expo/vector-icons';
@@ -552,7 +553,7 @@ export default function OutlineScreen() {
                 </Pressable>
               </View>
               <View style={styles.modalBody}>
-                <Text style={{ color: '#888', fontSize: 13, marginBottom: 8 }}>
+                <Text style={{ color: GC.textSecondary, fontSize: 13, marginBottom: 8 }}>
                   {importStage === 'outline'
                     ? '粘贴大纲内容，整体骨架文本'
                     : importStage === 'rough'
@@ -589,7 +590,7 @@ export default function OutlineScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: GC.bgBase,
   },
   header: {
     paddingHorizontal: 24,
@@ -598,24 +599,24 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: 14,
-    color: '#888',
+    color: GC.textSecondary,
     fontWeight: '600',
     letterSpacing: 2,
   },
   novelNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 6,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   novelNameInput: {
     flex: 1,
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 10,
@@ -624,12 +625,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#fff',
+    color: GC.textPrimary,
     marginTop: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: '#888',
+    color: GC.textSecondary,
     marginTop: 6,
   },
   list: {
@@ -637,15 +638,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   stageCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 16,
     padding: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   stageCardLocked: {
-    borderColor: '#4ade80',
+    borderColor: GC.success,
     borderLeftWidth: 3,
   },
   stageHeader: {
@@ -660,7 +661,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: '#333',
+    backgroundColor: GC.border,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -671,11 +672,11 @@ const styles = StyleSheet.create({
   stageTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#fff',
+    color: GC.textPrimary,
   },
   stageSubtitle: {
     fontSize: 12,
-    color: '#888',
+    color: GC.textSecondary,
     marginTop: 2,
   },
   lockedBadge: {
@@ -689,7 +690,7 @@ const styles = StyleSheet.create({
   },
   lockedText: {
     fontSize: 12,
-    color: '#4ade80',
+    color: GC.success,
     fontWeight: '600',
   },
   stageActions: {
@@ -700,7 +701,7 @@ const styles = StyleSheet.create({
   importBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#333',
+    backgroundColor: GC.border,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -709,12 +710,12 @@ const styles = StyleSheet.create({
   importBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#fff',
+    color: GC.textPrimary,
   },
   aiBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -723,12 +724,12 @@ const styles = StyleSheet.create({
   aiBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#000',
+    color: GC.textPrimary,
   },
   reviewBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#333',
+    backgroundColor: GC.border,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -737,7 +738,7 @@ const styles = StyleSheet.create({
   reviewBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#fff',
+    color: GC.textPrimary,
   },
   lockBtn: {
     flexDirection: 'row',
@@ -751,7 +752,7 @@ const styles = StyleSheet.create({
   lockBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#4ade80',
+    color: GC.success,
   },
   unlockBtn: {
     flexDirection: 'row',
@@ -760,53 +761,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     gap: 6,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   unlockBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#888',
+    color: GC.textSecondary,
   },
   outlineEditArea: {
     marginTop: 4,
   },
   outlineInput: {
-    backgroundColor: '#000',
+    backgroundColor: GC.bgBase,
     borderRadius: 12,
     padding: 16,
     fontSize: 15,
-    color: '#fff',
+    color: GC.textPrimary,
     lineHeight: 24,
     minHeight: 180,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   listArea: {
     marginTop: 4,
   },
   hintText: {
     fontSize: 14,
-    color: '#555',
+    color: GC.textTertiary,
     textAlign: 'center',
     paddingVertical: 24,
   },
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#000',
+    backgroundColor: GC.bgBase,
     borderRadius: 10,
     padding: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#222',
+    borderColor: GC.border,
   },
   listItemNum: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#333',
+    backgroundColor: GC.border,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -814,12 +815,12 @@ const styles = StyleSheet.create({
   listItemNumText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#fff',
+    color: GC.textPrimary,
   },
   listItemText: {
     flex: 1,
     fontSize: 14,
-    color: '#ccc',
+    color: GC.border,
     lineHeight: 20,
   },
   listItemIcon: {
@@ -831,29 +832,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 8,
-    backgroundColor: '#111',
+    backgroundColor: GC.bgElevated,
     borderRadius: 8,
     gap: 8,
   },
   chapterCountLabel: {
-    color: '#999',
+    color: GC.textSecondary,
     fontSize: 13,
   },
   chapterCountInput: {
     flex: 1,
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
     paddingVertical: 4,
     paddingHorizontal: 8,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   chapterCountUnit: {
-    color: '#999',
+    color: GC.textSecondary,
     fontSize: 13,
   },
   addItemBtn: {
@@ -863,20 +864,20 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     borderStyle: 'dashed',
     gap: 6,
     marginTop: 4,
   },
   addItemText: {
     fontSize: 14,
-    color: '#888',
+    color: GC.textSecondary,
   },
   startWritingBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     borderRadius: 14,
     paddingVertical: 18,
     gap: 10,
@@ -885,7 +886,7 @@ const styles = StyleSheet.create({
   startWritingText: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#000',
+    color: GC.textPrimary,
   },
   bottomSpacer: {
     height: 40,
@@ -901,28 +902,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 16,
     padding: 24,
     width: '90%',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#fff',
+    color: GC.textPrimary,
     marginBottom: 16,
   },
   modalInput: {
-    backgroundColor: '#000',
+    backgroundColor: GC.bgBase,
     borderRadius: 10,
     padding: 16,
     fontSize: 15,
-    color: '#fff',
+    color: GC.textPrimary,
     minHeight: 150,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     textAlignVertical: 'top',
   },
   modalActions: {
@@ -932,7 +933,7 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    backgroundColor: '#333',
+    backgroundColor: GC.border,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -940,11 +941,11 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#888',
+    color: GC.textSecondary,
   },
   saveBtn: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -952,7 +953,7 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#000',
+    color: GC.textPrimary,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -964,11 +965,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   textArea: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 12,
     padding: 16,
     fontSize: 14,
-    color: '#fff',
+    color: GC.textPrimary,
     minHeight: 200,
     textAlignVertical: 'top',
   },
@@ -993,11 +994,11 @@ const styles = StyleSheet.create({
   },
   agentProgressFill: {
     height: '100%',
-    backgroundColor: '#7C5CFF',
+    backgroundColor: GC.accent,
     borderRadius: 2,
   },
   agentProgressText: {
-    color: '#7C5CFF',
+    color: GC.accent,
     fontSize: 12,
     marginTop: 6,
   },

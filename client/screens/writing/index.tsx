@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { orchestrateAgents, type OrchestrationParams, type AgentStepResult, type CoordinatorReport } from '@/utils/agentOrchestrator';
 import { PRESET_AGENTS, type PresetAgent } from '@/utils/presetAgents';
+import { GC } from '@/utils/glassColors';
 
 interface QueueItem {
   id: string;
@@ -537,8 +538,8 @@ export default function WritingScreen() {
                   <ActivityIndicator color="#000" />
                 ) : (
                   <>
-                    <Ionicons name="bulb" size={20} color={!outlineInput ? '#333' : '#000'} />
-                    <Text style={[styles.generateBtnText, !outlineInput && { color: '#333' }]}>
+                    <Ionicons name="bulb" size={20} color={!outlineInput ? GC.border : GC.bgBase} />
+                    <Text style={[styles.generateBtnText, !outlineInput && { color: GC.border }]}>
                       {outlineInput ? '开始创作' : '请先生成细纲'}
                     </Text>
                   </>
@@ -658,7 +659,7 @@ export default function WritingScreen() {
                       {/* pending 状态：显示开始创作按钮 */}
                       {item.status === 'pending' && !isGenerating && item.outline.trim() && (
                         <TouchableOpacity
-                          style={[styles.queueActionBtn, { backgroundColor: '#4ade80', borderRadius: 4, paddingHorizontal: 6 }]}
+                          style={[styles.queueActionBtn, { backgroundColor: GC.success, borderRadius: 4, paddingHorizontal: 6 }]}
                           onPress={() => {
                             setCurrentQueueIdx(idx);
                             currentQueueIdxRef.current = idx;
@@ -667,11 +668,11 @@ export default function WritingScreen() {
                           }}
                         >
                           <Ionicons name="play" size={16} color="#000" />
-                          <Text style={{ color: '#000', fontSize: 12, fontWeight: '600' }}>创作</Text>
+                          <Text style={{ color: GC.bgBase, fontSize: 12, fontWeight: '600' }}>创作</Text>
                         </TouchableOpacity>
                       )}
                       {item.status === 'pending' && !item.outline.trim() && (
-                        <Text style={{ color: '#ff6b6b', fontSize: 11 }}>无细纲</Text>
+                        <Text style={{ color: GC.danger, fontSize: 11 }}>无细纲</Text>
                       )}
                       {item.status === 'generating' && (
                         <ActivityIndicator size="small" color="#fbbf24" />
@@ -712,7 +713,7 @@ export default function WritingScreen() {
                               onPress={() => handleRegenerateQueueItem(idx)}
                             >
                               <Ionicons name="refresh" size={16} color="#7C5CFF" />
-                              <Text style={{ color: '#7C5CFF', fontSize: 11, fontWeight: '600' }}>重写</Text>
+                              <Text style={{ color: GC.primary, fontSize: 11, fontWeight: '600' }}>重写</Text>
                             </TouchableOpacity>
                           )}
                         </>
@@ -915,7 +916,7 @@ export default function WritingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: GC.bgBase },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -924,20 +925,20 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
   },
-  headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#fff' },
+  headerTitle: { fontSize: 28, fontWeight: 'bold', color: GC.textPrimary },
   headerRight: { flexDirection: 'row', gap: 8 },
   multiModeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
-  multiModeBtnText: { color: '#fff', fontSize: 14, fontWeight: '500' },
+  multiModeBtnText: { color: GC.textPrimary, fontSize: 14, fontWeight: '500' },
   exitMultiBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -945,17 +946,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderWidth: 1,
     borderColor: '#ff6b6b33',
   },
-  exitMultiBtnText: { color: '#ff6b6b', fontSize: 14, fontWeight: '500' },
+  exitMultiBtnText: { color: GC.danger, fontSize: 14, fontWeight: '500' },
   scrollView: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 100 },
   chapterBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
@@ -963,55 +964,55 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
-  chapterText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  chapterText: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
   switchingBar: {
     height: 3,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 2,
     marginBottom: 16,
     overflow: 'hidden',
   },
   switchingProgress: {
     height: '100%',
-    backgroundColor: '#7C5CFF',
+    backgroundColor: GC.primary,
     borderRadius: 2,
     width: '60%',
   },
   outlineSection: { marginBottom: 16 },
-  sectionLabel: { color: '#888', fontSize: 13, marginBottom: 8, fontWeight: '500' },
+  sectionLabel: { color: GC.textSecondary, fontSize: 13, marginBottom: 8, fontWeight: '500' },
   outlineDisplay: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 8,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     maxHeight: 120,
   },
   outlineDisplayText: {
-    color: '#ccc',
+    color: GC.border,
     fontSize: 14,
     lineHeight: 22,
   },
   noOutlineHint: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 8,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     gap: 8,
     marginBottom: 16,
   },
   noOutlineHintText: {
-    color: '#666',
+    color: GC.textMuted,
     fontSize: 13,
     flex: 1,
   },
   generateBtn: {
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1021,38 +1022,38 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   generateBtnDisabled: { opacity: 0.5 },
-  generateBtnText: { color: '#000', fontSize: 17, fontWeight: '600' },
+  generateBtnText: { color: GC.bgBase, fontSize: 17, fontWeight: '600' },
   agentStatus: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 8,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
-  agentStatusTitle: { color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 10 },
+  agentStatusTitle: { color: GC.textPrimary, fontSize: 14, fontWeight: '600', marginBottom: 10 },
   agentSteps: { gap: 8 },
   agentStepItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  stepDotPending: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#333' },
+  stepDotPending: { width: 8, height: 8, borderRadius: 4, backgroundColor: GC.border },
   stepText: { fontSize: 12 },
-  stepTextDone: { color: '#4ade80' },
-  stepTextCurrent: { color: '#7C5CFF', fontWeight: '700' },
-  stepTextPending: { color: '#555' },
-  currentStepText: { color: '#fff', fontSize: 13, marginTop: 8 },
+  stepTextDone: { color: GC.success },
+  stepTextCurrent: { color: GC.primary, fontWeight: '700' },
+  stepTextPending: { color: GC.textSecondary },
+  currentStepText: { color: GC.textPrimary, fontSize: 13, marginTop: 8 },
   contentSection: { marginTop: 8 },
   contentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   previewBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  previewBtnText: { color: '#888', fontSize: 13 },
+  previewBtnText: { color: GC.textSecondary, fontSize: 13 },
   contentCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 8,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     minHeight: 200,
   },
   contentScroll: { maxHeight: 400 },
-  contentText: { color: '#ddd', fontSize: 15, lineHeight: 26 },
+  contentText: { color: GC.textMuted, fontSize: 15, lineHeight: 26 },
   actionButtons: {
     flexDirection: 'row',
     gap: 10,
@@ -1063,42 +1064,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#7C5CFF',
+    backgroundColor: GC.primary,
     borderRadius: 10,
     paddingVertical: 12,
     gap: 6,
   },
-  rewriteBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  rewriteBtnText: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
   saveBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     borderRadius: 10,
     paddingVertical: 12,
     gap: 6,
   },
-  saveBtnText: { color: '#000', fontSize: 15, fontWeight: '600' },
+  saveBtnText: { color: GC.bgBase, fontSize: 15, fontWeight: '600' },
   reviewBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#333',
+    backgroundColor: GC.border,
     borderRadius: 10,
     paddingVertical: 12,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#555',
+    borderColor: GC.textSecondary,
   },
-  reviewBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  reviewBtnText: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
   emptyContent: {
     alignItems: 'center',
     paddingVertical: 40,
     gap: 12,
   },
-  emptyText: { color: '#666', fontSize: 14, textAlign: 'center' },
+  emptyText: { color: GC.textMuted, fontSize: 14, textAlign: 'center' },
 
   // 多章模式
   multiHeader: {
@@ -1107,24 +1108,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  multiTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  multiCount: { color: '#888', fontSize: 14 },
+  multiTitle: { color: GC.textPrimary, fontSize: 20, fontWeight: 'bold' },
+  multiCount: { color: GC.textSecondary, fontSize: 14 },
   queueCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 10,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
-  queueCardActive: { borderColor: '#7C5CFF', borderWidth: 2 },
+  queueCardActive: { borderColor: GC.primary, borderWidth: 2 },
   queueCardReviewed: { borderColor: '#4ade8044' },
   queueCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  queueCardTitle: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  queueCardTitle: { color: GC.textPrimary, fontSize: 16, fontWeight: '600' },
   queueCardActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   queueActionBtn: {
     flexDirection: 'row',
@@ -1138,20 +1139,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
-    backgroundColor: '#333',
+    backgroundColor: GC.border,
   },
   statusBadgeGenerating: { backgroundColor: '#fbbf2433' },
   statusBadgeDone: { backgroundColor: '#4ade8033' },
   statusBadgeReviewed: { backgroundColor: '#7C5CFF33' },
-  statusBadgeText: { fontSize: 11, color: '#ccc' },
+  statusBadgeText: { fontSize: 11, color: GC.border },
   queueOutlineText: {
-    color: '#999',
+    color: GC.textSecondary,
     fontSize: 12,
     marginTop: 8,
     lineHeight: 18,
   },
   queueNoOutlineText: {
-    color: '#ff6b6b',
+    color: GC.danger,
     fontSize: 12,
     marginTop: 8,
     fontStyle: 'italic',
@@ -1165,15 +1166,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 16,
     padding: 24,
     width: '85%',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   reportModalContent: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 16,
     padding: 24,
     width: '90%',
@@ -1181,18 +1182,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#7C5CFF44',
   },
-  modalTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold', marginBottom: 8 },
-  modalDesc: { color: '#888', fontSize: 14, marginBottom: 20 },
-  modalLabel: { color: '#ccc', fontSize: 14, marginBottom: 8 },
-  modalInfo: { color: '#888', fontSize: 14, marginBottom: 12 },
+  modalTitle: { color: GC.textPrimary, fontSize: 20, fontWeight: 'bold', marginBottom: 8 },
+  modalDesc: { color: GC.textSecondary, fontSize: 14, marginBottom: 20 },
+  modalLabel: { color: GC.border, fontSize: 14, marginBottom: 8 },
+  modalInfo: { color: GC.textSecondary, fontSize: 14, marginBottom: 12 },
   modalInput: {
-    backgroundColor: '#000',
+    backgroundColor: GC.bgBase,
     borderRadius: 8,
     padding: 14,
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     marginBottom: 12,
   },
   modalQuickRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
@@ -1200,48 +1201,48 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#000',
+    backgroundColor: GC.bgBase,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
-  modalQuickBtnActive: { borderColor: '#7C5CFF', backgroundColor: '#7C5CFF22' },
-  modalQuickBtnText: { color: '#888', fontSize: 14 },
-  modalQuickBtnTextActive: { color: '#7C5CFF', fontWeight: '600' },
+  modalQuickBtnActive: { borderColor: GC.primary, backgroundColor: '#7C5CFF22' },
+  modalQuickBtnText: { color: GC.textSecondary, fontSize: 14 },
+  modalQuickBtnTextActive: { color: GC.primary, fontWeight: '600' },
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 8 },
   modalCancelBtn: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#333',
+    backgroundColor: GC.border,
     alignItems: 'center',
   },
-  modalCancelText: { color: '#fff', fontSize: 15, fontWeight: '500' },
+  modalCancelText: { color: GC.textPrimary, fontSize: 15, fontWeight: '500' },
   modalConfirmBtn: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#7C5CFF',
+    backgroundColor: GC.primary,
     alignItems: 'center',
   },
-  modalConfirmText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  reportTitle: { color: '#7C5CFF', fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
+  modalConfirmText: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
+  reportTitle: { color: GC.primary, fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
   reportScroll: { maxHeight: 200, marginBottom: 12 },
-  reportText: { color: '#ccc', fontSize: 14, lineHeight: 22 },
-  reportFeedbackLabel: { color: '#888', fontSize: 12, marginBottom: 6 },
+  reportText: { color: GC.border, fontSize: 14, lineHeight: 22 },
+  reportFeedbackLabel: { color: GC.textSecondary, fontSize: 12, marginBottom: 6 },
   reportFeedbackInput: {
-    backgroundColor: '#000',
+    backgroundColor: GC.bgBase,
     borderRadius: 8,
     padding: 12,
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     minHeight: 60,
     marginBottom: 12,
     textAlignVertical: 'top',
   },
-  previewModalContainer: { flex: 1, backgroundColor: '#000' },
+  previewModalContainer: { flex: 1, backgroundColor: GC.bgBase },
   previewHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1249,7 +1250,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 60,
   },
-  previewTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  previewTitle: { color: GC.textPrimary, fontSize: 22, fontWeight: 'bold' },
   previewScroll: { flex: 1, padding: 20 },
-  previewText: { color: '#ddd', fontSize: 16, lineHeight: 28 },
+  previewText: { color: GC.textMuted, fontSize: 16, lineHeight: 28 },
 });

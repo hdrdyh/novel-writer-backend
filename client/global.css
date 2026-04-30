@@ -1,26 +1,130 @@
 :root {
-  --color-background: #000000;
-  --color-foreground: #ffffff;
-  --color-card: #1a1a1a;
-  --color-border: #333333;
-  --color-muted: #888888;
-  --color-accent: #6c63ff;
+  /* === 品牌色 === */
+  --color-primary: #7C5CFF;
+  --color-primary-container: #9B82FF;
+  --color-on-primary: #ffffff;
+
+  /* === 背景 / 表面（暗色毛玻璃系） === */
+  --color-background: #070A14;
+  --color-surface-container-lowest: #0D1120;
+  --color-surface: #111628;
+  --color-surface-container: #161C35;
+  --color-surface-container-high: #1C2442;
+  --color-surface-container-highest: #232D50;
+
+  /* === 前景文字 === */
+  --color-foreground: #F7FAFF;
+  --color-on-surface: #F7FAFF;
+  --color-on-surface-variant: #9AA7C7;
+  --color-muted: #9AA7C7;
+
+  /* === 功能色 === */
+  --color-accent: #7C5CFF;
+  --color-success: #62FAD3;
+  --color-error: #FF6B8A;
+  --color-warning: #FFD166;
+
+  /* === 边框 === */
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-outline: rgba(255, 255, 255, 0.12);
+  --color-outline-variant: rgba(255, 255, 255, 0.06);
+
+  /* === 卡片 === */
+  --color-card: #161C35;
+
+  /* === 圆角 === */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* === 阴影 === */
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-float: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --shadow-dialog: 0 25px 60px rgba(0, 0, 0, 0.7);
 }
 
 body {
-  background-color: #000000;
-  color: #ffffff;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Manrope", system-ui, sans-serif;
+  --font-sans: 'Noto Sans SC', 'Space Grotesk', system-ui, -apple-system, sans-serif;
 }
 
 #root {
-  background-color: #000000;
-  color: #ffffff;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
   min-height: 100vh;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* === 毛玻璃效果 === */
+.glass {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-high {
+  background: rgba(255, 255, 255, 0.10);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* === 发光效果 === */
+.glow-primary {
+  box-shadow: 0 0 20px rgba(124, 92, 255, 0.3);
+}
+
+.glow-accent {
+  box-shadow: 0 0 20px rgba(105, 231, 255, 0.3);
+}
+
+.glow-success {
+  box-shadow: 0 0 12px rgba(98, 250, 211, 0.25);
+}
+
+/* === 渐变按钮 === */
+.btn-gradient {
+  background: linear-gradient(135deg, #7C5CFF 0%, #69E7FF 100%);
+  color: #070A14;
+  font-weight: 700;
+}
+
+/* === 脉冲发光动画 === */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* === 微光扫过动画 === */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(124, 92, 255, 0.15), transparent);
+  animation: shimmer 2s infinite;
 }

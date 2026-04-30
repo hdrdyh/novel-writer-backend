@@ -1,3 +1,4 @@
+import { GC } from '@/utils/glassColors';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
@@ -517,7 +518,7 @@ export default function OutlineReviewScreen() {
                 );
               }
 
-              const agentColor = AGENT_COLORS[msg.senderName] || '#888';
+              const agentColor = AGENT_COLORS[msg.senderName] || GC.textSecondary;
 
               if (msg.sender === 'user') {
                 return (
@@ -588,7 +589,7 @@ export default function OutlineReviewScreen() {
                     editable={!loading}
                   />
                   <Pressable style={styles.sendBtn} onPress={handleSend} disabled={loading || !inputText.trim()}>
-                    <Feather name="send" size={18} color={inputText.trim() && !loading ? '#000' : '#555'} />
+                    <Feather name="send" size={18} color={inputText.trim() && !loading ? GC.textPrimary : '#555'} />
                   </Pressable>
                 </View>
                 <View style={styles.actionRow}>
@@ -623,7 +624,7 @@ export default function OutlineReviewScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: GC.bgBase,
   },
   topBar: {
     flexDirection: 'row',
@@ -631,7 +632,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
+    borderBottomColor: GC.bgCard,
     paddingTop: 56,
   },
   backBtn: {
@@ -641,7 +642,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: '800',
-    color: '#fff',
+    color: GC.textPrimary,
     textAlign: 'center',
   },
   previewToggle: {
@@ -655,7 +656,7 @@ const styles = StyleSheet.create({
   },
   previewLabel: {
     fontSize: 12,
-    color: '#888',
+    color: GC.textSecondary,
     fontWeight: '600',
     marginBottom: 12,
   },
@@ -694,12 +695,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   msgBubble: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 14,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     marginRight: 20,
   },
   userBubbleWrap: {
@@ -715,7 +716,7 @@ const styles = StyleSheet.create({
     maxWidth: '75%',
   },
   userMsgText: {
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 15,
     lineHeight: 22,
   },
@@ -780,25 +781,25 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 13,
-    color: '#888',
+    color: GC.textSecondary,
   },
   bottomBar: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#222',
+    borderTopColor: GC.bgCard,
   },
   startReviewBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
   },
   startReviewText: {
-    color: '#000',
+    color: GC.textPrimary,
     fontSize: 17,
     fontWeight: '600',
   },
@@ -809,17 +810,17 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 10,
     padding: 14,
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 15,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     maxHeight: 80,
   },
   sendBtn: {
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     width: 44,
     height: 44,
     borderRadius: 12,
@@ -839,12 +840,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   regenerateText: {
-    color: '#888',
+    color: GC.textSecondary,
     fontSize: 12,
   },
   undoBtn: {
@@ -854,7 +855,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderWidth: 1,
     borderColor: '#fbbf2444',
   },
@@ -870,10 +871,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
   },
   confirmText: {
-    color: '#000',
+    color: GC.textPrimary,
     fontSize: 14,
     fontWeight: '600',
   },

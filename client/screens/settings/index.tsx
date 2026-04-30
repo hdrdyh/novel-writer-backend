@@ -1,3 +1,4 @@
+import { GC } from '@/utils/glassColors';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -256,7 +257,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: GC.bgBase,
   },
   header: {
     paddingHorizontal: 20,
@@ -266,7 +267,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
+    color: GC.textPrimary,
   },
   scrollView: {
     flex: 1,
@@ -276,7 +277,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   sectionTitle: {
-    color: '#888',
+    color: GC.textSecondary,
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 12,
@@ -291,20 +292,20 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 12,
     padding: 18,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   statValue: {
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 28,
     fontWeight: 'bold',
   },
   statLabel: {
-    color: '#888',
+    color: GC.textSecondary,
     fontSize: 12,
     marginTop: 4,
   },
@@ -312,25 +313,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 12,
     padding: 18,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   settingInfo: {
     flex: 1,
     marginRight: 16,
   },
   settingLabel: {
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 4,
   },
   settingDesc: {
-    color: '#888',
+    color: GC.textSecondary,
     fontSize: 13,
   },
   toggle: {
@@ -341,10 +342,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleOn: {
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
   },
   toggleOff: {
-    backgroundColor: '#333',
+    backgroundColor: GC.border,
   },
   toggleThumb: {
     width: 26,
@@ -352,51 +353,51 @@ const styles = StyleSheet.create({
     borderRadius: 13,
   },
   toggleThumbOn: {
-    backgroundColor: '#000',
+    backgroundColor: GC.bgBase,
     alignSelf: 'flex-end',
   },
   toggleThumbOff: {
-    backgroundColor: '#888',
+    backgroundColor: GC.textSecondary,
   },
   actionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 12,
     padding: 18,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     gap: 14,
   },
   dangerCard: {
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   actionInfo: {
     flex: 1,
   },
   actionLabel: {
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 2,
   },
   actionLabelDanger: {
-    color: '#888',
+    color: GC.textSecondary,
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 2,
   },
   actionDesc: {
-    color: '#888',
+    color: GC.textSecondary,
     fontSize: 13,
   },
   aboutCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 12,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   aboutRow: {
     flexDirection: 'row',
@@ -406,14 +407,14 @@ const styles = StyleSheet.create({
   },
   aboutDivider: {
     height: 1,
-    backgroundColor: '#333',
+    backgroundColor: GC.border,
   },
   aboutLabel: {
-    color: '#888',
+    color: GC.textSecondary,
     fontSize: 15,
   },
   aboutValue: {
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 15,
   },
 });

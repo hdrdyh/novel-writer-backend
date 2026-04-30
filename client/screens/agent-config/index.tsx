@@ -20,6 +20,7 @@ import { Screen } from '@/components/Screen';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useFocusEffect } from 'expo-router';
+import { GC } from '@/utils/glassColors';
 import { PRESET_AGENTS, PresetAgent, AgentCategory } from '@/utils/presetAgents';
 
 // ============== 类型 ==============
@@ -695,8 +696,8 @@ export default function AgentConfigScreen() {
           <Switch
             value={config.enabled}
             onValueChange={() => handleToggleCollabAgent(preset.id)}
-            trackColor={{ false: '#333', true: isCore ? '#555' : '#7C5CFF' }}
-            thumbColor={config.enabled ? '#fff' : '#555'}
+            trackColor={{ false: GC.border, true: isCore ? GC.textMuted : GC.primary }}
+            thumbColor={config.enabled ? GC.textPrimary : GC.textMuted}
             disabled={isCore}
           />
         </View>
@@ -789,8 +790,8 @@ export default function AgentConfigScreen() {
                     <Switch
                       value={agent.enabled}
                       onValueChange={() => handleToggleReviewAgent(agent)}
-                      trackColor={{ false: '#333', true: '#7C5CFF' }}
-                      thumbColor={agent.enabled ? '#fff' : '#555'}
+                      trackColor={{ false: GC.border, true: GC.primary }}
+                      thumbColor={agent.enabled ? GC.textPrimary : GC.textMuted}
                     />
                     <TouchableOpacity onPress={() => handleDeleteReviewAgent(agent)} style={s.iconBtn}>
                       <Ionicons name="trash-outline" size={18} color="#666" />
@@ -921,10 +922,10 @@ export default function AgentConfigScreen() {
                 {smartMatchLoading ? (
                   <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                     <ActivityIndicator size="large" color="#7C5CFF" />
-                    <Text style={{ color: '#888', marginTop: 12 }}>AI正在分析最佳搭配方案...</Text>
+                    <Text style={{ color: GC.textSecondary, marginTop: 12 }}>AI正在分析最佳搭配方案...</Text>
                   </View>
                 ) : (
-                  <Text style={{ color: '#ccc', fontSize: 14, lineHeight: 22 }}>{smartMatchSuggestion}</Text>
+                  <Text style={{ color: GC.textTertiary, fontSize: 14, lineHeight: 22 }}>{smartMatchSuggestion}</Text>
                 )}
               </ScrollView>
               {!smartMatchLoading && smartMatchSuggestion && !smartMatchSuggestion.includes('失败') && !smartMatchSuggestion.includes('错误') && (
@@ -948,30 +949,30 @@ export default function AgentConfigScreen() {
 // ============== 弹窗样式 ==============
 const m = StyleSheet.create({
   modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
-  modalContent: { backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%', borderWidth: 1, borderColor: '#333' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#333' },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
+  modalContent: { backgroundColor: GC.bgElevated, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%', borderWidth: 1, borderColor: GC.border },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: GC.border },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: GC.textPrimary },
   modalBody: { padding: 20 },
-  modalFooter: { flexDirection: 'row', gap: 12, padding: 20, borderTopWidth: 1, borderTopColor: '#333' },
+  modalFooter: { flexDirection: 'row', gap: 12, padding: 20, borderTopWidth: 1, borderTopColor: GC.border },
   modalBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  cancelBtn: { backgroundColor: '#333' },
-  cancelBtnText: { color: '#aaa', fontSize: 16, fontWeight: '600' },
-  submitBtn: { backgroundColor: '#7C5CFF' },
-  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  fieldLabel: { color: '#888', fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 12 },
-  fieldInput: { backgroundColor: '#222', borderRadius: 10, padding: 14, color: '#fff', fontSize: 15, borderWidth: 1, borderColor: '#333' },
+  cancelBtn: { backgroundColor: GC.border },
+  cancelBtnText: { color: GC.textSecondary, fontSize: 16, fontWeight: '600' },
+  submitBtn: { backgroundColor: GC.primary },
+  submitBtnText: { color: GC.textPrimary, fontSize: 16, fontWeight: '600' },
+  fieldLabel: { color: GC.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 12 },
+  fieldInput: { backgroundColor: GC.inputBg, borderRadius: 10, padding: 14, color: GC.textPrimary, fontSize: 15, borderWidth: 1, borderColor: GC.border },
   promptInput: { minHeight: 120 },
-  pickerWrap: { backgroundColor: '#222', borderRadius: 10, borderWidth: 1, borderColor: '#333', maxHeight: 150 },
+  pickerWrap: { backgroundColor: GC.inputBg, borderRadius: 10, borderWidth: 1, borderColor: GC.border, maxHeight: 150 },
   pickerScroll: { padding: 8 },
   pickerItem: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8 },
-  pickerItemActive: { backgroundColor: '#7C5CFF' },
-  pickerItemText: { color: '#888', fontSize: 14 },
-  pickerItemTextActive: { color: '#fff', fontWeight: '600' },
+  pickerItemActive: { backgroundColor: GC.primary },
+  pickerItemText: { color: GC.textSecondary, fontSize: 14 },
+  pickerItemTextActive: { color: GC.textPrimary, fontWeight: '600' },
 });
 
 // ============== 页面样式 ==============
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: GC.bgBase },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -981,22 +982,22 @@ const s = StyleSheet.create({
     paddingBottom: 16,
   },
   backBtn: { padding: 8 },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
+  headerTitle: { fontSize: 22, fontWeight: 'bold', color: GC.textPrimary },
 
   tabBar: {
     flexDirection: 'row',
     marginHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: '#111',
+    backgroundColor: GC.bgElevated,
     borderRadius: 12,
     padding: 4,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   tabItem: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
-  tabItemActive: { backgroundColor: '#7C5CFF' },
-  tabItemText: { color: '#888', fontSize: 14, fontWeight: '600' },
-  tabItemTextActive: { color: '#fff' },
+  tabItemActive: { backgroundColor: GC.primary },
+  tabItemText: { color: GC.textSecondary, fontSize: 14, fontWeight: '600' },
+  tabItemTextActive: { color: GC.textPrimary },
 
   scrollView: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 100 },
@@ -1007,74 +1008,74 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: GC.bgElevated,
     borderRadius: 12,
     paddingVertical: 14,
     borderWidth: 1,
     borderColor: '#7C5CFF33',
     marginBottom: 20,
   },
-  smartMatchBtnText: { color: '#7C5CFF', fontSize: 15, fontWeight: '600' },
+  smartMatchBtnText: { color: GC.primary, fontSize: 15, fontWeight: '600' },
 
   // 分类标题
   categoryHeader: { marginTop: 16, marginBottom: 8, paddingLeft: 4 },
-  categoryTitle: { color: '#7C5CFF', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5 },
+  categoryTitle: { color: GC.primary, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5 },
 
   // Agent卡片
   agentCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 12,
     padding: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   agentCardDisabled: { opacity: 0.5 },
   agentInfo: { flex: 1 },
   agentNameRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   agentIcon: { fontSize: 20 },
   agentNameCol: { flex: 1 },
-  agentName: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  agentDesc: { color: '#888', fontSize: 12, marginTop: 2, lineHeight: 16 },
-  agentApi: { color: '#555', fontSize: 11, marginTop: 4 },
-  textDisabled: { color: '#555' },
+  agentName: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
+  agentDesc: { color: GC.textSecondary, fontSize: 12, marginTop: 2, lineHeight: 16 },
+  agentApi: { color: GC.textMuted, fontSize: 11, marginTop: 4 },
+  textDisabled: { color: GC.textMuted },
   agentRightActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 
   // 评审团
   sectionHeader: { marginTop: 16 },
-  sectionTitle: { color: '#888', fontSize: 13, fontWeight: '600', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 },
-  sectionDesc: { color: '#555', fontSize: 12, marginBottom: 12 },
+  sectionTitle: { color: GC.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 },
+  sectionDesc: { color: GC.textMuted, fontSize: 12, marginBottom: 12 },
 
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#7C5CFF',
+    backgroundColor: GC.primary,
     borderRadius: 12,
     paddingVertical: 14,
     marginTop: 12,
   },
-  addBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  addBtnText: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
 
   resetBtn: { marginTop: 16, alignItems: 'center' },
-  resetBtnText: { color: '#555', fontSize: 13 },
+  resetBtnText: { color: GC.textMuted, fontSize: 13 },
 
   iconBtn: { padding: 6 },
 
   // 评审参数
-  divider: { height: 1, backgroundColor: '#222', marginTop: 24, marginBottom: 8 },
-  fieldTitle: { color: '#888', fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 16 },
+  divider: { height: 1, backgroundColor: GC.inputBg, marginTop: 24, marginBottom: 8 },
+  fieldTitle: { color: GC.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 16 },
   reviewInput: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 10,
     padding: 14,
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     minHeight: 60,
     textAlignVertical: 'top',
   },
@@ -1084,27 +1085,27 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
     borderRadius: 10,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
-  roundBtnActive: { backgroundColor: '#7C5CFF', borderColor: '#7C5CFF' },
-  roundBtnText: { color: '#888', fontSize: 14, fontWeight: '600' },
-  roundBtnTextActive: { color: '#fff' },
+  roundBtnActive: { backgroundColor: GC.primary, borderColor: GC.primary },
+  roundBtnText: { color: GC.textSecondary, fontSize: 14, fontWeight: '600' },
+  roundBtnTextActive: { color: GC.textPrimary },
 
   // API卡片
   apiCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 12,
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   apiInfo: { flex: 1 },
-  apiName: { color: '#fff', fontSize: 16, fontWeight: '500' },
-  apiDetail: { color: '#888', fontSize: 12, marginTop: 2 },
+  apiName: { color: GC.textPrimary, fontSize: 16, fontWeight: '500' },
+  apiDetail: { color: GC.textSecondary, fontSize: 12, marginTop: 2 },
   apiActions: { flexDirection: 'row', gap: 8 },
 });

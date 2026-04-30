@@ -1,3 +1,4 @@
+import { GC } from '@/utils/glassColors';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
@@ -487,8 +488,8 @@ export default function ChapterReviewScreen() {
   };
 
   const getAgentColor = (name?: string) => {
-    if (!name) return '#888';
-    return AGENT_COLORS[name] || '#888';
+    if (!name) return GC.textSecondary;
+    return AGENT_COLORS[name] || GC.textSecondary;
   };
 
   return (
@@ -640,7 +641,7 @@ export default function ChapterReviewScreen() {
                   onPress={handleUserSend}
                   disabled={!userInput.trim()}
                 >
-                  <Ionicons name="send" size={20} color={userInput.trim() ? '#000' : '#555'} />
+                  <Ionicons name="send" size={20} color={userInput.trim() ? GC.textPrimary : '#555'} />
                 </TouchableOpacity>
               </View>
             )}
@@ -660,7 +661,7 @@ export default function ChapterReviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: GC.bgBase },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -668,18 +669,18 @@ const styles = StyleSheet.create({
     paddingTop: 56,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
+    borderBottomColor: GC.bgCard,
   },
   backBtn: { padding: 8 },
   headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  headerSub: { color: '#888', fontSize: 12, marginTop: 2 },
+  headerTitle: { color: GC.textPrimary, fontSize: 18, fontWeight: 'bold' },
+  headerSub: { color: GC.textSecondary, fontSize: 12, marginTop: 2 },
   toggleContentBtn: {
     padding: 8,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   focusHint: {
     color: '#fbbf24',
@@ -699,18 +700,18 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     paddingHorizontal: 20,
   },
-  startTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold', marginTop: 16 },
-  startDesc: { color: '#888', fontSize: 14, textAlign: 'center', lineHeight: 22, marginTop: 8, marginBottom: 24 },
+  startTitle: { color: GC.textPrimary, fontSize: 22, fontWeight: 'bold', marginTop: 16 },
+  startDesc: { color: GC.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 22, marginTop: 8, marginBottom: 24 },
   startBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
   },
-  startBtnText: { color: '#000', fontSize: 17, fontWeight: '600' },
+  startBtnText: { color: GC.textPrimary, fontSize: 17, fontWeight: '600' },
 
   // 系统消息
   systemMsg: { alignItems: 'center', marginVertical: 8 },
@@ -726,19 +727,19 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     maxWidth: '75%',
   },
-  userMsgText: { color: '#fff', fontSize: 15, lineHeight: 22 },
+  userMsgText: { color: GC.textPrimary, fontSize: 15, lineHeight: 22 },
 
   // Agent消息
   agentMsgWrap: { alignItems: 'flex-start', marginVertical: 6 },
   agentMsg: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 14,
     borderBottomLeftRadius: 4,
     paddingHorizontal: 16,
     paddingVertical: 12,
     maxWidth: '85%',
     borderWidth: 1,
-    borderColor: '#222',
+    borderColor: GC.bgCard,
   },
   agentMsgHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   agentAvatar: {
@@ -778,7 +779,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 12,
   },
-  reviewingText: { color: '#888', fontSize: 13 },
+  reviewingText: { color: GC.textSecondary, fontSize: 13 },
 
   // 底部操作栏
   bottomBar: {
@@ -788,7 +789,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: '#222',
+    borderTopColor: GC.bgCard,
   },
   undoBtn: {
     flexDirection: 'row',
@@ -797,7 +798,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderWidth: 1,
     borderColor: '#fbbf2444',
   },
@@ -808,7 +809,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderWidth: 1,
     borderColor: '#60a5fa44',
   },
@@ -821,9 +822,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
   },
-  confirmBtnText: { color: '#000', fontSize: 14, fontWeight: '600' },
+  confirmBtnText: { color: GC.textPrimary, fontSize: 14, fontWeight: '600' },
 
   // 输入框
   inputBar: {
@@ -833,41 +834,41 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 8,
     borderTopWidth: 1,
-    borderTopColor: '#222',
+    borderTopColor: GC.bgCard,
     paddingBottom: Platform.OS === 'ios' ? 20 : 8,
   },
   inputField: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 15,
     maxHeight: 80,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
   sendBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sendBtnDisabled: { backgroundColor: '#1a1a1a' },
+  sendBtnDisabled: { backgroundColor: GC.bgElevated },
 
   // 内容预览区
   contentArea: { flex: 1 },
   contentAreaContent: { padding: 20 },
-  contentAreaTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
+  contentAreaTitle: { color: GC.textPrimary, fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
   contentAreaCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 12,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
   },
-  contentAreaText: { color: '#fff', fontSize: 15, lineHeight: 28 },
+  contentAreaText: { color: GC.textPrimary, fontSize: 15, lineHeight: 28 },
 });

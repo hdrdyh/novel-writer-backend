@@ -1,3 +1,4 @@
+import { GC } from '@/utils/glassColors';
 import React, { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
@@ -322,7 +323,7 @@ export default function ReverseOutlineScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: GC.bgBase },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -330,49 +331,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: GC.border,
   },
   backBtn: { padding: 8 },
-  backBtnText: { color: '#888', fontSize: 14 },
-  title: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  backBtnText: { color: GC.textSecondary, fontSize: 14 },
+  title: { color: GC.textPrimary, fontSize: 18, fontWeight: 'bold' },
   body: { flex: 1 },
   bodyContent: { padding: 16 },
-  desc: { color: '#888', fontSize: 13, marginBottom: 12, lineHeight: 20 },
+  desc: { color: GC.textSecondary, fontSize: 13, marginBottom: 12, lineHeight: 20 },
   input: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     padding: 12,
-    color: '#fff',
+    color: GC.textPrimary,
     fontSize: 14,
     minHeight: 300,
     marginBottom: 16,
   },
   startBtn: {
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
   },
-  startBtnText: { color: '#000', fontSize: 16, fontWeight: 'bold' },
+  startBtnText: { color: GC.textPrimary, fontSize: 16, fontWeight: 'bold' },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
   },
-  loadingText: { color: '#fff', fontSize: 16, marginTop: 16, textAlign: 'center' },
+  loadingText: { color: GC.textPrimary, fontSize: 16, marginTop: 16, textAlign: 'center' },
   loadingHint: { color: '#666', fontSize: 12, marginTop: 8, textAlign: 'center' },
   resultSection: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     padding: 14,
     marginBottom: 12,
   },
-  resultLabel: { color: '#fff', fontSize: 15, fontWeight: 'bold', marginBottom: 8 },
+  resultLabel: { color: GC.textPrimary, fontSize: 15, fontWeight: 'bold', marginBottom: 8 },
   resultText: { color: '#ccc', fontSize: 14, lineHeight: 22 },
   actionRow: {
     flexDirection: 'row',
@@ -382,20 +383,20 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: GC.bgBase,
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
   },
-  saveBtnText: { color: '#000', fontSize: 16, fontWeight: 'bold' },
+  saveBtnText: { color: GC.textPrimary, fontSize: 16, fontWeight: 'bold' },
   reBtn: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: GC.bgElevated,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: GC.border,
     paddingVertical: 14,
     alignItems: 'center',
   },
-  reBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  reBtnText: { color: GC.textPrimary, fontSize: 16, fontWeight: 'bold' },
 });
