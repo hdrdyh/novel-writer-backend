@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,199 +6,438 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  Modal,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface ChapterOutline {
-  id: string;
-  chapterNumber: number;
-  outline: string;
-  createdAt: string;
-  updatedAt: string;
+type OutlineStage = 'outline' | 'rough' | 'detail';
+
+interface OutlineData {
+  outline: string; // 大纲：整体骨架
+  rough: string[]; // 粗纲：每章一句话
+  detail: string[]; // 细纲：每章展开
+  stage: OutlineStage; // 当前锁定到哪层
+  outlineLocked: boolean;
+  roughLocked: boolean;
+  detailLocked: boolean;
 }
+
+const STORAGE_KEY = 'outline_data';
 
 export default function OutlineScreen() {
   const router = useSafeRouter();
-  const [chapters, setChapters] = useState<ChapterOutline[]>([
-    { id: '1', chapterNumber: 1, outline: '主角张远穿越到异世界，在废墟中醒来...', createdAt: '2024-01-01', updatedAt: '2024-01-01' },
-  ]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingChapter, setEditingChapter] = useState<ChapterOutline | null>(null);
-  const [chapterNumber, setChapterNumber] = useState('');
-  const [outline, setOutline] = useState('');
-  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
-  const [selectedChapter, setSelectedChapter] = useState<ChapterOutline | null>(null);
+  const [data, setData] = useState<OutlineData>({
+    outline: '',
+    rough: [],
+    detail: [],
+    stage: 'outline',
+    outlineLocked: false,
+    roughLocked: false,
+    detailLocked: false,
+  });
+  const [loading, setLoading] = useState(false);
+  const [editIndex, setEditIndex] = useState(-1); // 当前编辑的粗纲/细纲索引
+  const [editText, setEditText] = useState('');
+  const [editModalVisible, setEditModalVisible] = useState(false);
 
-  const handleAddChapter = () => {
-    setEditingChapter(null);
-    setChapterNumber(String(chapters.length + 1));
-    setOutline('');
-    setModalVisible(true);
-  };
+  // 加载本地数据
+  const loadData = useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        setData(JSON.parse(saved));
+      }
+    } catch (e) {
+      // 忽略
+    }
+  }, []);
 
-  const handleEditChapter = (chapter: ChapterOutline) => {
-    setEditingChapter(chapter);
-    setChapterNumber(String(chapter.chapterNumber));
-    setOutline(chapter.outline);
-    setModalVisible(true);
-  };
+  const saveData = useCallback(async (newData: OutlineData) => {
+    setData(newData);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+    } catch (e) {
+      // 忽略
+    }
+  }, []);
 
-  const handleSaveChapter = () => {
-    if (!chapterNumber || !outline) {
-      Alert.alert('提示', '请填写章节号和章纲');
+  // 初始化加载
+  useState(() => { loadData(); });
+
+  // 读取Agent和API配置
+  const getConfig = useCallback(async () => {
+    const agentsStr = await AsyncStorage.getItem('agent_configs');
+    const apisStr = await AsyncStorage.getItem('api_configs');
+    const agents = agentsStr ? JSON.parse(agentsStr) : [];
+    const apis = apisStr ? JSON.parse(apisStr) : [];
+    return { agents: agents.filter((a: any) => a.enabled), apis };
+  }, []);
+
+  // AI扩写
+  const handleAIExpand = useCallback(async (stage: OutlineStage) => {
+    const { agents, apis } = await getConfig();
+    if (agents.length === 0 || apis.length === 0) {
+      Alert.alert('提示', '请先在写作流水线中配置Agent和API');
       return;
     }
 
-    if (editingChapter) {
-      setChapters(prev =>
-        prev.map(c =>
-          c.id === editingChapter.id
-            ? { ...c, chapterNumber: parseInt(chapterNumber), outline, updatedAt: new Date().toISOString() }
-            : c
-        )
-      );
-    } else {
-      const newChapter: ChapterOutline = {
-        id: new Date().getTime().toString(),
-        chapterNumber: parseInt(chapterNumber),
-        outline,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setChapters(prev => [...prev, newChapter].sort((a, b) => a.chapterNumber - b.chapterNumber));
+    setLoading(true);
+    try {
+      let prompt = '';
+      if (stage === 'outline') {
+        prompt = `请根据以下核心概念，扩展为完整的小说大纲，包含起承转合，约300字：\n${data.outline}`;
+      } else if (stage === 'rough') {
+        prompt = `请根据以下大纲，拆分为每章一句话的粗纲，每行一章，格式"第X章：xxx"：\n${data.outline}`;
+      } else {
+        prompt = `请根据以下粗纲，为每章展开细纲，包含具体情节、场景、情绪走向，每章约100字：\n${data.rough.join('\n')}`;
+      }
+
+      // 用第一个启用的Agent和其绑定的API
+      const agent = agents[0];
+      const api = apis.find((a: any) => a.name === agent.apiName) || apis[0];
+
+      const response = await fetch(`${api.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${api.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: api.model,
+          messages: [
+            { role: 'system', content: agent.systemPrompt || '你是一个专业的小说策划师。' },
+            { role: 'user', content: prompt },
+          ],
+          max_tokens: 2000,
+        }),
+      });
+
+      const result = await response.json();
+      const content = result.choices?.[0]?.message?.content || '';
+
+      if (stage === 'outline') {
+        saveData({ ...data, outline: content });
+      } else if (stage === 'rough') {
+        const lines = content.split('\n').filter((l: string) => l.trim());
+        saveData({ ...data, rough: lines });
+      } else {
+        const lines = content.split('\n').filter((l: string) => l.trim());
+        saveData({ ...data, detail: lines });
+      }
+    } catch (e: any) {
+      Alert.alert('AI扩写失败', e.message || '请检查API配置');
+    } finally {
+      setLoading(false);
     }
-    setModalVisible(false);
-  };
+  }, [data, getConfig, saveData]);
 
-  const handleStartWriting = (chapter: ChapterOutline) => {
-    setSelectedChapter(chapter);
-    setConfirmModalVisible(true);
-  };
+  // 定稿
+  const handleLock = useCallback((stage: OutlineStage) => {
+    const updates: Partial<OutlineData> = {};
+    if (stage === 'outline') updates.outlineLocked = true;
+    if (stage === 'rough') updates.roughLocked = true;
+    if (stage === 'detail') updates.detailLocked = true;
+    saveData({ ...data, ...updates });
+  }, [data, saveData]);
 
-  const handleDeleteChapter = (id: string) => {
-    Alert.alert('删除', '确定删除该章节?', [
+  // 解锁（重新编辑）
+  const handleUnlock = useCallback((stage: OutlineStage) => {
+    Alert.alert('解锁', '解锁后下层内容将清空，确定？', [
       { text: '取消', style: 'cancel' },
       {
-        text: '删除',
+        text: '确定',
         style: 'destructive',
-        onPress: () => setChapters(prev => prev.filter(c => c.id !== id)),
+        onPress: () => {
+          const updates: Partial<OutlineData> = {};
+          if (stage === 'outline') {
+            updates.outlineLocked = false;
+            updates.roughLocked = false;
+            updates.detailLocked = false;
+            updates.rough = [];
+            updates.detail = [];
+          } else if (stage === 'rough') {
+            updates.roughLocked = false;
+            updates.detailLocked = false;
+            updates.detail = [];
+          } else {
+            updates.detailLocked = false;
+          }
+          saveData({ ...data, ...updates });
+        },
       },
     ]);
-  };
+  }, [data, saveData]);
+
+  // 跳转AI评审
+  const handleReview = useCallback((stage: OutlineStage) => {
+    let content = '';
+    if (stage === 'outline') content = data.outline;
+    else if (stage === 'rough') content = data.rough.join('\n');
+    else content = data.detail.join('\n');
+
+    router.push('/outline-review', {
+      content,
+      stage,
+    });
+  }, [data, router]);
+
+  // 编辑粗纲/细纲条目
+  const handleEditItem = useCallback((stage: 'rough' | 'detail', index: number) => {
+    const list = stage === 'rough' ? data.rough : data.detail;
+    setEditIndex(index);
+    setEditText(list[index] || '');
+    setEditModalVisible(true);
+  }, [data]);
+
+  const handleSaveItem = useCallback((stage: 'rough' | 'detail') => {
+    if (stage === 'rough') {
+      const newRough = [...data.rough];
+      newRough[editIndex] = editText;
+      saveData({ ...data, rough: newRough });
+    } else {
+      const newDetail = [...data.detail];
+      newDetail[editIndex] = editText;
+      saveData({ ...data, detail: newDetail });
+    }
+    setEditModalVisible(false);
+  }, [data, editIndex, editText, saveData]);
+
+  // 开始写作
+  const handleStartWriting = useCallback(() => {
+    router.push('/writing', {
+      outline: data.outline,
+      rough: JSON.stringify(data.rough),
+      detail: JSON.stringify(data.detail),
+    });
+  }, [data, router]);
+
+  // 渲染阶段卡片
+  const renderStageCard = (
+    stage: OutlineStage,
+    title: string,
+    subtitle: string,
+    icon: string,
+    locked: boolean,
+    canEdit: boolean,
+    content: React.ReactNode,
+  ) => (
+    <View style={[styles.stageCard, locked && styles.stageCardLocked]}>
+      <View style={styles.stageHeader}>
+        <View style={styles.stageTitleRow}>
+          <View style={styles.stageIcon}>
+            <Feather name={icon as any} size={20} color="#fff" />
+          </View>
+          <View style={styles.stageTitleCol}>
+            <Text style={styles.stageTitle}>{title}</Text>
+            <Text style={styles.stageSubtitle}>{subtitle}</Text>
+          </View>
+          {locked && (
+            <View style={styles.lockedBadge}>
+              <Feather name="lock" size={12} color="#4ade80" />
+              <Text style={styles.lockedText}>已定稿</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.stageActions}>
+          {!locked && canEdit && (
+            <Pressable style={styles.aiBtn} onPress={() => handleAIExpand(stage)} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <Feather name="zap" size={14} color="#000" />
+              )}
+              <Text style={styles.aiBtnText}>AI扩写</Text>
+            </Pressable>
+          )}
+          {!locked && canEdit && (
+            <Pressable style={styles.reviewBtn} onPress={() => handleReview(stage)}>
+              <Feather name="message-circle" size={14} color="#fff" />
+              <Text style={styles.reviewBtnText}>AI评审</Text>
+            </Pressable>
+          )}
+          {!locked && canEdit && (
+            <Pressable style={styles.lockBtn} onPress={() => handleLock(stage)}>
+              <Feather name="check-circle" size={14} color="#4ade80" />
+              <Text style={styles.lockBtnText}>定稿</Text>
+            </Pressable>
+          )}
+          {locked && (
+            <Pressable style={styles.unlockBtn} onPress={() => handleUnlock(stage)}>
+              <Feather name="unlock" size={14} color="#888" />
+              <Text style={styles.unlockBtnText}>解锁</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+      {content}
+    </View>
+  );
 
   return (
     <Screen style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.greeting}>创作空间</Text>
-        <Text style={styles.title}>章节粗纲</Text>
-        <Text style={styles.subtitle}>{chapters.length} 个章节</Text>
+        <Text style={styles.title}>大纲设计</Text>
+        <Text style={styles.subtitle}>大纲 → 粗纲 → 细纲，逐层打磨</Text>
       </View>
 
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-        {chapters.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Feather name="file-text" size={48} color="#888" />
-            <Text style={styles.emptyText}>暂无章节</Text>
-            <Text style={styles.emptyHint}>点击下方按钮添加第一章节</Text>
+        {/* 第一层：大纲 */}
+        {renderStageCard(
+          'outline',
+          '大纲',
+          data.outline ? `${data.outline.length}字` : '整本书的骨架，起承转合',
+          'book-open',
+          data.outlineLocked,
+          true,
+          <View style={styles.outlineEditArea}>
+            <TextInput
+              style={styles.outlineInput}
+              value={data.outline}
+              onChangeText={(text) => saveData({ ...data, outline: text })}
+              placeholder="写出你的核心概念，AI帮你扩展为完整大纲..."
+              placeholderTextColor="#555"
+              multiline
+              numberOfLines={8}
+              textAlignVertical="top"
+              editable={!data.outlineLocked}
+            />
           </View>
-        ) : (
-          chapters.map(chapter => (
-            <View key={chapter.id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.chapterBadge}>
-                  <Text style={styles.chapterBadgeText}>第{chapter.chapterNumber}章</Text>
-                </View>
-                <View style={styles.cardActions}>
-                  <Pressable onPress={() => handleEditChapter(chapter)} style={styles.actionBtn}>
-                    <Feather name="edit-2" size={16} color="#888" />
-                  </Pressable>
-                  <Pressable onPress={() => handleDeleteChapter(chapter.id)} style={styles.actionBtn}>
-                    <Feather name="trash-2" size={16} color="#888" />
-                  </Pressable>
-                </View>
-              </View>
-              <Text style={styles.outlineText} numberOfLines={3}>{chapter.outline}</Text>
-              <View style={styles.cardFooter}>
-                <Text style={styles.dateText}>{chapter.updatedAt.split('T')[0]}</Text>
-                <Pressable style={styles.startBtn} onPress={() => handleStartWriting(chapter)}>
-                  <Text style={styles.startBtnText}>开始写作</Text>
-                </Pressable>
-              </View>
-            </View>
-          ))
         )}
+
+        {/* 第二层：粗纲 */}
+        {renderStageCard(
+          'rough',
+          '粗纲',
+          `${data.rough.length}章`,
+          'list',
+          data.roughLocked,
+          data.outlineLocked,
+          <View style={styles.listArea}>
+            {data.rough.length === 0 ? (
+              <Text style={styles.hintText}>
+                {data.outlineLocked ? '大纲已定稿，点AI扩写生成粗纲' : '请先定稿大纲'}
+              </Text>
+            ) : (
+              data.rough.map((item, idx) => (
+                <Pressable
+                  key={idx}
+                  style={styles.listItem}
+                  onPress={() => !data.roughLocked && handleEditItem('rough', idx)}
+                  disabled={data.roughLocked}
+                >
+                  <View style={styles.listItemNum}>
+                    <Text style={styles.listItemNumText}>{idx + 1}</Text>
+                  </View>
+                  <Text style={styles.listItemText} numberOfLines={2}>{item}</Text>
+                  {!data.roughLocked && (
+                    <Feather name="edit-2" size={14} color="#888" style={styles.listItemIcon} />
+                  )}
+                </Pressable>
+              ))
+            )}
+            {!data.roughLocked && data.rough.length > 0 && (
+              <Pressable style={styles.addItemBtn} onPress={() => {
+                saveData({ ...data, rough: [...data.rough, ''] });
+                setEditIndex(data.rough.length);
+                setEditText('');
+                setEditModalVisible(true);
+              }}>
+                <Feather name="plus" size={16} color="#888" />
+                <Text style={styles.addItemText}>添加章节</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {/* 第三层：细纲 */}
+        {renderStageCard(
+          'detail',
+          '细纲',
+          `${data.detail.length}章`,
+          'file-text',
+          data.detailLocked,
+          data.roughLocked,
+          <View style={styles.listArea}>
+            {data.detail.length === 0 ? (
+              <Text style={styles.hintText}>
+                {data.roughLocked ? '粗纲已定稿，点AI扩写生成细纲' : '请先定稿粗纲'}
+              </Text>
+            ) : (
+              data.detail.map((item, idx) => (
+                <Pressable
+                  key={idx}
+                  style={styles.listItem}
+                  onPress={() => !data.detailLocked && handleEditItem('detail', idx)}
+                  disabled={data.detailLocked}
+                >
+                  <View style={styles.listItemNum}>
+                    <Text style={styles.listItemNumText}>{idx + 1}</Text>
+                  </View>
+                  <Text style={styles.listItemText} numberOfLines={3}>{item}</Text>
+                  {!data.detailLocked && (
+                    <Feather name="edit-2" size={14} color="#888" style={styles.listItemIcon} />
+                  )}
+                </Pressable>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* 开始写作按钮 */}
+        {data.detailLocked && (
+          <Pressable style={styles.startWritingBtn} onPress={handleStartWriting}>
+            <Feather name="pen-tool" size={20} color="#000" />
+            <Text style={styles.startWritingText}>开始写作</Text>
+          </Pressable>
+        )}
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      <Pressable style={styles.fab} onPress={handleAddChapter}>
-        <Feather name="plus" size={28} color="#fff" />
-      </Pressable>
-
-      <Modal visible={modalVisible} transparent animationType="fade">
+      {/* 编辑条目弹窗 */}
+      {editModalVisible && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingChapter ? '编辑章节' : '新增章节'}</Text>
-            <Text style={styles.inputLabel}>章节号</Text>
+            <Text style={styles.modalTitle}>编辑</Text>
             <TextInput
-              style={styles.input}
-              value={chapterNumber}
-              onChangeText={setChapterNumber}
-              placeholder="输入章节号"
-              placeholderTextColor="#555"
-              keyboardType="numeric"
-            />
-            <Text style={styles.inputLabel}>章纲内容</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={outline}
-              onChangeText={setOutline}
-              placeholder="描述本章的核心情节..."
+              style={styles.modalInput}
+              value={editText}
+              onChangeText={setEditText}
+              placeholder="输入内容..."
               placeholderTextColor="#555"
               multiline
-              numberOfLines={5}
+              numberOfLines={6}
               textAlignVertical="top"
+              autoFocus
             />
             <View style={styles.modalActions}>
-              <Pressable style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+              <Pressable style={styles.cancelBtn} onPress={() => setEditModalVisible(false)}>
                 <Text style={styles.cancelBtnText}>取消</Text>
               </Pressable>
-              <Pressable style={styles.saveBtn} onPress={handleSaveChapter}>
+              <Pressable
+                style={styles.saveBtn}
+                onPress={() => {
+                  // 判断是粗纲还是细纲
+                  if (editIndex < data.rough.length && data.roughLocked) {
+                    handleSaveItem('detail');
+                  } else if (editIndex < data.rough.length) {
+                    handleSaveItem('rough');
+                  } else {
+                    handleSaveItem('detail');
+                  }
+                }}
+              >
                 <Text style={styles.saveBtnText}>保存</Text>
               </Pressable>
             </View>
           </View>
         </View>
-      </Modal>
-
-      <Modal visible={confirmModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.confirmContent}>
-            <Feather name="play-circle" size={40} color="#fff" />
-            <Text style={styles.confirmTitle}>开始写作</Text>
-            <Text style={styles.confirmText}>确认开始写作第{selectedChapter?.chapterNumber}章？</Text>
-            <View style={styles.modalActions}>
-              <Pressable style={styles.cancelBtn} onPress={() => setConfirmModalVisible(false)}>
-                <Text style={styles.cancelBtnText}>取消</Text>
-              </Pressable>
-              <Pressable style={styles.saveBtn} onPress={() => {
-                  setConfirmModalVisible(false);
-                  if (selectedChapter) {
-                    router.push('/writing', {
-                      chapterNumber: String(selectedChapter.chapterNumber),
-                      outline: selectedChapter.outline,
-                    });
-                  }
-                }}>
-                  <Text style={styles.saveBtnText}>确认</Text>
-                </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      )}
     </Screen>
   );
 }
@@ -234,184 +473,276 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
   },
-  emptyState: {
-    alignItems: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyHint: {
-    fontSize: 14,
-    color: '#888',
-  },
-  card: {
+  stageCard: {
     backgroundColor: '#1a1a1a',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: '#333',
   },
-  cardHeader: {
+  stageCardLocked: {
+    borderColor: '#4ade80',
+    borderLeftWidth: 3,
+  },
+  stageHeader: {
+    marginBottom: 16,
+  },
+  stageTitleRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  chapterBadge: {
+  stageIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: '#333',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  chapterBadgeText: {
+  stageTitleCol: {
+    flex: 1,
+  },
+  stageTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  stageSubtitle: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(74, 222, 128, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  lockedText: {
+    fontSize: 12,
+    color: '#4ade80',
+    fontWeight: '600',
+  },
+  stageActions: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  aiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  aiBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#000',
+  },
+  reviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  reviewBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  lockBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 6,
+    backgroundColor: 'rgba(74, 222, 128, 0.15)',
+  },
+  lockBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4ade80',
+  },
+  unlockBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 6,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  unlockBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#888',
+  },
+  outlineEditArea: {
+    marginTop: 4,
+  },
+  outlineInput: {
+    backgroundColor: '#000',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 15,
+    color: '#fff',
+    lineHeight: 24,
+    minHeight: 180,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  listArea: {
+    marginTop: 4,
+  },
+  hintText: {
+    fontSize: 14,
+    color: '#555',
+    textAlign: 'center',
+    paddingVertical: 24,
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#000',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  listItemNum: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  listItemNumText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#fff',
   },
-  cardActions: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  actionBtn: {
-    padding: 4,
-  },
-  outlineText: {
-    fontSize: 15,
+  listItemText: {
+    flex: 1,
+    fontSize: 14,
     color: '#ccc',
-    lineHeight: 22,
-    marginBottom: 16,
+    lineHeight: 20,
   },
-  cardFooter: {
+  listItemIcon: {
+    marginLeft: 8,
+  },
+  addItemBtn: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#333',
+    borderStyle: 'dashed',
+    gap: 6,
+    marginTop: 4,
   },
-  dateText: {
-    fontSize: 12,
+  addItemText: {
+    fontSize: 14,
     color: '#888',
   },
-  startBtn: {
+  startWritingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    borderRadius: 14,
+    paddingVertical: 18,
+    gap: 10,
+    marginBottom: 20,
   },
-  startBtnText: {
+  startWritingText: {
+    fontSize: 18,
+    fontWeight: '800',
     color: '#000',
-    fontSize: 14,
-    fontWeight: '700',
   },
   bottomSpacer: {
-    height: 120,
-  },
-  fab: {
-    position: 'absolute',
-    right: 24,
-    bottom: 100,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
+    height: 40,
   },
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
     backgroundColor: '#1a1a1a',
     borderRadius: 16,
-    padding: 28,
-    width: '88%',
-    maxWidth: 400,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  confirmContent: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 16,
-    padding: 32,
-    width: '80%',
-    maxWidth: 320,
-    alignItems: 'center',
+    padding: 24,
+    width: '90%',
     borderWidth: 1,
     borderColor: '#333',
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#fff',
-    marginBottom: 24,
-    textAlign: 'center',
+    marginBottom: 16,
   },
-  confirmTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#fff',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  confirmText: {
-    fontSize: 15,
-    color: '#888',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#888',
-    marginBottom: 8,
-  },
-  input: {
+  modalInput: {
     backgroundColor: '#000',
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 16,
-    fontSize: 16,
+    fontSize: 15,
     color: '#fff',
-    marginBottom: 20,
+    minHeight: 150,
     borderWidth: 1,
     borderColor: '#333',
-  },
-  textArea: {
-    minHeight: 120,
-    paddingTop: 16,
+    textAlignVertical: 'top',
   },
   modalActions: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 8,
+    marginTop: 16,
   },
   cancelBtn: {
     flex: 1,
     backgroundColor: '#333',
-    borderRadius: 8,
-    paddingVertical: 16,
+    borderRadius: 10,
+    paddingVertical: 14,
     alignItems: 'center',
   },
   cancelBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#888',
   },
   saveBtn: {
     flex: 1,
     backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingVertical: 16,
+    borderRadius: 10,
+    paddingVertical: 14,
     alignItems: 'center',
   },
   saveBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#000',
   },

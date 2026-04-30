@@ -13,6 +13,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="agent-config" />
           <Stack.Screen name="chapter-review" />
+          <Stack.Screen name="outline-review" />
         </Stack>
       </View>
     </Provider>
