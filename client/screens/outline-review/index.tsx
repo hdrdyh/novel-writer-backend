@@ -168,6 +168,18 @@ export default function OutlineReviewScreen() {
   const callLLM = (agent: Agent, systemPrompt: string, userPrompt: string, thinkingId: string): Promise<void> => {
     return new Promise((resolve) => {
       const api = getApiForAgent(agent);
+
+      // 检查API配置是否完整
+      if (!api.apiKey || !api.baseUrl || !api.model) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkingId ? { ...m, content: '评审失败：请先在"写作流水线"中配置API' } : m
+          )
+        );
+        resolve();
+        return;
+      }
+
       let agentResponse = '';
 
       // 确保 baseUrl 末尾无斜杠，拼接 /v1/chat/completions

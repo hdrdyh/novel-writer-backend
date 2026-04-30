@@ -174,6 +174,17 @@ export default function ChapterReviewScreen() {
         }
       }
 
+      // 检查API配置是否完整
+      if (!useApiKey || !useBaseUrl || !useModel) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkingId ? { ...m, content: '评审失败：请先在"写作流水线"中配置API' } : m
+          )
+        );
+        resolve();
+        return;
+      }
+
       let agentResponse = '';
 
       // 确保 baseUrl 末尾无斜杠，拼接 /v1/chat/completions
