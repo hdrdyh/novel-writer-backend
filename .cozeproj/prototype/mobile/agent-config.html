@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1" />
+
+  <link href="https://lf-code-agent.coze.cn/obj/x-ai-cn/fonts/google/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/jquery/jquery-3.7.1.min.js"></script>
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/lucide/lucide-1.11.0.min.js"></script>
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/tailwindcss/tailwindcss-browser-4.2.4.min.js"></script>
+
+  <style type="text/tailwindcss">
+    @theme {
+      /* === 品牌色 === */
+      --color-primary:              #7C5CFF;
+      --color-primary-container:    #9B82FF;
+      --color-on-primary:           #ffffff;
+      /* === 背景 / 表面（暗色毛玻璃系） === */
+      --color-background:                 #070A14;
+      --color-surface-container-lowest:   #0D1120;
+      --color-surface:                    #111628;
+      --color-surface-container:          #161C35;
+      --color-surface-container-high:     #1C2442;
+      --color-surface-container-highest:  #232D50;
+      /* === 文字 === */
+      --color-on-surface:           #F7FAFF;
+      --color-on-surface-variant:   #9AA7C7;
+      /* === 功能色 === */
+      --color-success:  #62FAD3;
+      --color-error:    #FF6B8A;
+      --color-warning:  #FFD166;
+      /* === 边框 === */
+      --color-outline:          rgba(255,255,255,0.12);
+      --color-outline-variant:  rgba(255,255,255,0.06);
+      /* === 圆角 === */
+      --radius-sm:   0.5rem;
+      --radius-md:   0.75rem;
+      --radius-lg:   1rem;
+      --radius-xl:   1.25rem;
+      --radius-2xl:  1.5rem;
+      --radius-full: 9999px;
+      /* === 阴影 === */
+      --shadow-card:   0 4px 16px rgba(0,0,0,0.4);
+      --shadow-float:  0 10px 30px rgba(0,0,0,0.5);
+      --shadow-dialog: 0 25px 60px rgba(0,0,0,0.7);
+      /* === 字体 === */
+      --font-sans: "Manrope", system-ui, sans-serif;
+    }
+  </style>
+
+  <style>
+    body {
+      min-height: max(812px, 100dvh);
+      font-family: "Manrope", system-ui, sans-serif;
+    }
+    /* 毛玻璃效果 */
+    .glass {
+      background: rgba(255,255,255,0.06);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .glass-high {
+      background: rgba(255,255,255,0.10);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    /* 发光效果 */
+    .glow-primary {
+      box-shadow: 0 0 20px rgba(124,92,255,0.3);
+    }
+    .glow-accent {
+      box-shadow: 0 0 20px rgba(105,231,255,0.3);
+    }
+    .glow-success {
+      box-shadow: 0 0 12px rgba(98,250,211,0.25);
+    }
+    /* 渐变按钮 */
+    .btn-gradient {
+      background: linear-gradient(135deg, #7C5CFF 0%, #69E7FF 100%);
+      color: #070A14;
+      font-weight: 700;
+    }
+    /* 进度条动画 */
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    .animate-pulse-glow {
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .shimmer {
+      position: relative;
+      overflow: hidden;
+    }
+    .shimmer::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(124,92,255,0.15), transparent);
+      animation: shimmer 2s infinite;
+    }
+    /* 自定义开关样式 */
+    .toggle-track {
+      width: 44px;
+      height: 24px;
+      border-radius: 12px;
+      position: relative;
+      transition: background-color 0.2s ease;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .toggle-track.active {
+      background-color: var(--color-primary);
+    }
+    .toggle-track.disabled {
+      background-color: rgba(255,255,255,0.12);
+      cursor: not-allowed;
+    }
+    .toggle-track.inactive {
+      background-color: rgba(255,255,255,0.15);
+    }
+    .toggle-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 10px;
+      background: #ffffff;
+      position: absolute;
+      top: 2px;
+      transition: left 0.2s ease;
+    }
+    .toggle-track.active .toggle-thumb {
+      left: 22px;
+    }
+    .toggle-track.inactive .toggle-thumb,
+    .toggle-track.disabled .toggle-thumb {
+      left: 2px;
+    }
+    /* Agent卡片展开动画 */
+    .agent-expand {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    .agent-expand.open {
+      max-height: 500px;
+    }
+    /* Tab下划线动画 */
+    .tab-indicator {
+      transition: left 0.25s ease, width 0.25s ease;
+    }
+  </style>
+
+  <!-- 图片兜底 -->
+  <script>
+    document.addEventListener('error', function (e) {
+      const img = e.target;
+      if (img.tagName !== 'IMG' || img.dataset.fallback) return;
+      img.dataset.fallback = '1';
+      const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const cat = img.getAttribute('data-category') || '其他';
+      const alt = img.getAttribute('alt') || '';
+      const label = esc(alt.length > 8 ? alt.slice(0, 8) + '…' : alt);
+      const icons = { '人物': '👤', '自然风景': '🏞', '动物': '🐾', '建筑城市': '🏙', '运动体育': '⚽', '交通工具': '🚗', '食物': '🍽', '服饰时尚': '👗', '商业科技': '💼', '游戏娱乐': '🎮', '艺术': '🎨', '其他': '🖼' };
+      const icon = icons[cat] || '🖼';
+      const w = img.width || 400, h = img.height || 300;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="45%" text-anchor="middle" font-size="${Math.min(w, h) * 0.18}" dominant-baseline="central">${icon}</text><text x="50%" y="68%" text-anchor="middle" font-size="${Math.min(w, h) * 0.07}" fill="%239ca3af" font-family="system-ui,sans-serif" dominant-baseline="central">${label}</text></svg>`;
+      img.src = 'data:image/svg+xml,' + svg;
+    }, true);
+  </script>
+</head>
+
+<body class="bg-background text-on-surface font-sans">
+
+  <!-- @nav:start 导航组件 -->
+  <header class="bg-background/80 backdrop-blur-xl sticky top-0 z-40 h-14 flex items-center justify-between px-4 border-b border-outline-variant/20">
+    <button id="btn-back" class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-full hover:bg-surface-container transition-colors">
+      <i data-lucide="arrow-left" class="w-5 h-5"></i>
+    </button>
+    <h1 class="text-base font-semibold text-on-surface">Agent配置</h1>
+    <button id="btn-settings" class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-full hover:bg-surface-container transition-colors">
+      <i data-lucide="settings" class="w-5 h-5"></i>
+    </button>
+  </header>
+  <!-- @nav:end 导航组件 -->
+
+  <main class="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+    <!-- @main-content:start -->
+
+    <!-- 智能搭配按钮区 -->
+    <div class="px-4 pt-4 pb-2">
+      <button id="btn-smart-match" class="w-full btn-gradient py-3 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all">
+        <i data-lucide="sparkles" class="w-4 h-4"></i>
+        智能搭配
+      </button>
+    </div>
+
+    <!-- Tab 切换区 -->
+    <div class="px-4 pt-2 pb-0">
+      <div id="category-bar" class="flex relative glass rounded-xl p-1">
+        <!-- Tab-核心Agent -->
+        <button id="tab-core" class="flex-1 py-2 text-xs font-semibold rounded-lg text-center z-10 transition-colors" data-tab="core">
+          核心
+        </button>
+        <!-- Tab-推荐Agent -->
+        <button id="tab-recommended" class="flex-1 py-2 text-xs font-semibold rounded-lg text-center z-10 transition-colors" data-tab="recommended">
+          推荐
+        </button>
+        <!-- Tab-可选Agent -->
+        <button id="tab-optional" class="flex-1 py-2 text-xs font-semibold rounded-lg text-center z-10 transition-colors" data-tab="optional">
+          可选
+        </button>
+        <!-- 滑动指示器 -->
+        <div id="tab-indicator" class="tab-indicator absolute top-1 bottom-1 bg-primary/20 rounded-lg" style="left: 4px; width: calc(33.33% - 4px);"></div>
+      </div>
+    </div>
+
+    <!-- Agent 列表区 -->
+    <div class="px-4 pt-3 pb-6 space-y-3">
+
+      <!-- ===== 核心 Agent Tab 内容 ===== -->
+      <div id="panel-core" class="tab-panel space-y-3">
+
+        <!-- 列表-核心Agent1: 写手 -->
+        <div id="card-writer" class="glass rounded-xl overflow-hidden" data-agent-id="writer" data-category="must">
+          <!-- 卡片主体 -->
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="pen-tool" class="w-5 h-5 text-primary"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">写手</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-error/15 text-error">必须</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">写正文，唯一产出最终文字的角色</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: Claude-3.5</span>
+              </div>
+            </div>
+            <div class="toggle-track disabled flex-shrink-0 mt-1" data-agent="writer" data-enabled="true">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <!-- 展开区域 -->
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-writer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是写手Agent，负责根据细纲和前序Agent的设定产出高质量的章节正文。严格遵循细纲结构，保持人物性格一致，确保文风统一。不得擅自修改大纲和细纲设定。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-writer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="claude-3.5" selected>Claude-3.5</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-核心Agent2: 统筹 -->
+        <div id="card-coordinator" class="glass rounded-xl overflow-hidden" data-agent-id="coordinator" data-category="must">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-warning/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="workflow" class="w-5 h-5 text-warning"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">统筹</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-error/15 text-error">必须</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">编排Agent流程，产出协作报告</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: GPT-4o</span>
+              </div>
+            </div>
+            <div class="toggle-track disabled flex-shrink-0 mt-1" data-agent="coordinator" data-enabled="true">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-coordinator" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是统筹Agent，负责编排所有Agent的执行流程。始终第一个运行以确定流程，最后一个运行以产出协作报告。整合各Agent的输出，检测冲突和遗漏，确保最终产出的完整性和一致性。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-coordinator" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="gpt-4o" selected>GPT-4o</option>
+                  <option value="claude-3.5">Claude-3.5</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ===== 推荐 Agent Tab 内容 ===== -->
+      <div id="panel-recommended" class="tab-panel space-y-3 hidden">
+
+        <!-- 列表-推荐Agent1: 世界架构师 -->
+        <div id="card-world-architect" class="glass rounded-xl overflow-hidden" data-agent-id="world_architect" data-category="recommended">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-success/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="globe" class="w-5 h-5 text-success"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">世界架构师</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-success/15 text-success">推荐</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">世界观、地理、城镇、势力</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: Claude-3.5</span>
+              </div>
+            </div>
+            <div class="toggle-track active flex-shrink-0 mt-1" data-agent="world_architect" data-enabled="true">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-world-architect" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是世界架构师，负责构建小说的世界观体系。包括地理环境、城镇分布、势力格局、社会制度、魔法/科技体系等。确保世界观的内在逻辑自洽，为后续剧情和人物提供坚实的世界基础。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-world-architect" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="claude-3.5" selected>Claude-3.5</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-推荐Agent2: 剧情设计师 -->
+        <div id="card-plot-designer" class="glass rounded-xl overflow-hidden" data-agent-id="plot_designer" data-category="recommended">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="route" class="w-5 h-5 text-primary"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">剧情设计师</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-success/15 text-success">推荐</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">情节线、冲突、转折</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: GPT-4o</span>
+              </div>
+            </div>
+            <div class="toggle-track active flex-shrink-0 mt-1" data-agent="plot_designer" data-enabled="true">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-plot-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是剧情设计师，负责设计小说的情节架构。包括主线和支线情节、关键冲突、高潮转折、伏笔铺垫等。确保故事节奏张弛有度，情节推进自然合理，避免逻辑漏洞和平铺直叙。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-plot-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="gpt-4o" selected>GPT-4o</option>
+                  <option value="claude-3.5">Claude-3.5</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-推荐Agent3: 人物设计师 -->
+        <div id="card-character-designer" class="glass rounded-xl overflow-hidden" data-agent-id="character_designer" data-category="recommended">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-warning/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="users" class="w-5 h-5 text-warning"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">人物设计师</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-success/15 text-success">推荐</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">人物性格、关系、成长弧</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: Claude-3.5</span>
+              </div>
+            </div>
+            <div class="toggle-track active flex-shrink-0 mt-1" data-agent="character_designer" data-enabled="true">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-character-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是人物设计师，负责塑造小说的角色体系。包括人物性格特征、关系网络、成长弧线、动机与弱点等。确保角色立体丰满，行为逻辑一致，角色关系推动情节发展。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-character-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="claude-3.5" selected>Claude-3.5</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-推荐Agent4: 粗纲设计师 -->
+        <div id="card-rough-designer" class="glass rounded-xl overflow-hidden" data-agent-id="rough_designer" data-category="recommended">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="list-tree" class="w-5 h-5 text-primary"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">粗纲设计师</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-success/15 text-success">推荐</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">根据大纲设计章节粗纲</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: GPT-4o</span>
+              </div>
+            </div>
+            <div class="toggle-track active flex-shrink-0 mt-1" data-agent="rough_designer" data-enabled="true">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-rough-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是粗纲设计师，负责根据大纲设计每个章节的粗略提纲。将大纲的宏观结构分解为章节级别的情节要点、场景划分和情感走向，确保章节间的衔接流畅。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-rough-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="gpt-4o" selected>GPT-4o</option>
+                  <option value="claude-3.5">Claude-3.5</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-推荐Agent5: 细纲设计师 -->
+        <div id="card-detail-designer" class="glass rounded-xl overflow-hidden" data-agent-id="detail_designer" data-category="recommended">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-success/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="file-spreadsheet" class="w-5 h-5 text-success"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">细纲设计师</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-success/15 text-success">推荐</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">根据大纲+粗纲设计细纲</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: Claude-3.5</span>
+              </div>
+            </div>
+            <div class="toggle-track active flex-shrink-0 mt-1" data-agent="detail_designer" data-enabled="true">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-detail-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是细纲设计师，负责根据大纲和粗纲设计详细的章节细纲。将粗纲的要点细化为具体的场景描述、对话要点、情感节奏和细节安排，为写手提供明确的创作指引。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-detail-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="claude-3.5" selected>Claude-3.5</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-推荐Agent6: 记忆压缩 -->
+        <div id="card-memory-compressor" class="glass rounded-xl overflow-hidden" data-agent-id="memory_compressor" data-category="recommended">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-warning/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="archive" class="w-5 h-5 text-warning"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">记忆压缩</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-success/15 text-success">推荐</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">压缩前文为摘要，不产出内容</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: DeepSeek-V3</span>
+              </div>
+            </div>
+            <div class="toggle-track active flex-shrink-0 mt-1" data-agent="memory_compressor" data-enabled="true">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-memory-compressor" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是记忆压缩Agent，负责将长篇前文压缩为精炼摘要。保留关键情节、人物状态、伏笔线索和世界观设定，去除冗余描写。摘供给写手参考，确保长篇写作的连贯性。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-memory-compressor" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="deepseek-v3" selected>DeepSeek-V3</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="claude-3.5">Claude-3.5</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ===== 可选 Agent Tab 内容 ===== -->
+      <div id="panel-optional" class="tab-panel space-y-3 hidden">
+
+        <!-- 列表-可选Agent1: 对话设计师 -->
+        <div id="card-dialogue-designer" class="glass rounded-xl overflow-hidden" data-agent-id="dialogue_designer" data-category="optional">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="message-square" class="w-5 h-5 text-primary"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">对话设计师</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-on-surface-variant/15 text-on-surface-variant">可选</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">角色对话风格和技巧</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: 未绑定</span>
+              </div>
+            </div>
+            <div class="toggle-track inactive flex-shrink-0 mt-1" data-agent="dialogue_designer" data-enabled="false">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-dialogue-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是对话设计师，负责优化小说中的角色对话。确保每个角色的对话风格独特鲜明，对话推进情节而非堆砌，善用潜台词和言外之意增强张力。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-dialogue-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="">未绑定</option>
+                  <option value="claude-3.5">Claude-3.5</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-可选Agent2: 场景描写师 -->
+        <div id="card-scene-describer" class="glass rounded-xl overflow-hidden" data-agent-id="scene_describer" data-category="optional">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-success/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="mountain-snow" class="w-5 h-5 text-success"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">场景描写师</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-on-surface-variant/15 text-on-surface-variant">可选</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">环境氛围描写</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: 未绑定</span>
+              </div>
+            </div>
+            <div class="toggle-track inactive flex-shrink-0 mt-1" data-agent="scene_describer" data-enabled="false">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-scene-describer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是场景描写师，负责增强小说的环境氛围描写。运用五感细节构建沉浸式场景，通过环境映射人物内心，掌握场景描写的详略节奏，避免过度描写拖慢节奏。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-scene-describer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="">未绑定</option>
+                  <option value="claude-3.5">Claude-3.5</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-可选Agent3: 节奏把控师 -->
+        <div id="card-pacing-controller" class="glass rounded-xl overflow-hidden" data-agent-id="pacing_controller" data-category="optional">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-warning/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="gauge" class="w-5 h-5 text-warning"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">节奏把控师</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-on-surface-variant/15 text-on-surface-variant">可选</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">章节节奏和张力</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: 未绑定</span>
+              </div>
+            </div>
+            <div class="toggle-track inactive flex-shrink-0 mt-1" data-agent="pacing_controller" data-enabled="false">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-pacing-controller" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是节奏把控师，负责审视和调整章节的叙事节奏。识别节奏过快或过慢的段落，建议删减冗余或补充过渡，确保张力曲线合理，高潮与缓冲交替出现。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-pacing-controller" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="">未绑定</option>
+                  <option value="claude-3.5">Claude-3.5</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-可选Agent4: 伏笔设计师 -->
+        <div id="card-foreshadow-designer" class="glass rounded-xl overflow-hidden" data-agent-id="foreshadow_designer" data-category="optional">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="link" class="w-5 h-5 text-primary"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">伏笔设计师</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-on-surface-variant/15 text-on-surface-variant">可选</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">伏笔布局和回收</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: 未绑定</span>
+              </div>
+            </div>
+            <div class="toggle-track inactive flex-shrink-0 mt-1" data-agent="foreshadow_designer" data-enabled="false">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-foreshadow-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是伏笔设计师，负责规划和管理小说中的伏笔体系。在细纲阶段预埋伏笔线索，在写作阶段确保伏笔回收自然不突兀，维护伏笔追踪表确保每条伏笔都有交代。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-foreshadow-designer" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="">未绑定</option>
+                  <option value="claude-3.5">Claude-3.5</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-可选Agent5: 风格润色师 -->
+        <div id="card-style-polisher" class="glass rounded-xl overflow-hidden" data-agent-id="style_polisher" data-category="optional">
+          <div class="agent-card-header flex items-start gap-3 p-4 cursor-pointer">
+            <div class="w-10 h-10 rounded-xl bg-success/15 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="sparkles" class="w-5 h-5 text-success"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-on-surface">风格润色师</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-on-surface-variant/15 text-on-surface-variant">可选</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">最终润色统一风格</p>
+              <div class="flex items-center gap-1.5 mt-2">
+                <i data-lucide="cpu" class="w-3 h-3 text-on-surface-variant/60"></i>
+                <span class="text-[11px] text-on-surface-variant/60">API: 未绑定</span>
+              </div>
+            </div>
+            <div class="toggle-track inactive flex-shrink-0 mt-1" data-agent="style_polisher" data-enabled="false">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="agent-expand">
+            <div class="px-4 pb-4 pt-0 border-t border-outline-variant/20">
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">规则 Prompt</label>
+                <textarea id="prompt-style-polisher" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3">你是风格润色师，负责对最终正文进行风格统一和语言润色。消除不同Agent产出间的风格差异，优化句式节奏和用词，确保整体文风一致流畅且具有文学性。</textarea>
+              </div>
+              <div class="mt-3">
+                <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">API 绑定</label>
+                <select id="api-style-polisher" class="w-full bg-surface-container border-none rounded-xl px-3 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors appearance-none cursor-pointer">
+                  <option value="">未绑定</option>
+                  <option value="claude-3.5">Claude-3.5</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="deepseek-v3">DeepSeek-V3</option>
+                  <option value="qwen-max">Qwen-Max</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- 智能搭配弹窗 -->
+    <div id="modal-smart-match" class="fixed inset-0 bg-black/60 z-50 flex items-end hidden" style="backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+      <div class="glass-high rounded-t-2xl w-full max-h-[80vh] overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+        <!-- 弹窗头部 -->
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-5 h-5 text-primary"></i>
+            <h2 class="text-base font-bold text-on-surface">统筹Agent智能建议</h2>
+          </div>
+          <button id="btn-close-modal" class="w-8 h-8 flex items-center justify-center text-on-surface-variant rounded-full hover:bg-surface-container transition-colors">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <!-- 建议说明 -->
+        <p class="text-xs text-on-surface-variant mb-4 leading-relaxed">根据当前小说类型（玄幻长篇），统筹Agent建议以下Agent组合以获得最佳协作效果：</p>
+        <!-- 大纲阶段 -->
+        <div class="mb-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/15 text-primary">大纲阶段</span>
+          </div>
+          <div class="glass rounded-xl p-3 space-y-2">
+            <div class="flex items-center gap-2">
+              <i data-lucide="workflow" class="w-3.5 h-3.5 text-warning"></i>
+              <span class="text-xs font-medium text-on-surface">统筹</span>
+              <span class="text-[10px] text-on-surface-variant">→ 编排流程</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="globe" class="w-3.5 h-3.5 text-success"></i>
+              <span class="text-xs font-medium text-on-surface">世界架构师</span>
+              <span class="text-[10px] text-on-surface-variant">→ 构建世界观</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="route" class="w-3.5 h-3.5 text-primary"></i>
+              <span class="text-xs font-medium text-on-surface">剧情设计师</span>
+              <span class="text-[10px] text-on-surface-variant">→ 设计情节线</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="workflow" class="w-3.5 h-3.5 text-warning"></i>
+              <span class="text-xs font-medium text-on-surface">统筹</span>
+              <span class="text-[10px] text-on-surface-variant">→ 整合报告</span>
+            </div>
+          </div>
+        </div>
+        <!-- 粗纲阶段 -->
+        <div class="mb-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-warning/15 text-warning">粗纲阶段</span>
+          </div>
+          <div class="glass rounded-xl p-3 space-y-2">
+            <div class="flex items-center gap-2">
+              <i data-lucide="workflow" class="w-3.5 h-3.5 text-warning"></i>
+              <span class="text-xs font-medium text-on-surface">统筹</span>
+              <span class="text-[10px] text-on-surface-variant">→ 编排流程</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="globe" class="w-3.5 h-3.5 text-success"></i>
+              <span class="text-xs font-medium text-on-surface">世界架构师</span>
+              <span class="text-[10px] text-on-surface-variant">→ 补充设定</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="route" class="w-3.5 h-3.5 text-primary"></i>
+              <span class="text-xs font-medium text-on-surface">剧情设计师</span>
+              <span class="text-[10px] text-on-surface-variant">→ 细化情节</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="list-tree" class="w-3.5 h-3.5 text-primary"></i>
+              <span class="text-xs font-medium text-on-surface">粗纲设计师</span>
+              <span class="text-[10px] text-on-surface-variant">→ 设计章节粗纲</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="workflow" class="w-3.5 h-3.5 text-warning"></i>
+              <span class="text-xs font-medium text-on-surface">统筹</span>
+              <span class="text-[10px] text-on-surface-variant">→ 整合报告</span>
+            </div>
+          </div>
+        </div>
+        <!-- 写作阶段 -->
+        <div class="mb-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success">写作阶段</span>
+          </div>
+          <div class="glass rounded-xl p-3 space-y-2">
+            <div class="flex items-center gap-2">
+              <i data-lucide="workflow" class="w-3.5 h-3.5 text-warning"></i>
+              <span class="text-xs font-medium text-on-surface">统筹</span>
+              <span class="text-[10px] text-on-surface-variant">→ 编排流程</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="archive" class="w-3.5 h-3.5 text-warning"></i>
+              <span class="text-xs font-medium text-on-surface">记忆压缩</span>
+              <span class="text-[10px] text-on-surface-variant">→ 压缩前文</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="users" class="w-3.5 h-3.5 text-warning"></i>
+              <span class="text-xs font-medium text-on-surface">人物设计师</span>
+              <span class="text-[10px] text-on-surface-variant">→ 校准人物</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="message-square" class="w-3.5 h-3.5 text-primary"></i>
+              <span class="text-xs font-medium text-on-surface">对话设计师</span>
+              <span class="text-[10px] text-on-surface-variant">→ 优化对话</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="mountain-snow" class="w-3.5 h-3.5 text-success"></i>
+              <span class="text-xs font-medium text-on-surface">场景描写师</span>
+              <span class="text-[10px] text-on-surface-variant">→ 增强氛围</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="pen-tool" class="w-3.5 h-3.5 text-primary"></i>
+              <span class="text-xs font-medium text-on-surface">写手</span>
+              <span class="text-[10px] text-on-surface-variant">→ 产出正文</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="gauge" class="w-3.5 h-3.5 text-warning"></i>
+              <span class="text-xs font-medium text-on-surface">节奏把控师</span>
+              <span class="text-[10px] text-on-surface-variant">→ 调整节奏</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-success"></i>
+              <span class="text-xs font-medium text-on-surface">风格润色师</span>
+              <span class="text-[10px] text-on-surface-variant">→ 统一文风</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="workflow" class="w-3.5 h-3.5 text-warning"></i>
+              <span class="text-xs font-medium text-on-surface">统筹</span>
+              <span class="text-[10px] text-on-surface-variant">→ 整合报告</span>
+            </div>
+          </div>
+        </div>
+        <!-- 建议理由 -->
+        <div class="glass rounded-xl p-3 mb-4">
+          <div class="flex items-center gap-1.5 mb-2">
+            <i data-lucide="lightbulb" class="w-3.5 h-3.5 text-warning"></i>
+            <span class="text-xs font-semibold text-on-surface">推荐理由</span>
+          </div>
+          <p class="text-[11px] text-on-surface-variant leading-relaxed">玄幻长篇需要完整的世界观和复杂的人物关系，建议启用世界架构师和人物设计师。写作阶段加入对话设计师和场景描写师可显著提升阅读体验，节奏把控师和风格润色师确保长篇质量稳定。伏笔设计师可在后续启用以增强叙事深度。</p>
+        </div>
+        <!-- 操作按钮 -->
+        <button id="btn-apply-smart" class="w-full btn-gradient py-3 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          采用此方案
+        </button>
+      </div>
+    </div>
+
+    <!-- @main-content:end -->
+  </main>
+
+  <script>
+  $(function() {
+
+    // 导航函数
+    function navBack() {
+      console.log('[原型演示] BACK 返回上一页');
+      if (window.history.length > 1) window.history.back();
+    }
+    function navPush(route) {
+      console.log('[原型演示] PUSH 到: ' + route);
+      window.location.href = route;
+    }
+    function navReplace(route) {
+      console.log('[原型演示] REPLACE 为: ' + route);
+      window.location.replace(route);
+    }
+    function navReset(route) {
+      console.log('[原型演示] RESET 到: ' + route);
+      window.location.href = route;
+    }
+
+    // 返回按钮
+    $('#btn-back').on('click', function() {
+      navBack();
+    });
+
+    // 设置按钮 - 跳转到写作台（演示）
+    $('#btn-settings').on('click', function() {
+      navPush('writing-desk.html');
+    });
+
+    // ===== Tab 切换逻辑 =====
+    var $tabBar = $('#category-bar');
+    var $tabBtns = $tabBar.find('button[data-tab]');
+    var $tabIndicator = $('#tab-indicator');
+    var $panels = $('.tab-panel');
+
+    // 设置初始Tab状态
+    setActiveTab('core');
+
+    $tabBtns.on('click', function() {
+      var tabName = $(this).data('tab');
+      setActiveTab(tabName);
+    });
+
+    function setActiveTab(tabName) {
+      // 更新按钮文字颜色
+      $tabBtns.each(function() {
+        var btnTab = $(this).data('tab');
+        if (btnTab === tabName) {
+          $(this).removeClass('text-on-surface-variant').addClass('text-on-surface');
+        } else {
+          $(this).removeClass('text-on-surface').addClass('text-on-surface-variant');
+        }
+      });
+
+      // 移动指示器
+      var $activeBtn = $tabBar.find('button[data-tab="' + tabName + '"]');
+      var btnIndex = $tabBtns.index($activeBtn);
+      var btnWidth = $activeBtn.outerWidth();
+      var btnLeft = $activeBtn.position().left;
+      // 计算相对于tab-bar的left
+      var barPadding = 4; // p-1 = 4px
+      $tabIndicator.css({
+        left: btnLeft + 'px',
+        width: btnWidth + 'px'
+      });
+
+      // 切换面板
+      $panels.addClass('hidden');
+      $('#panel-' + tabName).removeClass('hidden');
+    }
+
+    // ===== Agent 卡片展开/收起 =====
+    $('.agent-card-header').on('click', function(e) {
+      // 如果点击的是开关区域，不触发展开
+      if ($(e.target).closest('.toggle-track').length) return;
+
+      var $card = $(this).closest('.glass');
+      var $expand = $card.find('.agent-expand');
+      $expand.toggleClass('open');
+    });
+
+    // ===== Agent 开关切换 =====
+    $('.toggle-track').on('click', function(e) {
+      e.stopPropagation();
+
+      var $toggle = $(this);
+      var category = $toggle.closest('.glass').data('category');
+
+      // 必须Agent不可切换
+      if (category === 'must') {
+        // 添加轻微抖动反馈
+        $toggle.css('transform', 'translateX(-2px)');
+        setTimeout(function() { $toggle.css('transform', ''); }, 150);
+        return;
+      }
+
+      var isEnabled = $toggle.data('enabled');
+
+      if (isEnabled) {
+        // 当前启用 → 禁用
+        $toggle.removeClass('active').addClass('inactive');
+        $toggle.data('enabled', false);
+      } else {
+        // 当前禁用 → 启用
+        $toggle.removeClass('inactive').addClass('active');
+        $toggle.data('enabled', true);
+      }
+
+      // 更新卡片中的API显示文本（可选Agent启用时更新）
+      var $apiLabel = $toggle.closest('.agent-card-header').find('.text-\\[11px\\]');
+      if (!isEnabled && category === 'optional') {
+        $apiLabel.text('API: Claude-3.5');
+      } else if (isEnabled && category === 'optional') {
+        $apiLabel.text('API: 未绑定');
+      }
+    });
+
+    // ===== 智能搭配弹窗 =====
+    $('#btn-smart-match').on('click', function() {
+      $('#modal-smart-match').removeClass('hidden');
+    });
+
+    $('#btn-close-modal').on('click', function() {
+      $('#modal-smart-match').addClass('hidden');
+    });
+
+    // 点击弹窗遮罩关闭
+    $('#modal-smart-match').on('click', function(e) {
+      if ($(e.target).is('#modal-smart-match')) {
+        $('#modal-smart-match').addClass('hidden');
+      }
+    });
+
+    // 采用智能搭配方案
+    // 交互行为：
+    // 1. 将所有推荐Agent设为启用状态
+    // 2. 将对话设计师、场景描写师、节奏把控师、风格润色师设为启用
+    // 3. 伏笔设计师保持关闭（弹窗建议中标注"后续启用"）
+    // 4. 更新所有相关开关的视觉状态
+    // 5. 关闭弹窗并显示Toast提示
+    $('#btn-apply-smart').on('click', function() {
+      // 启用所有推荐Agent（确保开启）
+      $('#panel-recommended .toggle-track').each(function() {
+        $(this).removeClass('inactive').addClass('active');
+        $(this).data('enabled', true);
+      });
+
+      // 启用指定的可选Agent
+      var enableOptionalIds = ['dialogue_designer', 'scene_describer', 'pacing_controller', 'style_polisher'];
+      $.each(enableOptionalIds, function(i, agentId) {
+        var $toggle = $('#card-' + agentId.replace(/_/g, '-') + ' .toggle-track');
+        $toggle.removeClass('inactive').addClass('active');
+        $toggle.data('enabled', true);
+        // 更新API标签
+        $toggle.closest('.agent-card-header').find('.text-\\[11px\\]').text('API: Claude-3.5');
+      });
+
+      // 伏笔设计师保持关闭
+      var $foreshadow = $('#card-foreshadow-designer .toggle-track');
+      $foreshadow.removeClass('active').addClass('inactive');
+      $foreshadow.data('enabled', false);
+
+      // 关闭弹窗
+      $('#modal-smart-match').addClass('hidden');
+
+      // 切换到推荐Tab展示结果
+      setActiveTab('recommended');
+    });
+
+  });
+  </script>
+
+  <script>lucide.createIcons();</script>
+</body>
+
+</html>

@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1" />
+
+  <link href="https://lf-code-agent.coze.cn/obj/x-ai-cn/fonts/google/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/jquery/jquery-3.7.1.min.js"></script>
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/lucide/lucide-1.11.0.min.js"></script>
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/tailwindcss/tailwindcss-browser-4.2.4.min.js"></script>
+
+  <style type="text/tailwindcss">
+    @theme {
+      /* === 品牌色 === */
+      --color-primary:              #7C5CFF;
+      --color-primary-container:    #9B82FF;
+      --color-on-primary:           #ffffff;
+      /* === 背景 / 表面（暗色毛玻璃系） === */
+      --color-background:                 #070A14;
+      --color-surface-container-lowest:   #0D1120;
+      --color-surface:                    #111628;
+      --color-surface-container:          #161C35;
+      --color-surface-container-high:     #1C2442;
+      --color-surface-container-highest:  #232D50;
+      /* === 文字 === */
+      --color-on-surface:           #F7FAFF;
+      --color-on-surface-variant:   #9AA7C7;
+      /* === 功能色 === */
+      --color-success:  #62FAD3;
+      --color-error:    #FF6B8A;
+      --color-warning:  #FFD166;
+      /* === 边框 === */
+      --color-outline:          rgba(255,255,255,0.12);
+      --color-outline-variant:  rgba(255,255,255,0.06);
+      /* === 圆角 === */
+      --radius-sm:   0.5rem;
+      --radius-md:   0.75rem;
+      --radius-lg:   1rem;
+      --radius-xl:   1.25rem;
+      --radius-2xl:  1.5rem;
+      --radius-full: 9999px;
+      /* === 阴影 === */
+      --shadow-card:   0 4px 16px rgba(0,0,0,0.4);
+      --shadow-float:  0 10px 30px rgba(0,0,0,0.5);
+      --shadow-dialog: 0 25px 60px rgba(0,0,0,0.7);
+      /* === 字体 === */
+      --font-sans: "Manrope", system-ui, sans-serif;
+    }
+  </style>
+
+  <style>
+    body {
+      min-height: max(812px, 100dvh);
+      font-family: "Manrope", system-ui, sans-serif;
+    }
+    /* 毛玻璃效果 */
+    .glass {
+      background: rgba(255,255,255,0.06);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .glass-high {
+      background: rgba(255,255,255,0.10);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    /* 发光效果 */
+    .glow-primary {
+      box-shadow: 0 0 20px rgba(124,92,255,0.3);
+    }
+    .glow-accent {
+      box-shadow: 0 0 20px rgba(105,231,255,0.3);
+    }
+    .glow-success {
+      box-shadow: 0 0 12px rgba(98,250,211,0.25);
+    }
+    /* 渐变按钮 */
+    .btn-gradient {
+      background: linear-gradient(135deg, #7C5CFF 0%, #69E7FF 100%);
+      color: #070A14;
+      font-weight: 700;
+    }
+    /* 进度条动画 */
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    .animate-pulse-glow {
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .shimmer {
+      position: relative;
+      overflow: hidden;
+    }
+    .shimmer::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(124,92,255,0.15), transparent);
+      animation: shimmer 2s infinite;
+    }
+    /* 折叠区域 */
+    .collapse-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease;
+    }
+    .collapse-body.open {
+      max-height: 2000px;
+    }
+    .collapse-arrow {
+      transition: transform 0.3s ease;
+    }
+    .collapse-arrow.rotated {
+      transform: rotate(180deg);
+    }
+    /* Agent进度动画 */
+    @keyframes agent-step-progress {
+      0% { width: 0%; }
+      100% { width: 100%; }
+    }
+    .agent-progress-bar {
+      animation: agent-step-progress 3s ease-in-out infinite;
+    }
+    /* 底部操作栏 */
+    .bottom-bar {
+      background: rgba(7,10,20,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+  </style>
+
+  <!-- 图片兜底 -->
+  <script>
+    document.addEventListener('error', function (e) {
+      const img = e.target;
+      if (img.tagName !== 'IMG' || img.dataset.fallback) return;
+      img.dataset.fallback = '1';
+      const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const cat = img.getAttribute('data-category') || '其他';
+      const alt = img.getAttribute('alt') || '';
+      const label = esc(alt.length > 8 ? alt.slice(0, 8) + '…' : alt);
+      const icons = { '人物': '👤', '自然风景': '🏞', '动物': '🐾', '建筑城市': '🏙', '运动体育': '⚽', '交通工具': '🚗', '食物': '🍽', '服饰时尚': '👗', '商业科技': '💼', '游戏娱乐': '🎮', '艺术': '🎨', '其他': '🖼' };
+      const icon = icons[cat] || '🖼';
+      const w = img.width || 400, h = img.height || 300;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="45%" text-anchor="middle" font-size="${Math.min(w, h) * 0.18}" dominant-baseline="central">${icon}</text><text x="50%" y="68%" text-anchor="middle" font-size="${Math.min(w, h) * 0.07}" fill="%239ca3af" font-family="system-ui,sans-serif" dominant-baseline="central">${label}</text></svg>`;
+      img.src = 'data:image/svg+xml,' + svg;
+    }, true);
+  </script>
+</head>
+
+<body class="bg-background text-on-surface font-sans">
+
+  <!-- @nav:start 导航组件 -->
+  <header class="bg-background/80 backdrop-blur-xl sticky top-0 z-40 h-14 flex items-center justify-between px-4 border-b border-outline-variant/20">
+    <button id="btn-back" class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-full hover:bg-surface-container transition-colors">
+      <i data-lucide="arrow-left" class="w-5 h-5"></i>
+    </button>
+    <h1 class="text-base font-semibold text-on-surface">大纲管理</h1>
+    <button id="btn-save-top" class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-full hover:bg-surface-container transition-colors">
+      <i data-lucide="save" class="w-5 h-5"></i>
+    </button>
+  </header>
+  <!-- @nav:end 导航组件 -->
+
+  <main class="flex-1 overflow-y-auto pb-32">
+    <!-- @main-content:start -->
+
+    <!-- ====== 区域1：顶部小说名输入 ====== -->
+    <section class="px-4 pt-5 pb-2">
+      <div class="flex gap-3">
+        <div class="flex-1">
+          <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">小说名称</label>
+          <input id="input-novel-name" type="text" value="星河征途"
+                 class="w-full bg-surface-container border-none rounded-xl px-4 py-3 text-base
+                        text-on-surface placeholder:text-on-surface-variant/50
+                        focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+                 placeholder="输入小说名称" />
+        </div>
+        <div class="w-28">
+          <label class="text-xs font-medium text-on-surface-variant mb-1.5 block">目标章数</label>
+          <input id="input-chapter-count" type="number" value="300"
+                 class="w-full bg-surface-container border-none rounded-xl px-4 py-3 text-base
+                        text-on-surface placeholder:text-on-surface-variant/50
+                        focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors text-center"
+                 placeholder="300" />
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 区域2：大纲区域 ====== -->
+    <section class="px-4 pt-4">
+      <!-- 大纲折叠卡片 -->
+      <div id="card-outline" class="glass rounded-2xl overflow-hidden shadow-card">
+        <div id="header-outline" class="flex items-center justify-between px-4 py-3.5 cursor-pointer active:bg-surface-container/30 transition-colors">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
+              <i data-lucide="file-text" class="w-4 h-4 text-primary"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-semibold text-on-surface">大纲</h2>
+              <p class="text-xs text-on-surface-variant mt-0.5">小说整体架构与核心设定</p>
+            </div>
+          </div>
+          <i data-lucide="chevron-down" class="w-5 h-5 text-on-surface-variant collapse-arrow rotated" id="arrow-outline"></i>
+        </div>
+        <div id="body-outline" class="collapse-body open">
+          <div class="px-4 pb-4">
+            <textarea id="textarea-outline" rows="8"
+                      class="w-full bg-surface-container border-none rounded-xl px-4 py-3 text-sm
+                             text-on-surface placeholder:text-on-surface-variant/50
+                             focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none leading-relaxed"
+                      placeholder="在此输入小说大纲，或点击AI扩写生成...">《星河征途》大纲
+
+【核心设定】
+故事发生在公元2847年，人类已进入星际殖民时代。银河系中三大势力——地球联邦、火星同盟、自由星港——维持着微妙的平衡。一艘远古文明遗留的"星门"被意外激活，打开了通往未知星域的通道，引发了各方势力的争夺。
+
+【主线剧情】
+主角林远是地球联邦的一艘探索舰舰长，在一次例行巡逻中发现了异常信号，追踪后发现了沉睡万年的星门。星门激活后释放出远古文明的预警信息：一种被称为"虚空潮汐"的宇宙级灾难正在逼近。林远必须在各方势力的博弈中寻找真相，联合曾经的敌人共同面对人类文明的终极挑战。
+
+【主要冲突】
+三大势力对星门控制权的争夺；人类内部主战派与和平派的分裂；远古文明遗产带来的技术伦理困境。</textarea>
+            <!-- AI扩写粗纲按钮 -->
+            <button id="btn-ai-expand-rough"
+                    class="btn-gradient w-full py-3 rounded-xl text-base mt-3
+                           hover:opacity-90 active:scale-[0.98] transition-all
+                           inline-flex items-center justify-center gap-2">
+              <i data-lucide="sparkles" class="w-5 h-5"></i>
+              AI扩写粗纲
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 区域3：粗纲区域 ====== -->
+    <section class="px-4 pt-5">
+      <!-- 粗纲折叠卡片 -->
+      <div id="card-rough" class="glass rounded-2xl overflow-hidden shadow-card">
+        <div id="header-rough" class="flex items-center justify-between px-4 py-3.5 cursor-pointer active:bg-surface-container/30 transition-colors">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-success/15 flex items-center justify-center">
+              <i data-lucide="list" class="w-4 h-4 text-success"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-semibold text-on-surface">粗纲</h2>
+              <p class="text-xs text-on-surface-variant mt-0.5">5章 · 章节概览与核心事件</p>
+            </div>
+          </div>
+          <i data-lucide="chevron-down" class="w-5 h-5 text-on-surface-variant collapse-arrow" id="arrow-rough"></i>
+        </div>
+        <div id="body-rough" class="collapse-body">
+          <div class="px-4 pb-4 space-y-2.5">
+            <!-- 列表-粗纲第1章 -->
+            <div class="bg-surface-container/60 rounded-xl px-4 py-3">
+              <div class="flex items-center justify-between cursor-pointer" data-rough="1">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-6 h-6 rounded-md bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">1</span>
+                  <span class="text-sm font-semibold text-on-surface">第1章：起源</span>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant/60 collapse-arrow" id="arrow-rough-1"></i>
+              </div>
+              <div id="body-rough-1" class="collapse-body">
+                <p class="text-xs text-on-surface-variant leading-relaxed mt-2.5 pl-8">林远在例行巡逻中发现异常信号，追踪至银河边缘一颗荒废行星，发现沉睡万年的星门装置。首次激活时释放出远古文明的加密信息，地球联邦最高指挥部紧急召回林远。</p>
+              </div>
+            </div>
+            <!-- 列表-粗纲第2章 -->
+            <div class="bg-surface-container/60 rounded-xl px-4 py-3">
+              <div class="flex items-center justify-between cursor-pointer" data-rough="2">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-6 h-6 rounded-md bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">2</span>
+                  <span class="text-sm font-semibold text-on-surface">第2章：觉醒</span>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant/60 collapse-arrow" id="arrow-rough-2"></i>
+              </div>
+              <div id="body-rough-2" class="collapse-body">
+                <p class="text-xs text-on-surface-variant leading-relaxed mt-2.5 pl-8">星门激活的消息泄露，火星同盟派出舰队抢夺。林远在地球联邦内部发现间谍，同时解读出部分远古信息——"虚空潮汐"正在逼近。主角觉醒了与星门共鸣的特殊感知能力。</p>
+              </div>
+            </div>
+            <!-- 列表-粗纲第3章 -->
+            <div class="bg-surface-container/60 rounded-xl px-4 py-3">
+              <div class="flex items-center justify-between cursor-pointer" data-rough="3">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-6 h-6 rounded-md bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">3</span>
+                  <span class="text-sm font-semibold text-on-surface">第3章：裂隙</span>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant/60 collapse-arrow" id="arrow-rough-3"></i>
+              </div>
+              <div id="body-rough-3" class="collapse-body">
+                <p class="text-xs text-on-surface-variant leading-relaxed mt-2.5 pl-8">三大势力在星门附近爆发第一次正面冲突。自由星港保持中立但暗中观察。林远的小队在战斗中被孤立，与火星同盟的女军官苏瑾被迫合作求生，发现星门内部空间远比想象中复杂。</p>
+              </div>
+            </div>
+            <!-- 列表-粗纲第4章 -->
+            <div class="bg-surface-container/60 rounded-xl px-4 py-3">
+              <div class="flex items-center justify-between cursor-pointer" data-rough="4">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-6 h-6 rounded-md bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">4</span>
+                  <span class="text-sm font-semibold text-on-surface">第4章：深渊</span>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant/60 collapse-arrow" id="arrow-rough-4"></i>
+              </div>
+              <div id="body-rough-4" class="collapse-body">
+                <p class="text-xs text-on-surface-variant leading-relaxed mt-2.5 pl-8">林远与苏瑾深入星门内部，发现远古文明留下的完整记录——虚空潮汐曾毁灭无数文明。星门是远古文明最后的遗产，内含对抗潮汐的方案。地球联邦内部主战派发动政变。</p>
+              </div>
+            </div>
+            <!-- 列表-粗纲第5章 -->
+            <div class="bg-surface-container/60 rounded-xl px-4 py-3">
+              <div class="flex items-center justify-between cursor-pointer" data-rough="5">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-6 h-6 rounded-md bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">5</span>
+                  <span class="text-sm font-semibold text-on-surface">第5章：抉择</span>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant/60 collapse-arrow" id="arrow-rough-5"></i>
+              </div>
+              <div id="body-rough-5" class="collapse-body">
+                <p class="text-xs text-on-surface-variant leading-relaxed mt-2.5 pl-8">林远必须在各方势力的博弈中做出抉择——是将星门技术公开共享，还是由单一势力独占。虚空潮汐的前兆开始出现，时间紧迫。苏瑾的身份秘密揭晓，她是自由星港创始人的后裔。</p>
+              </div>
+            </div>
+
+            <!-- AI扩写细纲按钮 -->
+            <button id="btn-ai-expand-detail"
+                    class="btn-gradient w-full py-3 rounded-xl text-base mt-2
+                           hover:opacity-90 active:scale-[0.98] transition-all
+                           inline-flex items-center justify-center gap-2">
+              <i data-lucide="sparkles" class="w-5 h-5"></i>
+              AI扩写细纲
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 区域4：细纲区域 ====== -->
+    <section class="px-4 pt-5">
+      <!-- 细纲折叠卡片 -->
+      <div id="card-detail" class="glass rounded-2xl overflow-hidden shadow-card">
+        <div id="header-detail" class="flex items-center justify-between px-4 py-3.5 cursor-pointer active:bg-surface-container/30 transition-colors">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-warning/15 flex items-center justify-center">
+              <i data-lucide="layers" class="w-4 h-4 text-warning"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-semibold text-on-surface">细纲</h2>
+              <p class="text-xs text-on-surface-variant mt-0.5">3章 · 场景与细节规划</p>
+            </div>
+          </div>
+          <i data-lucide="chevron-down" class="w-5 h-5 text-on-surface-variant collapse-arrow" id="arrow-detail"></i>
+        </div>
+        <div id="body-detail" class="collapse-body">
+          <div class="px-4 pb-4 space-y-3">
+            <!-- 列表-细纲第1章 -->
+            <div class="bg-surface-container/60 rounded-xl overflow-hidden">
+              <div class="flex items-center justify-between px-4 py-3 cursor-pointer" data-detail="1">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-6 h-6 rounded-md bg-warning/20 text-warning text-xs font-bold flex items-center justify-center">1</span>
+                  <span class="text-sm font-semibold text-on-surface">第1章：起源 — 细纲</span>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant/60 collapse-arrow" id="arrow-detail-1"></i>
+              </div>
+              <div id="body-detail-1" class="collapse-body">
+                <div class="px-4 pb-3 space-y-2 pl-10">
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">场景1：</span>
+                    <span class="text-on-surface-variant">探索舰"破晓号"驾驶舱 — 例行巡逻，单调的星际航路</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">场景2：</span>
+                    <span class="text-on-surface-variant">银河边缘荒废行星地表 — 异常信号源，远古遗迹入口</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">场景3：</span>
+                    <span class="text-on-surface-variant">遗迹内部 — 星门装置首次发现，能量波动，加密信息释放</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">关键人物：</span>
+                    <span class="text-on-surface-variant">林远（主角/舰长）、副舰长赵明、通讯员小何</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">情绪线：</span>
+                    <span class="text-on-surface-variant">平淡→好奇→震惊→紧迫</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 列表-细纲第2章 -->
+            <div class="bg-surface-container/60 rounded-xl overflow-hidden">
+              <div class="flex items-center justify-between px-4 py-3 cursor-pointer" data-detail="2">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-6 h-6 rounded-md bg-warning/20 text-warning text-xs font-bold flex items-center justify-center">2</span>
+                  <span class="text-sm font-semibold text-on-surface">第2章：觉醒 — 细纲</span>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant/60 collapse-arrow" id="arrow-detail-2"></i>
+              </div>
+              <div id="body-detail-2" class="collapse-body">
+                <div class="px-4 pb-3 space-y-2 pl-10">
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">场景1：</span>
+                    <span class="text-on-surface-variant">地球联邦指挥部 — 紧急会议，各方对星门的态度分歧</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">场景2：</span>
+                    <span class="text-on-surface-variant">火星同盟秘密基地 — 窃听情报，决定派舰队抢夺</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">场景3：</span>
+                    <span class="text-on-surface-variant">破晓号医疗舱 — 林远与星门共鸣后出现异常感知能力</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">关键人物：</span>
+                    <span class="text-on-surface-variant">林远、联邦将军陈霆、火星间谍（伪装成技术顾问）</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">情绪线：</span>
+                    <span class="text-on-surface-variant">紧张→疑虑→惊恐→决意</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 列表-细纲第3章 -->
+            <div class="bg-surface-container/60 rounded-xl overflow-hidden">
+              <div class="flex items-center justify-between px-4 py-3 cursor-pointer" data-detail="3">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-6 h-6 rounded-md bg-warning/20 text-warning text-xs font-bold flex items-center justify-center">3</span>
+                  <span class="text-sm font-semibold text-on-surface">第3章：裂隙 — 细纲</span>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant/60 collapse-arrow" id="arrow-detail-3"></i>
+              </div>
+              <div id="body-detail-3" class="collapse-body">
+                <div class="px-4 pb-3 space-y-2 pl-10">
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">场景1：</span>
+                    <span class="text-on-surface-variant">星门外围空间 — 三方舰队对峙，剑拔弩张</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">场景2：</span>
+                    <span class="text-on-surface-variant">战斗爆发 — 混乱中林远小队被孤立，与苏瑾相遇</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">场景3：</span>
+                    <span class="text-on-surface-variant">星门内部空间 — 远古建筑群，超出科技认知的能量场</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">关键人物：</span>
+                    <span class="text-on-surface-variant">林远、苏瑾（火星女军官）、自由星港观察员</span>
+                  </div>
+                  <div class="text-xs">
+                    <span class="text-primary font-semibold">情绪线：</span>
+                    <span class="text-on-surface-variant">压迫→混乱→意外→探索</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 开始写作按钮 -->
+            <button id="btn-start-writing"
+                    class="w-full bg-primary text-on-primary py-3.5 rounded-xl text-base font-semibold
+                           hover:opacity-90 active:scale-[0.98] transition-all
+                           inline-flex items-center justify-center gap-2 mt-2">
+              <i data-lucide="pen-tool" class="w-5 h-5"></i>
+              开始写作
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 区域5：AI扩写Agent进度（默认隐藏） ====== -->
+    <section id="section-agent-progress" class="px-4 pt-5 hidden">
+      <div class="glass-high rounded-2xl overflow-hidden shadow-card p-4">
+        <div class="flex items-center gap-2.5 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center animate-pulse-glow">
+            <i data-lucide="cpu" class="w-4 h-4 text-primary"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-semibold text-on-surface">Agent协作中</h2>
+            <p id="agent-current-stage" class="text-xs text-on-surface-variant mt-0.5">粗纲扩写</p>
+          </div>
+        </div>
+
+        <!-- Agent进度步骤 -->
+        <div class="space-y-3" id="agent-steps">
+          <!-- 步骤1：统筹 -->
+          <div class="flex items-start gap-3" id="agent-step-1">
+            <div class="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <i data-lucide="check" class="w-3.5 h-3.5 text-success"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-success">统筹</span>
+                <span class="text-xs text-success">已完成</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-0.5">编排流程：世界架构师→剧情设计师→粗纲设计师</p>
+            </div>
+          </div>
+          <!-- 连接线 -->
+          <div class="ml-3 w-px h-3 bg-outline-variant/30"></div>
+          <!-- 步骤2：世界架构师 -->
+          <div class="flex items-start gap-3" id="agent-step-2">
+            <div class="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <i data-lucide="check" class="w-3.5 h-3.5 text-success"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-success">世界架构师</span>
+                <span class="text-xs text-success">已完成</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-0.5">构建3大势力地理分布与星门技术体系</p>
+            </div>
+          </div>
+          <div class="ml-3 w-px h-3 bg-outline-variant/30"></div>
+          <!-- 步骤3：剧情设计师（当前进行中） -->
+          <div class="flex items-start gap-3" id="agent-step-3">
+            <div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5 animate-pulse-glow">
+              <i data-lucide="loader" class="w-3.5 h-3.5 text-primary"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-primary">剧情设计师</span>
+                <span class="text-xs text-primary animate-pulse-glow">生成中...</span>
+              </div>
+              <div class="w-full bg-surface-container rounded-full h-1.5 mt-2 overflow-hidden">
+                <div class="bg-primary h-full rounded-full agent-progress-bar" style="width:65%"></div>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-1.5">设计5章核心冲突与情节转折点</p>
+            </div>
+          </div>
+          <div class="ml-3 w-px h-3 bg-outline-variant/30"></div>
+          <!-- 步骤4：粗纲设计师（待执行） -->
+          <div class="flex items-start gap-3 opacity-40" id="agent-step-4">
+            <div class="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0 mt-0.5">
+              <i data-lucide="circle" class="w-3.5 h-3.5 text-on-surface-variant"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-on-surface-variant">粗纲设计师</span>
+                <span class="text-xs text-on-surface-variant">等待中</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-0.5">基于前序输出设计章节粗纲</p>
+            </div>
+          </div>
+          <div class="ml-3 w-px h-3 bg-outline-variant/30"></div>
+          <!-- 步骤5：统筹整合 -->
+          <div class="flex items-start gap-3 opacity-40" id="agent-step-5">
+            <div class="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0 mt-0.5">
+              <i data-lucide="circle" class="w-3.5 h-3.5 text-on-surface-variant"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-on-surface-variant">统筹整合</span>
+                <span class="text-xs text-on-surface-variant">等待中</span>
+              </div>
+              <p class="text-xs text-on-surface-variant mt-0.5">整合所有Agent输出，生成协作报告</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 间距占位 -->
+    <div class="h-6"></div>
+
+    <!-- @main-content:end -->
+  </main>
+
+  <!-- ====== 区域6：底部操作栏 ====== -->
+  <div class="fixed bottom-0 left-0 right-0 z-40 bottom-bar border-t border-outline-variant/15 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+    <div class="flex gap-3">
+      <button id="btn-save-outline"
+              class="flex-1 bg-primary text-on-primary py-3 rounded-xl text-sm font-semibold
+                     hover:opacity-90 active:scale-[0.98] transition-all
+                     inline-flex items-center justify-center gap-1.5">
+        <i data-lucide="save" class="w-4 h-4"></i>
+        保存大纲
+      </button>
+      <button id="btn-clear-outline"
+              class="flex-1 bg-surface-container text-on-surface-variant border-none py-3 rounded-xl text-sm font-semibold
+                     hover:bg-surface-container-high active:scale-[0.98] transition-all
+                     inline-flex items-center justify-center gap-1.5">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        清空大纲
+      </button>
+      <button id="btn-export-outline"
+              class="flex-1 bg-surface-container text-on-surface-variant border-none py-3 rounded-xl text-sm font-semibold
+                     hover:bg-surface-container-high active:scale-[0.98] transition-all
+                     inline-flex items-center justify-center gap-1.5">
+        <i data-lucide="download" class="w-4 h-4"></i>
+        导出文本
+      </button>
+    </div>
+  </div>
+
+  <!-- ====== 清空确认弹窗 ====== -->
+  <div id="modal-clear" class="fixed inset-0 bg-black/50 z-50 flex items-end hidden">
+    <div class="bg-surface rounded-t-2xl w-full p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+      <h3 class="text-lg font-bold text-on-surface mb-2">确认清空</h3>
+      <p class="text-sm text-on-surface-variant mb-6">清空后大纲、粗纲、细纲内容将全部删除，此操作不可恢复。确认要清空吗？</p>
+      <div class="flex gap-3">
+        <button id="btn-clear-cancel"
+                class="flex-1 bg-surface-container text-on-surface-variant py-3 rounded-xl text-base font-semibold
+                       hover:bg-surface-container-high active:scale-[0.98] transition-all">
+          取消
+        </button>
+        <button id="btn-clear-confirm"
+                class="flex-1 bg-error text-on-primary py-3 rounded-xl text-base font-semibold
+                       hover:opacity-90 active:scale-[0.98] transition-all">
+          确认清空
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== 保存成功Toast ====== -->
+  <div id="toast-save" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 glass-high rounded-xl px-5 py-3 shadow-float hidden">
+    <div class="flex items-center gap-2">
+      <i data-lucide="check-circle" class="w-5 h-5 text-success"></i>
+      <span class="text-sm font-medium text-on-surface">大纲已保存</span>
+    </div>
+  </div>
+
+  <!-- ====== 导出成功Toast ====== -->
+  <div id="toast-export" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 glass-high rounded-xl px-5 py-3 shadow-float hidden">
+    <div class="flex items-center gap-2">
+      <i data-lucide="check-circle" class="w-5 h-5 text-success"></i>
+      <span class="text-sm font-medium text-on-surface">已导出文本文件</span>
+    </div>
+  </div>
+
+  <script>
+    // 导航辅助函数
+    function navPush(route) {
+      console.log('[原型演示] PUSH 到: ' + route);
+      window.location.href = route;
+    }
+    function navReplace(route) {
+      console.log('[原型演示] REPLACE 为: ' + route);
+      window.location.replace(route);
+    }
+    function navReset(route) {
+      console.log('[原型演示] RESET 到: ' + route);
+      window.location.href = route;
+    }
+    function navBack() {
+      console.log('[原型演示] BACK 返回上一页');
+      if (window.history.length > 1) window.history.back();
+    }
+
+    $(function () {
+      lucide.createIcons();
+
+      // ===== 返回按钮 =====
+      $('#btn-back').on('click', function () {
+        navBack();
+      });
+
+      // ===== 顶部保存按钮 =====
+      $('#btn-save-top').on('click', function () {
+        $('#toast-save').removeClass('hidden');
+        setTimeout(function () {
+          $('#toast-save').addClass('hidden');
+        }, 2000);
+      });
+
+      // ===== 折叠/展开：大纲区域 =====
+      $('#header-outline').on('click', function () {
+        $('#body-outline').toggleClass('open');
+        $('#arrow-outline').toggleClass('rotated');
+      });
+
+      // ===== 折叠/展开：粗纲区域 =====
+      $('#header-rough').on('click', function () {
+        $('#body-rough').toggleClass('open');
+        $('#arrow-rough').toggleClass('rotated');
+      });
+
+      // ===== 折叠/展开：细纲区域 =====
+      $('#header-detail').on('click', function () {
+        $('#body-detail').toggleClass('open');
+        $('#arrow-detail').toggleClass('rotated');
+      });
+
+      // ===== 粗纲子项折叠/展开 =====
+      $('[data-rough]').on('click', function () {
+        var idx = $(this).data('rough');
+        $('#body-rough-' + idx).toggleClass('open');
+        $('#arrow-rough-' + idx).toggleClass('rotated');
+      });
+
+      // ===== 细纲子项折叠/展开 =====
+      $('[data-detail]').on('click', function () {
+        var idx = $(this).data('detail');
+        $('#body-detail-' + idx).toggleClass('open');
+        $('#arrow-detail-' + idx).toggleClass('rotated');
+      });
+
+      // ===== AI扩写粗纲按钮 =====
+      $('#btn-ai-expand-rough').on('click', function () {
+        // 显示Agent进度区域，更新阶段标题
+        $('#section-agent-progress').removeClass('hidden');
+        $('#agent-current-stage').text('粗纲扩写');
+        // 滚动到进度区域
+        $('html, body').animate({
+          scrollTop: $('#section-agent-progress').offset().top - 70
+        }, 400);
+        // 模拟Agent协作完成后展开粗纲区域
+        setTimeout(function () {
+          $('#body-rough').addClass('open');
+          $('#arrow-rough').addClass('rotated');
+          $('#section-agent-progress').addClass('hidden');
+          $('html, body').animate({
+            scrollTop: $('#card-rough').offset().top - 70
+          }, 400);
+        }, 4000);
+      });
+
+      // ===== AI扩写细纲按钮 =====
+      $('#btn-ai-expand-detail').on('click', function () {
+        // 显示Agent进度区域，更新阶段标题为细纲
+        $('#section-agent-progress').removeClass('hidden');
+        $('#agent-current-stage').text('细纲扩写');
+        $('html, body').animate({
+          scrollTop: $('#section-agent-progress').offset().top - 70
+        }, 400);
+        // 模拟Agent协作完成后展开细纲区域
+        setTimeout(function () {
+          $('#body-detail').addClass('open');
+          $('#arrow-detail').addClass('rotated');
+          $('#section-agent-progress').addClass('hidden');
+          $('html, body').animate({
+            scrollTop: $('#card-detail').offset().top - 70
+          }, 400);
+        }, 4000);
+      });
+
+      // ===== 开始写作按钮 — 跳转到写作台 =====
+      $('#btn-start-writing').on('click', function () {
+        var novelName = $('#input-novel-name').val() || '星河征途';
+        navPush('writing-desk.html?novel=' + encodeURIComponent(novelName));
+      });
+
+      // ===== 保存大纲按钮 =====
+      $('#btn-save-outline').on('click', function () {
+        $('#toast-save').removeClass('hidden');
+        setTimeout(function () {
+          $('#toast-save').addClass('hidden');
+        }, 2000);
+      });
+
+      // ===== 清空大纲按钮 — 弹出确认弹窗 =====
+      $('#btn-clear-outline').on('click', function () {
+        $('#modal-clear').removeClass('hidden');
+      });
+
+      // ===== 清空确认弹窗 — 取消 =====
+      $('#btn-clear-cancel').on('click', function () {
+        $('#modal-clear').addClass('hidden');
+      });
+
+      // ===== 清空确认弹窗 — 确认清空 =====
+      // 完整行为步骤：
+      // 1. 清空textarea-outline的内容
+      // 2. 清空粗纲和细纲的文本内容
+      // 3. 隐藏Agent进度区域
+      // 4. 关闭弹窗
+      // 5. 显示清空成功的Toast提示
+      $('#btn-clear-confirm').on('click', function () {
+        $('#textarea-outline').val('');
+        $('#modal-clear').addClass('hidden');
+        // 原型中仅展示交互入口，实际清空逻辑需后端支持
+        console.log('大纲已清空，需后端持久化支持');
+      });
+
+      // ===== 导出文本按钮 =====
+      // 完整行为步骤：
+      // 1. 读取大纲、粗纲、细纲内容组合为文本
+      // 2. 创建Blob并触发浏览器下载
+      // 3. 显示导出成功Toast
+      $('#btn-export-outline').on('click', function () {
+        $('#toast-export').removeClass('hidden');
+        setTimeout(function () {
+          $('#toast-export').addClass('hidden');
+        }, 2000);
+        console.log('导出文本功能：将大纲+粗纲+细纲组合为txt文件下载');
+      });
+
+      // ===== 弹窗背景点击关闭 =====
+      $('#modal-clear').on('click', function (e) {
+        if ($(e.target).is('#modal-clear')) {
+          $('#modal-clear').addClass('hidden');
+        }
+      });
+    });
+  </script>
+
+  <script>lucide.createIcons();</script>
+</body>
+
+</html>

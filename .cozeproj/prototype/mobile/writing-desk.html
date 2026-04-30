@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <link href="https://lf-code-agent.coze.cn/obj/x-ai-cn/fonts/google/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/jquery/jquery-3.7.1.min.js"></script>
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/lucide/lucide/1.11.0.min.js"></script>
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/tailwindcss/tailwindcss-browser-4.2.4.min.js"></script>
+
+  <style type="text/tailwindcss">
+    @theme {
+      /* === 品牌色 === */
+      --color-primary:              #7C5CFF;
+      --color-primary-container:    #9B82FF;
+      --color-on-primary:           #ffffff;
+      /* === 背景 / 表面（暗色毛玻璃系） === */
+      --color-background:                 #070A14;
+      --color-surface-container-lowest:   #0D1120;
+      --color-surface:                    #111628;
+      --color-surface-container:          #161C35;
+      --color-surface-container-high:     #1C2442;
+      --color-surface-container-highest:  #232D50;
+      /* === 文字 === */
+      --color-on-surface:           #F7FAFF;
+      --color-on-surface-variant:   #9AA7C7;
+      /* === 功能色 === */
+      --color-success:  #62FAD3;
+      --color-error:    #FF6B8A;
+      --color-warning:  #FFD166;
+      /* === 边框 === */
+      --color-outline:          rgba(255,255,255,0.12);
+      --color-outline-variant:  rgba(255,255,255,0.06);
+      /* === 圆角 === */
+      --radius-sm:   0.5rem;
+      --radius-md:   0.75rem;
+      --radius-lg:   1rem;
+      --radius-xl:   1.25rem;
+      --radius-2xl:  1.5rem;
+      --radius-full: 9999px;
+      /* === 阴影 === */
+      --shadow-card:   0 4px 16px rgba(0,0,0,0.4);
+      --shadow-float:  0 10px 30px rgba(0,0,0,0.5);
+      --shadow-dialog: 0 25px 60px rgba(0,0,0,0.7);
+      /* === 字体 === */
+      --font-sans: "Manrope", system-ui, sans-serif;
+    }
+  </style>
+
+  <style>
+    body {
+      min-height: max(812px, 100dvh);
+      font-family: "Manrope", system-ui, sans-serif;
+    }
+    /* 毛玻璃效果 */
+    .glass {
+      background: rgba(255,255,255,0.06);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .glass-high {
+      background: rgba(255,255,255,0.10);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    /* 发光效果 */
+    .glow-primary {
+      box-shadow: 0 0 20px rgba(124,92,255,0.3);
+    }
+    .glow-accent {
+      box-shadow: 0 0 20px rgba(105,231,255,0.3);
+    }
+    .glow-success {
+      box-shadow: 0 0 12px rgba(98,250,211,0.25);
+    }
+    /* 渐变按钮 */
+    .btn-gradient {
+      background: linear-gradient(135deg, #7C5CFF 0%, #69E7FF 100%);
+      color: #070A14;
+      font-weight: 700;
+    }
+    /* 进度条动画 */
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    .animate-pulse-glow {
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .shimmer {
+      position: relative;
+      overflow: hidden;
+    }
+    .shimmer::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(124,92,255,0.15), transparent);
+      animation: shimmer 2s infinite;
+    }
+    /* Agent脉冲动画 */
+    @keyframes agent-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(124,92,255,0.4); }
+      50% { box-shadow: 0 0 12px 4px rgba(124,92,255,0.2); }
+    }
+    .agent-active-pulse {
+      animation: agent-pulse 2s ease-in-out infinite;
+    }
+    /* 流式打字光标 */
+    @keyframes blink-cursor {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    .typing-cursor::after {
+      content: '▌';
+      color: #7C5CFF;
+      animation: blink-cursor 1s step-end infinite;
+      margin-left: 2px;
+    }
+    /* 章节切换加载条 */
+    @keyframes loading-slide {
+      0% { width: 0%; }
+      50% { width: 70%; }
+      100% { width: 100%; }
+    }
+    .loading-bar-anim {
+      animation: loading-slide 1.5s ease-in-out forwards;
+    }
+    /* 弹窗淡入 */
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes slide-up {
+      from { transform: translateY(40px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .animate-fade-in {
+      animation: fade-in 0.3s ease-out forwards;
+    }
+    .animate-slide-up {
+      animation: slide-up 0.35s ease-out forwards;
+    }
+  </style>
+
+  <!-- 图片兜底 -->
+  <script>
+    document.addEventListener('error', function (e) {
+      const img = e.target;
+      if (img.tagName !== 'IMG' || img.dataset.fallback) return;
+      img.dataset.fallback = '1';
+      const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const cat = img.getAttribute('data-category') || '其他';
+      const alt = img.getAttribute('alt') || '';
+      const label = esc(alt.length > 8 ? alt.slice(0, 8) + '…' : alt);
+      const icons = { '人物': '👤', '自然风景': '🏞', '动物': '🐾', '建筑城市': '🏙', '运动体育': '⚽', '交通工具': '🚗', '食物': '🍽', '服饰时尚': '👗', '商业科技': '💼', '游戏娱乐': '🎮', '艺术': '🎨', '其他': '🖼' };
+      const icon = icons[cat] || '🖼';
+      const w = img.width || 400, h = img.height || 300;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="45%" text-anchor="middle" font-size="${Math.min(w, h) * 0.18}" dominant-baseline="central">${icon}</text><text x="50%" y="68%" text-anchor="middle" font-size="${Math.min(w, h) * 0.07}" fill="%239ca3af" font-family="system-ui,sans-serif" dominant-baseline="central">${label}</text></svg>`;
+      img.src = 'data:image/svg+xml,' + svg;
+    }, true);
+  </script>
+</head>
+
+<body class="bg-background text-on-surface font-sans">
+
+  <!-- 导航组件 -->
+  <header class="bg-background/80 backdrop-blur-xl sticky top-0 z-40 h-14 flex items-center justify-between px-4 border-b border-outline-variant/20">
+    <button id="btn-back" class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-full hover:bg-surface-container transition-colors">
+      <i data-lucide="arrow-left" class="w-5 h-5"></i>
+    </button>
+    <h1 class="text-base font-semibold text-on-surface">写作台</h1>
+    <button id="btn-more" class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-full hover:bg-surface-container transition-colors">
+      <i data-lucide="more-horizontal" class="w-5 h-5"></i>
+    </button>
+  </header>
+
+  <main class="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+
+    <!-- ========== 1. 顶部信息区 ========== -->
+    <section id="section-header" class="px-4 pt-4 pb-3">
+      <!-- 小说名 -->
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="book-open" class="w-4 h-4 text-primary"></i>
+        <span id="novel-name" class="text-lg font-bold text-on-surface">星河征途</span>
+      </div>
+      <!-- 章节切换行 -->
+      <div class="flex items-center gap-3">
+        <button id="btn-chapter-prev" class="w-9 h-9 flex items-center justify-center rounded-lg glass text-on-surface-variant hover:text-primary transition-colors">
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        </button>
+        <div class="flex-1 text-center">
+          <span id="chapter-label" class="text-base font-semibold text-on-surface">第3章</span>
+        </div>
+        <button id="btn-chapter-next" class="w-9 h-9 flex items-center justify-center rounded-lg glass text-on-surface-variant hover:text-primary transition-colors">
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <!-- 加载进度条（章节切换时显示） -->
+      <div id="chapter-loading-bar" class="h-0.5 rounded-full bg-surface-container mt-2 overflow-hidden hidden">
+        <div id="chapter-loading-inner" class="h-full bg-primary rounded-full loading-bar-anim"></div>
+      </div>
+      <!-- 章节切换错误提示 -->
+      <div id="chapter-error" class="hidden mt-2 px-3 py-2 rounded-lg bg-error/10 border border-error/20">
+        <p class="text-xs text-error flex items-center gap-1.5">
+          <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+          <span id="chapter-error-text">第100章没有对应细纲，当前细纲共10章</span>
+        </p>
+      </div>
+    </section>
+
+    <!-- ========== 2. 细纲预览区 ========== -->
+    <section id="section-outline" class="px-4 mb-5">
+      <div id="outline-card" class="glass rounded-xl overflow-hidden">
+        <!-- 折叠头部 -->
+        <button id="btn-outline-toggle" class="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors">
+          <div class="flex items-center gap-2">
+            <i data-lucide="file-text" class="w-4 h-4 text-primary"></i>
+            <span class="text-sm font-semibold text-on-surface">细纲预览</span>
+            <span id="outline-chapter-badge" class="text-xs px-1.5 py-0.5 rounded bg-primary/15 text-primary font-semibold">第3章</span>
+          </div>
+          <i data-lucide="chevron-down" id="outline-chevron" class="w-4 h-4 text-on-surface-variant transition-transform duration-300"></i>
+        </button>
+        <!-- 折叠内容 -->
+        <div id="outline-content" class="px-4 pb-4">
+          <div class="text-sm text-on-surface/80 leading-relaxed space-y-2">
+            <p class="font-semibold text-on-surface">一、开场</p>
+            <p>林远站在星港观测台上，远处"裂隙号"正在做最后的跃迁准备。他手中的旧徽章映出微弱蓝光——那是父亲留下的唯一遗物。</p>
+            <p class="font-semibold text-on-surface">二、冲突</p>
+            <p>通讯频道突然收到求救信号，来源坐标指向"禁域"深处。舰长苏晴坚持执行原定任务，林远却无法忽视那个信号中隐含的星图编码。</p>
+            <p class="font-semibold text-on-surface">三、转折</p>
+            <p>当林远独自破译编码后，发现信号指向的坐标与父亲失踪前最后的航线完全重合。他必须做出选择：服从命令，还是独自深入禁域。</p>
+            <p class="font-semibold text-on-surface">四、收束</p>
+            <p>林远偷偷驾驶侦察艇出发，身后是苏晴的怒吼和渐行渐远的裂隙号。星图在黑暗中亮起，指向未知。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 3. Agent协作进度区 ========== -->
+    <section id="section-agents" class="px-4 mb-5">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="cpu" class="w-4 h-4 text-primary"></i>
+        <span class="text-sm font-semibold text-on-surface">Agent 协作进度</span>
+      </div>
+      <div id="agent-list" class="space-y-2">
+
+        <!-- 列表-Agent1: 统筹-已完成 -->
+        <div id="agent-item-1" class="glass rounded-xl px-3.5 py-3 flex items-start gap-3">
+          <div class="w-7 h-7 rounded-full bg-success/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-success"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-on-surface-variant font-medium">[1/6]</span>
+              <span class="text-sm font-semibold text-on-surface/60">统筹</span>
+              <span class="text-xs text-success font-semibold">已完成</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-Agent2: 记忆压缩-已完成 -->
+        <div id="agent-item-2" class="glass rounded-xl px-3.5 py-3 flex items-start gap-3">
+          <div class="w-7 h-7 rounded-full bg-success/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-success"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-on-surface-variant font-medium">[2/6]</span>
+              <span class="text-sm font-semibold text-on-surface/60">记忆压缩</span>
+              <span class="text-xs text-success font-semibold">已完成</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-Agent3: 世界架构师-生成中（活跃态） -->
+        <div id="agent-item-3" class="glass rounded-xl px-3.5 py-3 flex items-start gap-3 agent-active-pulse border border-primary/20">
+          <div class="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="loader" class="w-3.5 h-3.5 text-primary animate-spin"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="text-xs text-primary font-medium">[3/6]</span>
+              <span class="text-sm font-semibold text-primary">世界架构师</span>
+              <span class="text-xs text-primary font-semibold animate-pulse-glow">生成中...</span>
+            </div>
+            <!-- 流式输出预览 -->
+            <div class="bg-surface-container/50 rounded-lg px-3 py-2 text-xs text-on-surface/70 leading-relaxed">
+              <span class="typing-cursor">正在设计星港"天枢"的空间结构——主港区分为三层环形甲板，核心区为跃迁引擎室。外围设有三座对接塔，分别对应军用、民用和货运用途</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-Agent4: 人物设计师-等待中 -->
+        <div id="agent-item-4" class="glass rounded-xl px-3.5 py-3 flex items-start gap-3 opacity-50">
+          <div class="w-7 h-7 rounded-full bg-on-surface-variant/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="clock" class="w-3.5 h-3.5 text-on-surface-variant"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-on-surface-variant font-medium">[4/6]</span>
+              <span class="text-sm font-semibold text-on-surface-variant">人物设计师</span>
+              <span class="text-xs text-on-surface-variant font-medium">等待中</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-Agent5: 写手-等待中 -->
+        <div id="agent-item-5" class="glass rounded-xl px-3.5 py-3 flex items-start gap-3 opacity-50">
+          <div class="w-7 h-7 rounded-full bg-on-surface-variant/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="clock" class="w-3.5 h-3.5 text-on-surface-variant"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-on-surface-variant font-medium">[5/6]</span>
+              <span class="text-sm font-semibold text-on-surface-variant">写手</span>
+              <span class="text-xs text-on-surface-variant font-medium">等待中</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 列表-Agent6: 风格润色师-等待中 -->
+        <div id="agent-item-6" class="glass rounded-xl px-3.5 py-3 flex items-start gap-3 opacity-50">
+          <div class="w-7 h-7 rounded-full bg-on-surface-variant/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="clock" class="w-3.5 h-3.5 text-on-surface-variant"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-on-surface-variant font-medium">[6/6]</span>
+              <span class="text-sm font-semibold text-on-surface-variant">风格润色师</span>
+              <span class="text-xs text-on-surface-variant font-medium">等待中</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========== 4. 正文内容区 ========== -->
+    <section id="section-content" class="px-4 mb-5">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="pen-tool" class="w-4 h-4 text-primary"></i>
+        <span class="text-sm font-semibold text-on-surface">正文内容</span>
+      </div>
+      <div id="content-area" class="glass rounded-xl px-4 py-4">
+        <div class="text-sm text-on-surface/85 leading-relaxed space-y-3">
+          <p>星港"天枢"的观测台悬浮在主港区最高点，像一枚被遗忘在太空中的硬币。林远站在弧形舷窗前，目光穿过防护隔层，落在远处那艘正在做跃迁准备的巡洋舰上。</p>
+          <p>"裂隙号"。它的名字像一道伤疤刻在船身上，又像某种隐秘的承诺。林远下意识握紧了胸前的徽章——那是父亲留下的唯一遗物，一枚旧式星航局的铜质徽章，边角已被岁月磨得发亮。</p>
+          <p>徽章上的微弱蓝光一闪一闪，像极了很多年前父亲教他认星座时，指尖划过星图的样子。</p>
+          <p class="typing-cursor">通讯频道里传来一阵刺耳的静电噪声，紧接着是一个断断续续的求救信号</p>
+        </div>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div id="content-actions" class="mt-4 space-y-2.5">
+        <button id="btn-rewrite" class="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-error/15 text-error border border-error/20 hover:bg-error/20 active:scale-[0.98] transition-all">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          重写
+        </button>
+        <div class="flex gap-2.5">
+          <button id="btn-save" class="flex-1 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 glass text-on-surface hover:bg-white/10 active:scale-[0.98] transition-all">
+            <i data-lucide="bookmark" class="w-4 h-4"></i>
+            保存到书架
+          </button>
+          <button id="btn-submit-review" class="flex-1 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 btn-gradient active:scale-[0.98] transition-all">
+            <i data-lucide="send" class="w-4 h-4"></i>
+            送审
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 5. 多章模式：章节队列 ========== -->
+    <section id="section-multi-chapter" class="px-4 mb-6">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="layers" class="w-4 h-4 text-primary"></i>
+        <span class="text-sm font-semibold text-on-surface">章节队列</span>
+        <span class="text-xs px-1.5 py-0.5 rounded bg-primary/15 text-primary font-semibold">3章</span>
+      </div>
+      <div id="chapter-queue" class="space-y-2">
+
+        <!-- 列表-章节1: 已完成 -->
+        <div class="glass rounded-xl px-4 py-3 flex items-center gap-3" data-chapter="1">
+          <div class="w-7 h-7 rounded-full bg-success/15 flex items-center justify-center flex-shrink-0">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-success"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <span class="text-sm font-semibold text-on-surface/70">第1章</span>
+            <span class="text-xs text-success ml-2 font-medium">已完成</span>
+          </div>
+          <button class="rewrite-chapter-btn px-3 py-1.5 rounded-lg text-xs font-bold text-error bg-error/10 border border-error/15 hover:bg-error/20 active:scale-[0.96] transition-all" data-chapter="1">
+            重写
+          </button>
+        </div>
+
+        <!-- 列表-章节2: 已完成 -->
+        <div class="glass rounded-xl px-4 py-3 flex items-center gap-3" data-chapter="2">
+          <div class="w-7 h-7 rounded-full bg-success/15 flex items-center justify-center flex-shrink-0">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-success"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <span class="text-sm font-semibold text-on-surface/70">第2章</span>
+            <span class="text-xs text-success ml-2 font-medium">已完成</span>
+          </div>
+          <button class="rewrite-chapter-btn px-3 py-1.5 rounded-lg text-xs font-bold text-error bg-error/10 border border-error/15 hover:bg-error/20 active:scale-[0.96] transition-all" data-chapter="2">
+            重写
+          </button>
+        </div>
+
+        <!-- 列表-章节3: 生成中 -->
+        <div class="glass rounded-xl px-4 py-3 flex items-center gap-3 border border-primary/20 agent-active-pulse" data-chapter="3">
+          <div class="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
+            <i data-lucide="loader" class="w-3.5 h-3.5 text-primary animate-spin"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <span class="text-sm font-semibold text-primary">第3章</span>
+            <span class="text-xs text-primary ml-2 font-medium animate-pulse-glow">生成中</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========== 6. 统筹报告弹窗 ========== -->
+  <div id="report-modal" class="fixed inset-0 z-50 hidden">
+    <!-- 遮罩 -->
+    <div id="report-overlay" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+    <!-- 弹窗内容 -->
+    <div class="absolute inset-x-4 top-1/2 -translate-y-1/2 z-10">
+      <div id="report-panel" class="glass-high rounded-2xl p-5 shadow-dialog">
+        <!-- 标题 -->
+        <div class="flex items-center gap-2 mb-4">
+          <i data-lucide="file-bar-chart" class="w-5 h-5 text-primary"></i>
+          <h2 class="text-base font-bold text-on-surface">协作报告</h2>
+        </div>
+        <!-- Agent参与摘要 -->
+        <div class="space-y-2.5 mb-4">
+          <!-- 摘要-Agent1 -->
+          <div class="flex items-start gap-2">
+            <div class="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0"></div>
+            <p class="text-sm text-on-surface/80 leading-relaxed"><span class="font-semibold text-on-surface">统筹：</span>编排6个Agent执行写作流程，确定第3章创作方案</p>
+          </div>
+          <!-- 摘要-Agent2 -->
+          <div class="flex items-start gap-2">
+            <div class="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0"></div>
+            <p class="text-sm text-on-surface/80 leading-relaxed"><span class="font-semibold text-on-surface">世界架构师：</span>设计了3个主要城镇、2个势力集团，完善了星港天枢的空间结构</p>
+          </div>
+          <!-- 摘要-Agent3 -->
+          <div class="flex items-start gap-2">
+            <div class="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0"></div>
+            <p class="text-sm text-on-surface/80 leading-relaxed"><span class="font-semibold text-on-surface">人物设计师：</span>定义了林远、苏晴的性格特征和关系张力</p>
+          </div>
+          <!-- 摘要-Agent4 -->
+          <div class="flex items-start gap-2">
+            <div class="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0"></div>
+            <p class="text-sm text-on-surface/80 leading-relaxed"><span class="font-semibold text-on-surface">写手：</span>基于以上设定完成第3章正文，共2800字</p>
+          </div>
+          <!-- 摘要-Agent5 -->
+          <div class="flex items-start gap-2">
+            <div class="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0"></div>
+            <p class="text-sm text-on-surface/80 leading-relaxed"><span class="font-semibold text-on-surface">风格润色师：</span>调整了4处节奏问题，统一了对话风格</p>
+          </div>
+        </div>
+        <!-- 意见反馈输入框 -->
+        <div class="mb-4">
+          <label class="text-xs text-on-surface-variant font-medium mb-1.5 block">意见反馈</label>
+          <textarea id="report-feedback" class="w-full bg-surface-container border-none rounded-xl px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors resize-none" rows="3" placeholder="对本次协作结果有什么建议..."></textarea>
+        </div>
+        <!-- 操作按钮 -->
+        <div class="flex gap-2.5">
+          <button id="btn-report-regenerate" class="flex-1 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 glass text-error border border-error/15 hover:bg-error/10 active:scale-[0.98] transition-all">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            重新生成
+          </button>
+          <button id="btn-report-confirm" class="flex-1 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 btn-gradient active:scale-[0.98] transition-all">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            确认完成
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>lucide.createIcons();</script>
+
+  <script>
+  $(function() {
+
+    // === 导航辅助函数 ===
+    function navPush(route) {
+      console.log('[原型演示] PUSH 到: ' + route);
+      window.location.href = route;
+    }
+    function navReplace(route) {
+      console.log('[原型演示] REPLACE 为: ' + route);
+      window.location.replace(route);
+    }
+    function navReset(route) {
+      console.log('[原型演示] RESET 到: ' + route);
+      window.location.href = route;
+    }
+    function navBack() {
+      console.log('[原型演示] BACK 返回上一页');
+      if (window.history.length > 1) window.history.back();
+    }
+
+    // === 返回按钮 ===
+    $('#btn-back').on('click', function() {
+      navBack();
+    });
+
+    // === 更多操作按钮 ===
+    $('#btn-more').on('click', function() {
+      console.log('更多操作：可展开设置菜单，跳转Agent配置等');
+      // 后续应实现：弹出操作菜单，包含"Agent配置"、"大纲页"等选项
+    });
+
+    // === 章节切换状态 ===
+    var currentChapter = 3;
+    var totalOutlineChapters = 10;
+
+    // 章节细纲mock数据（硬编码）
+    var outlineData = {
+      1: {
+        title: '第1章',
+        content: '<p class="font-semibold text-on-surface">一、背景铺设</p><p>银河联邦建立后的第三百年，边境星域突然出现大规模空间裂隙。联邦科学院紧急成立"裂隙研究组"，年轻研究员林远被调入职。</p><p class="font-semibold text-on-surface">二、人物登场</p><p>林远在报到首日遇到导师陈教授，以及同组的研究员苏晴。三人组成初始调查小组。</p><p class="font-semibold text-on-surface">三、悬念</p><p>林远在整理旧数据时发现，二十年前父亲林昊的失踪报告被标注为"绝密"。</p>'
+      },
+      2: {
+        title: '第2章',
+        content: '<p class="font-semibold text-on-surface">一、深入调查</p><p>林远在裂隙数据中发现异常频率信号，与父亲旧日志中的记录高度吻合。他决定私下追踪这条线索。</p><p class="font-semibold text-on-surface">二、冲突升级</p><p>苏晴发现林远的私下行动，产生分歧。陈教授暗示林远不要再深查，态度反常。</p><p class="font-semibold text-on-surface">三、发现</p><p>林远在废弃空间站找到父亲留下的加密数据核心，解码后指向一个坐标——禁域中心。</p>'
+      },
+      3: {
+        title: '第3章',
+        content: '<p class="font-semibold text-on-surface">一、开场</p><p>林远站在星港观测台上，远处"裂隙号"正在做最后的跃迁准备。他手中的旧徽章映出微弱蓝光——那是父亲留下的唯一遗物。</p><p class="font-semibold text-on-surface">二、冲突</p><p>通讯频道突然收到求救信号，来源坐标指向"禁域"深处。舰长苏晴坚持执行原定任务，林远却无法忽视那个信号中隐含的星图编码。</p><p class="font-semibold text-on-surface">三、转折</p><p>当林远独自破译编码后，发现信号指向的坐标与父亲失踪前最后的航线完全重合。他必须做出选择：服从命令，还是独自深入禁域。</p><p class="font-semibold text-on-surface">四、收束</p><p>林远偷偷驾驶侦察艇出发，身后是苏晴的怒吼和渐行渐远的裂隙号。星图在黑暗中亮起，指向未知。</p>'
+      },
+      4: {
+        title: '第4章',
+        content: '<p class="font-semibold text-on-surface">一、禁域边缘</p><p>侦察艇穿越禁域屏障时遭遇强烈的空间湍流，林远被迫紧急迫降在一颗无名星球上。</p><p class="font-semibold text-on-surface">二、遗迹</p><p>星球表面发现古代文明遗迹，墙壁上的符文与父亲徽章上的纹路完全一致。林远意识到父亲曾到过这里。</p><p class="font-semibold text-on-surface">三、危机</p><p>遗迹深处触发防御系统，林远被困。千钧一发之际，一个神秘信号解锁了防御——发送者似乎一直在等他。</p>'
+      },
+      5: {
+        title: '第5章',
+        content: '<p class="font-semibold text-on-surface">一、真相初现</p><p>神秘信号的发送者是一台古老的AI，它自称"守门人"，守护着裂隙的秘密。</p><p class="font-semibold text-on-surface">二、父亲的足迹</p><p>守门人向林远展示了二十年前的记录：林昊曾到达这里，并主动进入了裂隙深处。</p><p class="font-semibold text-on-surface">三、抉择</p><p>守门人告诉林远，裂隙正在扩大，如果不加以控制，整个银河将面临毁灭。而关闭裂隙需要林远血脉中的特殊基因。</p>'
+      }
+    };
+
+    function switchChapter(newChapter) {
+      // 隐藏之前的错误
+      $('#chapter-error').addClass('hidden');
+
+      if (newChapter < 1 || newChapter > totalOutlineChapters) {
+        // 超出细纲范围
+        $('#chapter-error-text').text('第' + newChapter + '章没有对应细纲，当前细纲共' + totalOutlineChapters + '章');
+        $('#chapter-error').removeClass('hidden');
+        return;
+      }
+
+      currentChapter = newChapter;
+      $('#chapter-label').text('第' + currentChapter + '章');
+      $('#outline-chapter-badge').text('第' + currentChapter + '章');
+
+      // 显示加载进度条
+      $('#chapter-loading-bar').removeClass('hidden');
+      $('#chapter-loading-inner').removeClass('loading-bar-anim');
+      // 触发重排以重新开始动画
+      void $('#chapter-loading-inner')[0].offsetWidth;
+      $('#chapter-loading-inner').addClass('loading-bar-anim');
+
+      // 模拟加载完成
+      setTimeout(function() {
+        $('#chapter-loading-bar').addClass('hidden');
+        // 更新细纲内容
+        var data = outlineData[currentChapter];
+        if (data) {
+          $('#outline-content .text-sm').html(data.content);
+        }
+      }, 1500);
+    }
+
+    $('#btn-chapter-prev').on('click', function() {
+      switchChapter(currentChapter - 1);
+    });
+
+    $('#btn-chapter-next').on('click', function() {
+      switchChapter(currentChapter + 1);
+    });
+
+    // === 细纲折叠/展开 ===
+    var outlineExpanded = true;
+    $('#btn-outline-toggle').on('click', function() {
+      outlineExpanded = !outlineExpanded;
+      if (outlineExpanded) {
+        $('#outline-content').slideDown(300);
+        $('#outline-chevron').css('transform', 'rotate(0deg)');
+      } else {
+        $('#outline-content').slideUp(300);
+        $('#outline-chevron').css('transform', 'rotate(-90deg)');
+      }
+    });
+
+    // === 重写按钮 ===
+    $('#btn-rewrite').on('click', function() {
+      console.log('重写：重新调用Agent编排引擎生成当前章节正文');
+      // 后续应实现：
+      // 1. 弹出确认对话框"确认重写第X章？当前内容将被覆盖"
+      // 2. 确认后调用 orchestrateAgents({ stage: 'writing', chapterNumber: currentChapter })
+      // 3. 清空正文内容区，重新显示Agent进度
+    });
+
+    // === 保存到书架 ===
+    $('#btn-save').on('click', function() {
+      console.log('保存到书架：将当前章节正文持久化存储');
+      // 后续应实现：调用存储接口保存正文到本地/云端书架
+    });
+
+    // === 送审 ===
+    $('#btn-submit-review').on('click', function() {
+      console.log('送审：将当前章节提交评审流程');
+      // 后续应实现：调用 orchestrateAgents({ stage: 'review' }) 进入评审阶段
+    });
+
+    // === 多章模式-重写按钮 ===
+    $('#chapter-queue').on('click', '.rewrite-chapter-btn', function() {
+      var ch = $(this).data('chapter');
+      console.log('重写第' + ch + '章');
+      // 后续应实现：
+      // 1. 切换到对应章节
+      // 2. 弹出确认对话框
+      // 3. 确认后重新调用Agent编排生成
+    });
+
+    // === 统筹报告弹窗 ===
+    // 模拟：章节生成完成后自动弹出
+    // 页面加载3秒后自动显示弹窗（演示用）
+    setTimeout(function() {
+      showReportModal();
+    }, 3000);
+
+    function showReportModal() {
+      $('#report-modal').removeClass('hidden');
+      $('#report-modal').addClass('animate-fade-in');
+      $('#report-panel').addClass('animate-slide-up');
+    }
+
+    function hideReportModal() {
+      $('#report-modal').addClass('hidden');
+      $('#report-modal').removeClass('animate-fade-in');
+      $('#report-panel').removeClass('animate-slide-up');
+    }
+
+    // 点击遮罩关闭
+    $('#report-overlay').on('click', function() {
+      hideReportModal();
+    });
+
+    // 重新生成按钮
+    $('#btn-report-regenerate').on('click', function() {
+      console.log('重新生成：关闭弹窗，重新调用Agent编排引擎');
+      // 后续应实现：
+      // 1. 关闭弹窗
+      // 2. 清空当前正文内容
+      // 3. 重新调用 orchestrateAgents({ stage: 'writing', chapterNumber: currentChapter })
+      hideReportModal();
+    });
+
+    // 确认完成按钮
+    $('#btn-report-confirm').on('click', function() {
+      console.log('确认完成：保存结果，更新章节队列状态');
+      // 后续应实现：
+      // 1. 收集意见反馈内容
+      // 2. 保存当前章节内容
+      // 3. 更新章节队列中当前章节状态为done
+      // 4. 如果队列中还有pending章节，自动切换到下一个
+      var feedback = $('#report-feedback').val();
+      if (feedback) {
+        console.log('用户反馈：' + feedback);
+      }
+      hideReportModal();
+    });
+
+  });
+  </script>
+
+</body>
+
+</html>

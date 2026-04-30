@@ -1,0 +1,28 @@
+{
+  "elements": [
+    {
+      "type": "html",
+      "options": {
+        "path": ".cozeproj/prototype/mobile/agent-config.html"
+      },
+      "title": "Agent配置",
+      "size": "mobile"
+    },
+    {
+      "type": "html",
+      "options": {
+        "path": ".cozeproj/prototype/mobile/writing-desk.html"
+      },
+      "title": "写作台",
+      "size": "mobile"
+    },
+    {
+      "type": "html",
+      "options": {
+        "path": ".cozeproj/prototype/mobile/outline-page.html"
+      },
+      "title": "大纲管理",
+      "size": "mobile"
+    }
+  ]
+}
