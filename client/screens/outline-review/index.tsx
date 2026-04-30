@@ -164,31 +164,33 @@ export default function OutlineReviewScreen() {
     ]);
   };
 
-  // 通用LLM调用（SSE流式，走后端/api/v1/llm/chat代理）
+  // 通用LLM调用（直接调外部API，SSE流式，标准OpenAI格式）
   const callLLM = (agent: Agent, systemPrompt: string, userPrompt: string, thinkingId: string): Promise<void> => {
     return new Promise((resolve) => {
       const api = getApiForAgent(agent);
       let agentResponse = '';
 
+      // 确保 baseUrl 末尾无斜杠，拼接 /v1/chat/completions
+      const base = api.baseUrl.replace(/\/+$/, '');
+      // 如果用户已包含 /v1 则不重复添加
+      const endpoint = base.endsWith('/v1') ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+
       try {
-        /**
-         * 服务端文件：server/src/index.ts
-         * 接口：POST /api/v1/llm/chat
-         * Body 参数：messages: Array<{ role: 'system'|'user'|'assistant', content: string }>
-         */
-        const sse = new RNSSE(`${API_BASE_URL}/api/v1/llm/chat`, {
+        const sse = new RNSSE(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-api-key': api.apiKey,
-            'x-model': api.model,
-            'x-base-url': api.baseUrl,
+            'Authorization': `Bearer ${api.apiKey}`,
           },
           body: JSON.stringify({
+            model: api.model,
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt },
             ],
+            stream: true,
+            temperature: 0.7,
+            max_tokens: 1024,
           }),
         });
 
@@ -208,8 +210,9 @@ export default function OutlineReviewScreen() {
 
           try {
             const json = JSON.parse(event.data || '{}');
-            if (json.type === 'chunk' && json.content) {
-              agentResponse += json.content;
+            const content = json.choices?.[0]?.delta?.content;
+            if (content) {
+              agentResponse += content;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === thinkingId
@@ -217,14 +220,6 @@ export default function OutlineReviewScreen() {
                     : m
                 )
               );
-            } else if (json.type === 'error') {
-              sse.close();
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === thinkingId ? { ...m, content: `评审失败：${json.content || '未知错误'}` } : m
-                )
-              );
-              resolve();
             }
           } catch (e) {}
         });
@@ -232,7 +227,7 @@ export default function OutlineReviewScreen() {
         sse.addEventListener('error', () => {
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === thinkingId ? { ...m, content: '评审失败，请检查API配置' } : m
+              m.id === thinkingId ? { ...m, content: '评审失败，请检查API配置和网络' } : m
             )
           );
           resolve();
@@ -254,7 +249,7 @@ export default function OutlineReviewScreen() {
             );
           }
           resolve();
-        }, 30000);
+        }, 60000);
 
       } catch (error) {
         setMessages((prev) =>

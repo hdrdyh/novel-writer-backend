@@ -33,29 +33,34 @@ export default function WritingScreen() {
   const router = useSafeRouter();
   const params = useSafeSearchParams<{ chapterNumber: string; outline: string; rough: string; detail: string }>();
 
-  // 单章模式
-  const [chapterNumber, setChapterNumber] = useState(parseInt(params.chapterNumber || '1') || 1);
-  const [outlineInput, setOutlineInput] = useState(params.outline || '');
-
-  // 从大纲页传入细纲时，自动切换多章模式
-  const detailFromOutline = React.useMemo(() => {
+  // 解析细纲数据（hooks之前计算）
+  const parsedDetail = React.useMemo(() => {
     try {
       return params.detail ? JSON.parse(params.detail) : [];
     } catch {
       return [];
     }
   }, [params.detail]);
+
+  // 单章模式
+  const [chapterNumber, setChapterNumber] = useState(parseInt(params.chapterNumber || '1') || 1);
+  const [outlineInput, setOutlineInput] = useState(() => {
+    // 如果有细纲，用第一章的细纲作为初始值
+    if (parsedDetail.length > 0) return parsedDetail[0] || '';
+    // 否则用大纲文本
+    return params.outline || '';
+  });
   const [content, setContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
 
   // 多章模式
-  const [isMultiMode, setIsMultiMode] = useState(false);
+  const [isMultiMode, setIsMultiMode] = useState(() => parsedDetail.length > 0);
   const [multiCount, setMultiCount] = useState('3');
   const [showMultiModal, setShowMultiModal] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>(() => {
-    if (detailFromOutline.length > 0) {
-      return detailFromOutline.map((item: string, idx: number) => ({
+    if (parsedDetail.length > 0) {
+      return parsedDetail.map((item: string, idx: number) => ({
         id: String(new Date().getTime() + idx),
         chapterNumber: idx + 1,
         outline: item,
@@ -109,16 +114,16 @@ export default function WritingScreen() {
       loadSavedItems();
       loadMemory();
       // 自动从大纲页加载细纲
-      if (detailFromOutline.length > 0 && !hasAutoLoaded) {
+      if (parsedDetail.length > 0 && !hasAutoLoaded) {
         setIsMultiMode(true);
         setHasAutoLoaded(true);
-        const firstChapter = detailFromOutline[0];
+        const firstChapter = parsedDetail[0];
         if (firstChapter) {
           setOutlineInput(firstChapter);
           setChapterNumber(1);
         }
       }
-    }, [loadSavedItems, loadMemory, detailFromOutline, hasAutoLoaded])
+    }, [loadSavedItems, loadMemory, parsedDetail, hasAutoLoaded])
   );
 
   // 生成单章
@@ -468,7 +473,7 @@ export default function WritingScreen() {
               ) : (
                 <View style={styles.emptyContent}>
                   <Ionicons name="create-outline" size={48} color="#333" />
-                  <Text style={styles.emptyText}>输入章纲，点击开始创作</Text>
+                  <Text style={styles.emptyText}>{outlineInput ? '点击开始创作，AI将根据章纲生成正文' : '从大纲页点击"开始写作"，或输入章纲开始创作'}</Text>
                 </View>
               )}
             </>
@@ -551,7 +556,7 @@ export default function WritingScreen() {
                   {/* 章纲输入 */}
                   <TextInput
                     style={styles.queueOutlineInput}
-                    placeholder="输入章纲..."
+                    placeholder="细纲内容（可编辑）..."
                     placeholderTextColor="#555"
                     value={item.outline}
                     onChangeText={(text) => updateQueueOutline(idx, text)}

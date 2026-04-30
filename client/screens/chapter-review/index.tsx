@@ -176,25 +176,27 @@ export default function ChapterReviewScreen() {
 
       let agentResponse = '';
 
+      // 确保 baseUrl 末尾无斜杠，拼接 /v1/chat/completions
+      const base = useBaseUrl.replace(/\/+$/, '');
+      const endpoint = base.endsWith('/v1') ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+
       try {
-        /**
-         * 服务端文件：server/src/index.ts
-         * 接口：POST /api/v1/llm/chat
-         * Body 参数：messages: Array<{ role: 'system'|'user'|'assistant', content: string }>
-         */
-        const sse = new RNSSE(`${API_BASE_URL}/api/v1/llm/chat`, {
+        // 直接调外部LLM API，SSE流式，标准OpenAI格式
+        const sse = new RNSSE(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-api-key': useApiKey,
-            'x-model': useModel,
-            'x-base-url': useBaseUrl,
+            'Authorization': `Bearer ${useApiKey}`,
           },
           body: JSON.stringify({
+            model: useModel,
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt },
             ],
+            stream: true,
+            temperature: 0.7,
+            max_tokens: 1024,
           }),
         });
 
@@ -214,8 +216,9 @@ export default function ChapterReviewScreen() {
 
           try {
             const json = JSON.parse(event.data || '{}');
-            if (json.type === 'chunk' && json.content) {
-              agentResponse += json.content;
+            const content = json.choices?.[0]?.delta?.content;
+            if (content) {
+              agentResponse += content;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === thinkingId
@@ -223,14 +226,6 @@ export default function ChapterReviewScreen() {
                     : m
                 )
               );
-            } else if (json.type === 'error') {
-              sse.close();
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === thinkingId ? { ...m, content: `评审失败：${json.content || '未知错误'}` } : m
-                )
-              );
-              resolve();
             }
           } catch (e) {}
         });
@@ -238,7 +233,7 @@ export default function ChapterReviewScreen() {
         sse.addEventListener('error', () => {
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === thinkingId ? { ...m, content: '评审失败，请检查API配置' } : m
+              m.id === thinkingId ? { ...m, content: '评审失败，请检查API配置和网络' } : m
             )
           );
           resolve();
@@ -260,7 +255,7 @@ export default function ChapterReviewScreen() {
             );
           }
           resolve();
-        }, 30000);
+        }, 60000);
 
       } catch (error) {
         setMessages((prev) =>

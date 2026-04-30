@@ -29,6 +29,7 @@ interface OutlineData {
   outlineLocked: boolean;
   roughLocked: boolean;
   detailLocked: boolean;
+  targetChapters: number; // 目标章节数
 }
 
 const STORAGE_KEY = 'outline_data';
@@ -43,6 +44,7 @@ export default function OutlineScreen() {
     outlineLocked: false,
     roughLocked: false,
     detailLocked: false,
+    targetChapters: 300,
   });
   const [loading, setLoading] = useState(false);
   const [editIndex, setEditIndex] = useState(-1); // 当前编辑的粗纲/细纲索引
@@ -104,16 +106,23 @@ export default function OutlineScreen() {
       if (stage === 'outline') {
         prompt = `请根据以下核心概念，扩展为完整的小说大纲，包含起承转合，约300字：\n${data.outline}`;
       } else if (stage === 'rough') {
-        prompt = `请根据以下大纲，拆分为每章一句话的粗纲，每行一章，格式"第X章：xxx"：\n${data.outline}`;
+        const chapters = data.targetChapters || 300;
+        prompt = `请根据以下大纲，拆分为${chapters}章的粗纲，每行一章，格式"第X章：xxx"。\n注意：必须生成完整的${chapters}章，不要遗漏，不要只生成前面几章。\n大纲如下：\n${data.outline}`;
       } else {
-        prompt = `请根据以下粗纲，为每章展开细纲。要求：1.每章格式为"第X章：具体情节描述" 2.不要单独输出字数、不要重复章节标题 3.每章内容包含具体场景、角色出场、冲突点、情绪转折、悬念留尾 4.每章约100字 5.每章占一行，不要换行分段。粗纲如下：\n${data.rough.join('\n')}`;
+        prompt = `请根据以下粗纲，为每章展开细纲。要求：1.每章格式为"第X章：具体情节描述" 2.不要单独输出字数、不要重复章节标题 3.每章内容包含具体场景、角色出场、冲突点、情绪转折、悬念留尾 4.每章约100字 5.每章占一行，不要换行分段 6.必须为粗纲中的每一章都生成细纲，一章不漏。粗纲如下：\n${data.rough.join('\n')}`;
       }
 
       // 用第一个启用的Agent和其绑定的API
       const agent = agents[0];
       const api = apis.find((a: any) => a.id === agent.apiId) || apis[0];
 
-      const response = await fetch(`${api.baseUrl}/chat/completions`, {
+      // baseUrl如 https://api.deepseek.com，需要拼 /v1/chat/completions
+      const baseEndpoint = api.baseUrl.endsWith('/v1') ? api.baseUrl : `${api.baseUrl}/v1`;
+      // 根据章节数动态调整 max_tokens，每章约20字+格式开销
+      const chapterCount = stage === 'rough' ? (data.targetChapters || 300) : (data.rough.length || 10);
+      const maxTokens = Math.min(Math.max(chapterCount * 30, 2000), 16000);
+
+      const response = await fetch(`${baseEndpoint}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -125,7 +134,7 @@ export default function OutlineScreen() {
             { role: 'system', content: agent.prompt || '你是一个专业的小说策划师。严格按照用户要求的格式输出，不要添加额外信息。' },
             { role: 'user', content: prompt },
           ],
-          max_tokens: 2000,
+          max_tokens: maxTokens,
         }),
       });
 
@@ -367,11 +376,32 @@ export default function OutlineScreen() {
         {renderStageCard(
           'rough',
           '粗纲',
-          `${data.rough.length}章`,
+          `${data.rough.length}章 / 目标${data.targetChapters || 300}章`,
           'list',
           data.roughLocked,
           data.outlineLocked,
           <View style={styles.listArea}>
+            {/* 目标章节数输入 */}
+            {!data.roughLocked && (
+              <View style={styles.chapterCountRow}>
+                <Text style={styles.chapterCountLabel}>目标章节数</Text>
+                <TextInput
+                  style={styles.chapterCountInput}
+                  value={String(data.targetChapters || 300)}
+                  onChangeText={(text) => {
+                    const num = parseInt(text, 10);
+                    if (!isNaN(num) && num > 0) {
+                      saveData({ ...data, targetChapters: num });
+                    }
+                  }}
+                  keyboardType="numeric"
+                  placeholder="300"
+                  placeholderTextColor="#555"
+                  maxLength={5}
+                />
+                <Text style={styles.chapterCountUnit}>章</Text>
+              </View>
+            )}
             {data.rough.length === 0 ? (
               <Text style={styles.hintText}>
                 {data.outlineLocked ? '大纲已定稿，点AI扩写生成粗纲' : '请先定稿大纲'}
@@ -753,6 +783,37 @@ const styles = StyleSheet.create({
   },
   listItemIcon: {
     marginLeft: 8,
+  },
+  chapterCountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+    backgroundColor: '#111',
+    borderRadius: 8,
+    gap: 8,
+  },
+  chapterCountLabel: {
+    color: '#999',
+    fontSize: 13,
+  },
+  chapterCountInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  chapterCountUnit: {
+    color: '#999',
+    fontSize: 13,
   },
   addItemBtn: {
     flexDirection: 'row',

@@ -599,7 +599,8 @@ export default function AgentConfigScreen() {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+      const baseEndpoint = cfg.baseUrl.endsWith('/v1') ? cfg.baseUrl : `${cfg.baseUrl}/v1`;
+      const res = await fetch(`${baseEndpoint}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
