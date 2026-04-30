@@ -31,11 +31,20 @@ interface QueueItem {
 
 export default function WritingScreen() {
   const router = useSafeRouter();
-  const params = useSafeSearchParams<{ chapterNumber: string; outline: string }>();
+  const params = useSafeSearchParams<{ chapterNumber: string; outline: string; rough: string; detail: string }>();
 
   // 单章模式
   const [chapterNumber, setChapterNumber] = useState(parseInt(params.chapterNumber || '1') || 1);
   const [outlineInput, setOutlineInput] = useState(params.outline || '');
+
+  // 从大纲页传入细纲时，自动切换多章模式
+  const detailFromOutline = React.useMemo(() => {
+    try {
+      return params.detail ? JSON.parse(params.detail) : [];
+    } catch {
+      return [];
+    }
+  }, [params.detail]);
   const [content, setContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
@@ -44,7 +53,19 @@ export default function WritingScreen() {
   const [isMultiMode, setIsMultiMode] = useState(false);
   const [multiCount, setMultiCount] = useState('3');
   const [showMultiModal, setShowMultiModal] = useState(false);
-  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [queue, setQueue] = useState<QueueItem[]>(() => {
+    if (detailFromOutline.length > 0) {
+      return detailFromOutline.map((item: string, idx: number) => ({
+        id: String(new Date().getTime() + idx),
+        chapterNumber: idx + 1,
+        outline: item,
+        content: '',
+        status: 'pending' as const,
+      }));
+    }
+    return [];
+  });
+  const [hasAutoLoaded, setHasAutoLoaded] = useState(false);
   const [currentQueueIdx, setCurrentQueueIdx] = useState(-1);
 
   // 预览
@@ -77,7 +98,17 @@ export default function WritingScreen() {
     useCallback(() => {
       loadSavedItems();
       loadMemory();
-    }, [loadSavedItems, loadMemory])
+      // 自动从大纲页加载细纲
+      if (detailFromOutline.length > 0 && !hasAutoLoaded) {
+        setIsMultiMode(true);
+        setHasAutoLoaded(true);
+        const firstChapter = detailFromOutline[0];
+        if (firstChapter) {
+          setOutlineInput(firstChapter);
+          setChapterNumber(1);
+        }
+      }
+    }, [loadSavedItems, loadMemory, detailFromOutline, hasAutoLoaded])
   );
 
   // 生成单章

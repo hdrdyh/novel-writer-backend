@@ -101,7 +101,7 @@ export default function OutlineScreen() {
       } else if (stage === 'rough') {
         prompt = `请根据以下大纲，拆分为每章一句话的粗纲，每行一章，格式"第X章：xxx"：\n${data.outline}`;
       } else {
-        prompt = `请根据以下粗纲，为每章展开细纲，包含具体情节、场景、情绪走向，每章约100字：\n${data.rough.join('\n')}`;
+        prompt = `请根据以下粗纲，为每章展开细纲。要求：1.每章格式为"第X章：具体情节描述" 2.不要单独输出字数、不要重复章节标题 3.每章内容包含具体场景、角色出场、冲突点、情绪转折、悬念留尾 4.每章约100字 5.每章占一行，不要换行分段。粗纲如下：\n${data.rough.join('\n')}`;
       }
 
       // 用第一个启用的Agent和其绑定的API
@@ -117,7 +117,7 @@ export default function OutlineScreen() {
         body: JSON.stringify({
           model: api.model,
           messages: [
-            { role: 'system', content: agent.systemPrompt || '你是一个专业的小说策划师。' },
+            { role: 'system', content: agent.systemPrompt || '你是一个专业的小说策划师。严格按照用户要求的格式输出，不要添加额外信息。' },
             { role: 'user', content: prompt },
           ],
           max_tokens: 2000,
@@ -130,11 +130,21 @@ export default function OutlineScreen() {
       if (stage === 'outline') {
         saveData({ ...data, outline: content });
       } else if (stage === 'rough') {
-        const lines = content.split('\n').filter((l: string) => l.trim());
+        const lines = content.split('\n').filter((l: string) => l.trim()).filter((l: string) => !/^[\d零一二三四五六七八九十百千]+[、.．]/.test(l.trim()) || l.length > 10);
         saveData({ ...data, rough: lines });
       } else {
-        const lines = content.split('\n').filter((l: string) => l.trim());
-        saveData({ ...data, detail: lines });
+        // 过滤纯字数行，合并标题行和内容
+        const rawLines = content.split('\n').filter((l: string) => l.trim());
+        const filtered: string[] = [];
+        for (const line of rawLines) {
+          const trimmed = line.trim();
+          // 跳过纯字数行（如"约1500字"、"1500字"）
+          if (/^[\d约]+字$/.test(trimmed)) continue;
+          // 跳过纯章节标题行（如"第一章"，没有冒号/描述的）
+          if (/^第[零一二三四五六七八九十百千\d]+章$/.test(trimmed)) continue;
+          filtered.push(trimmed);
+        }
+        saveData({ ...data, detail: filtered });
       }
     } catch (e: any) {
       Alert.alert('AI扩写失败', e.message || '请检查API配置');
