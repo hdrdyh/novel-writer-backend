@@ -164,30 +164,19 @@ export default function OutlineReviewScreen() {
     ]);
   };
 
-  // 单个Agent评审（SSE流式）
-  const reviewWithAgent = async (agent: Agent): Promise<void> => {
+  // 通用LLM调用（SSE流式，走后端/api/v1/llm/chat代理）
+  const callLLM = (agent: Agent, systemPrompt: string, userPrompt: string, thinkingId: string): Promise<void> => {
     return new Promise((resolve) => {
-      const agentName = agent.name || 'Agent';
-      const thinkingId = `thinking_${new Date().getTime()}`;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: thinkingId,
-          sender: 'agent',
-          senderName: agentName,
-          content: '正在思考...',
-          agentRole: agent.role,
-        },
-      ]);
-
-      const focusText = reviewConfig.focusDirection ? `\n\n评审重点：${reviewConfig.focusDirection}` : '';
-      const reviewPrompt = `你是"${agentName}"。${agent.prompt || ''}\n\n你正在评审一份小说${stageName}。请用${reviewConfig.maxWords}字以内给出你的评审意见和改进建议。简洁直接。\n\n以下是需要评审的${stageName}内容：\n${params.content}${focusText}`;
-
-      let agentResponse = '';
       const api = getApiForAgent(agent);
+      let agentResponse = '';
 
       try {
-        const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
+        /**
+         * 服务端文件：server/src/index.ts
+         * 接口：POST /api/v1/llm/chat
+         * Body 参数：messages: Array<{ role: 'system'|'user'|'assistant', content: string }>
+         */
+        const sse = new RNSSE(`${API_BASE_URL}/api/v1/llm/chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -196,11 +185,10 @@ export default function OutlineReviewScreen() {
             'x-base-url': api.baseUrl,
           },
           body: JSON.stringify({
-            chapterId: `outline_review_${new Date().getTime()}`,
-            chapterNumber: 1,
-            outline: reviewPrompt,
-            memoryContext: [],
-            agentCount: 1,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
           }),
         });
 
@@ -229,8 +217,14 @@ export default function OutlineReviewScreen() {
                     : m
                 )
               );
-            } else if (json.type === 'done' && json.content) {
-              agentResponse = json.content;
+            } else if (json.type === 'error') {
+              sse.close();
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === thinkingId ? { ...m, content: `评审失败：${json.content || '未知错误'}` } : m
+                )
+              );
+              resolve();
             }
           } catch (e) {}
         });
@@ -245,10 +239,17 @@ export default function OutlineReviewScreen() {
         });
 
         setTimeout(() => {
+          sse.close();
           if (agentResponse) {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === thinkingId ? { ...m, content: agentResponse, suggestion: agentResponse } : m
+              )
+            );
+          } else {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === thinkingId ? { ...m, content: '回复超时' } : m
               )
             );
           }
@@ -264,6 +265,28 @@ export default function OutlineReviewScreen() {
         resolve();
       }
     });
+  };
+
+  // 单个Agent评审
+  const reviewWithAgent = async (agent: Agent): Promise<void> => {
+    const agentName = agent.name || 'Agent';
+    const thinkingId = `thinking_${new Date().getTime()}_${Math.random()}`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: thinkingId,
+        sender: 'agent',
+        senderName: agentName,
+        content: '正在思考...',
+        agentRole: agent.role,
+      },
+    ]);
+
+    const focusText = reviewConfig.focusDirection ? `\n\n评审重点：${reviewConfig.focusDirection}` : '';
+    const systemPrompt = `你是"${agentName}"，一位专业的小说评审员。${agent.prompt || ''}\n\n你的职责是评审小说${stageName}，给出简洁的评审意见和改进建议。字数控制在${reviewConfig.maxWords}字以内。不要生成新的内容，只做评审。`;
+    const userPrompt = `以下是需要评审的${stageName}内容：\n${params.content}${focusText}\n\n请给出你的评审意见和改进建议。`;
+
+    await callLLM(agent, systemPrompt, userPrompt, thinkingId);
   };
 
   // 开始AI评审（使用SSE流式）
@@ -315,66 +338,17 @@ export default function OutlineReviewScreen() {
     const agent = agents[agentIndex];
     const agentName = agent.name || 'Agent';
 
-    const thinkingId = `discuss_${new Date().getTime()}`;
+    const thinkingId = `discuss_${new Date().getTime()}_${Math.random()}`;
     setMessages(prev => [
       ...prev,
       { id: thinkingId, sender: 'agent', senderName: agentName, content: '正在思考...', agentRole: agent.role },
     ]);
 
-    const discussPrompt = `你是"${agentName}"。${agent.prompt || ''}\n\n你正在参与${stageName}的群聊讨论。作者说："${userText}"\n\n用${reviewConfig.maxWords}字以内回复，简洁直接，给出你的看法或建议。`;
-    let agentResponse = '';
-    const api = getApiForAgent(agent);
+    const systemPrompt = `你是"${agentName}"，一位专业的小说评审员。${agent.prompt || ''}\n\n你正在参与${stageName}的群聊讨论。字数控制在${reviewConfig.maxWords}字以内，简洁直接。`;
+    const userPrompt = `作者说："${userText}"\n\n请给出你的看法或建议。`;
 
     setLoading(true);
-    try {
-      const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': api.apiKey,
-          'x-model': api.model,
-          'x-base-url': api.baseUrl,
-        },
-        body: JSON.stringify({
-          chapterId: `discuss_${new Date().getTime()}`,
-          chapterNumber: 1,
-          outline: discussPrompt,
-          memoryContext: [],
-          agentCount: 1,
-        }),
-      });
-
-      sse.addEventListener('message', (event) => {
-        if (event.data === '[DONE]') {
-          sse.close();
-          setMessages(prev =>
-            prev.map(m => m.id === thinkingId ? { ...m, content: agentResponse || '暂无回应', suggestion: agentResponse } : m)
-          );
-          return;
-        }
-        try {
-          const json = JSON.parse(event.data || '{}');
-          if (json.type === 'chunk' && json.content) {
-            agentResponse += json.content;
-            setMessages(prev =>
-              prev.map(m => m.id === thinkingId ? { ...m, content: agentResponse, suggestion: agentResponse } : m)
-            );
-          }
-        } catch (e) {}
-      });
-
-      sse.addEventListener('error', () => {
-        setMessages(prev => prev.map(m => m.id === thinkingId ? { ...m, content: '回复失败' } : m));
-      });
-
-      setTimeout(() => {
-        setMessages(prev =>
-          prev.map(m => m.id === thinkingId ? { ...m, content: agentResponse || '回复超时', suggestion: agentResponse } : m)
-        );
-      }, 20000);
-    } catch (e) {
-      setMessages(prev => prev.map(m => m.id === thinkingId ? { ...m, content: '回复失败' } : m));
-    }
+    await callLLM(agent, systemPrompt, userPrompt, thinkingId);
     setLoading(false);
   };
 
@@ -525,6 +499,12 @@ export default function OutlineReviewScreen() {
                   </Pressable>
                 </View>
                 <View style={styles.actionRow}>
+                  {!loading && (
+                    <Pressable style={styles.regenerateBtn} onPress={handleStartReview}>
+                      <Feather name="refresh-cw" size={14} color="#888" />
+                      <Text style={styles.regenerateText}>重新评审</Text>
+                    </Pressable>
+                  )}
                   {adoptHistory.length > 0 && (
                     <Pressable style={styles.undoBtn} onPress={handleUndo}>
                       <Feather name="rotate-ccw" size={14} color="#888" />
@@ -758,6 +738,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
     marginTop: 8,
+  },
+  regenerateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  regenerateText: {
+    color: '#888',
+    fontSize: 12,
   },
   undoBtn: {
     flexDirection: 'row',

@@ -159,30 +159,9 @@ export default function ChapterReviewScreen() {
     ]);
   };
 
-  // 单个Agent评审
-  const reviewWithAgent = async (agent: any): Promise<void> => {
+  // 通用LLM调用（SSE流式，走后端/api/v1/llm/chat代理）
+  const callLLM = (agent: any, systemPrompt: string, userPrompt: string, thinkingId: string): Promise<void> => {
     return new Promise((resolve) => {
-      const agentName = agent.name || 'Agent';
-
-      const thinkingId = `thinking_${new Date().getTime()}`;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: thinkingId,
-          type: 'agent',
-          agentName,
-          agentRole: agent.role,
-          content: '正在思考...',
-          timestamp: new Date().getTime(),
-        },
-      ]);
-
-      const focusText = reviewConfig.focusDirection ? `\n\n评审重点：${reviewConfig.focusDirection}` : '';
-      const reviewPrompt = `你是"${agentName}"。${agent.prompt || ''}\n\n请评审以下章节内容（${reviewConfig.maxWords}字以内简要评价，指出1-2个具体问题和改进建议）：\n\n章纲：${chapterOutline}\n\n正文：${currentContent.substring(0, 2000)}${focusText}`;
-
-      let agentResponse = '';
-
-      // 确定用哪个API
       let useApiKey = defaultApi.apiKey;
       let useBaseUrl = defaultApi.baseUrl;
       let useModel = defaultApi.model;
@@ -195,8 +174,15 @@ export default function ChapterReviewScreen() {
         }
       }
 
+      let agentResponse = '';
+
       try {
-        const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
+        /**
+         * 服务端文件：server/src/index.ts
+         * 接口：POST /api/v1/llm/chat
+         * Body 参数：messages: Array<{ role: 'system'|'user'|'assistant', content: string }>
+         */
+        const sse = new RNSSE(`${API_BASE_URL}/api/v1/llm/chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -205,11 +191,10 @@ export default function ChapterReviewScreen() {
             'x-base-url': useBaseUrl,
           },
           body: JSON.stringify({
-            chapterId: `review_${new Date().getTime()}`,
-            chapterNumber: parseInt(chapterNumber),
-            outline: reviewPrompt,
-            memoryContext: [],
-            agentCount: 1,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
           }),
         });
 
@@ -238,8 +223,14 @@ export default function ChapterReviewScreen() {
                     : m
                 )
               );
-            } else if (json.type === 'done' && json.content) {
-              agentResponse = json.content;
+            } else if (json.type === 'error') {
+              sse.close();
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === thinkingId ? { ...m, content: `评审失败：${json.content || '未知错误'}` } : m
+                )
+              );
+              resolve();
             }
           } catch (e) {}
         });
@@ -254,10 +245,17 @@ export default function ChapterReviewScreen() {
         });
 
         setTimeout(() => {
+          sse.close();
           if (agentResponse) {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === thinkingId ? { ...m, content: agentResponse, suggestion: agentResponse } : m
+              )
+            );
+          } else {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === thinkingId ? { ...m, content: '回复超时' } : m
               )
             );
           }
@@ -273,6 +271,30 @@ export default function ChapterReviewScreen() {
         resolve();
       }
     });
+  };
+
+  // 单个Agent评审
+  const reviewWithAgent = async (agent: any): Promise<void> => {
+    const agentName = agent.name || 'Agent';
+
+    const thinkingId = `thinking_${new Date().getTime()}_${Math.random()}`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: thinkingId,
+        type: 'agent',
+        agentName,
+        agentRole: agent.role,
+        content: '正在思考...',
+        timestamp: new Date().getTime(),
+      },
+    ]);
+
+    const focusText = reviewConfig.focusDirection ? `\n\n评审重点：${reviewConfig.focusDirection}` : '';
+    const systemPrompt = `你是"${agentName}"，一位专业的小说章节评审员。${agent.prompt || ''}\n\n你的职责是评审小说章节，给出简洁的评审意见和改进建议。字数控制在${reviewConfig.maxWords}字以内。不要生成新的章节内容，只做评审。`;
+    const userPrompt = `请评审以下章节内容：\n\n章纲：${chapterOutline}\n\n正文：${currentContent.substring(0, 2000)}${focusText}\n\n请指出1-2个具体问题和改进建议。`;
+
+    await callLLM(agent, systemPrompt, userPrompt, thinkingId);
   };
 
   // 开始AI评审
@@ -334,7 +356,7 @@ export default function ChapterReviewScreen() {
     const agent = activeReviewAgents[agentIndex];
     const agentName = agent.name || 'Agent';
 
-    const thinkingId = `discuss_${new Date().getTime()}`;
+    const thinkingId = `discuss_${new Date().getTime()}_${Math.random()}`;
     setMessages((prev) => [
       ...prev,
       {
@@ -347,93 +369,10 @@ export default function ChapterReviewScreen() {
       },
     ]);
 
-    const discussPrompt = `你是"${agentName}"。${agent.prompt || ''}\n\n作者说："${userText}"\n\n请基于章节内容回应作者的想法（${reviewConfig.maxWords}字以内）：\n\n章纲：${chapterOutline}\n\n正文：${currentContent.substring(0, 1500)}`;
+    const systemPrompt = `你是"${agentName}"，一位专业的小说章节评审员。${agent.prompt || ''}\n\n你正在参与章节评审的群聊讨论。字数控制在${reviewConfig.maxWords}字以内，简洁直接。`;
+    const userPrompt = `作者说："${userText}"\n\n请基于章节内容回应作者的想法：\n\n章纲：${chapterOutline}\n\n正文：${currentContent.substring(0, 1500)}`;
 
-    let agentResponse = '';
-
-    let useApiKey = defaultApi.apiKey;
-    let useBaseUrl = defaultApi.baseUrl;
-    let useModel = defaultApi.model;
-    if (agent.apiId) {
-      const cfg = apiConfigs.find((c) => c.id === agent.apiId);
-      if (cfg) {
-        useApiKey = cfg.apiKey;
-        useBaseUrl = cfg.baseUrl;
-        useModel = cfg.model;
-      }
-    }
-
-    try {
-      const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': useApiKey,
-          'x-model': useModel,
-          'x-base-url': useBaseUrl,
-        },
-        body: JSON.stringify({
-          chapterId: `discuss_${new Date().getTime()}`,
-          chapterNumber: parseInt(chapterNumber),
-          outline: discussPrompt,
-          memoryContext: [],
-          agentCount: 1,
-        }),
-      });
-
-      sse.addEventListener('message', (event) => {
-        if (event.data === '[DONE]') {
-          sse.close();
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === thinkingId
-                ? { ...m, content: agentResponse || '暂无回应', suggestion: agentResponse }
-                : m
-            )
-          );
-          return;
-        }
-
-        try {
-          const json = JSON.parse(event.data || '{}');
-          if (json.type === 'chunk' && json.content) {
-            agentResponse += json.content;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === thinkingId
-                  ? { ...m, content: agentResponse, suggestion: agentResponse }
-                  : m
-              )
-            );
-          }
-        } catch (e) {}
-      });
-
-      sse.addEventListener('error', () => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === thinkingId ? { ...m, content: '回复失败' } : m
-          )
-        );
-      });
-
-      setTimeout(() => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === thinkingId
-              ? { ...m, content: agentResponse || '回复超时', suggestion: agentResponse }
-              : m
-          )
-        );
-      }, 20000);
-
-    } catch (error) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === thinkingId ? { ...m, content: '回复失败' } : m
-        )
-      );
-    }
+    await callLLM(agent, systemPrompt, userPrompt, thinkingId);
   };
 
   // 采纳建议
@@ -611,6 +550,12 @@ export default function ChapterReviewScreen() {
                   <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirmChanges}>
                     <Ionicons name="checkmark-done" size={18} color="#000" />
                     <Text style={styles.confirmBtnText}>确定修改</Text>
+                  </TouchableOpacity>
+                )}
+                {!isReviewing && messages.length > 0 && (
+                  <TouchableOpacity style={styles.regenerateBtn} onPress={handleStartReview}>
+                    <Ionicons name="refresh" size={18} color="#60a5fa" />
+                    <Text style={styles.regenerateBtnText}>重新评审</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -793,6 +738,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#fbbf2444',
   },
+  regenerateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#60a5fa44',
+  },
+  regenerateBtnText: { color: '#60a5fa', fontSize: 14, fontWeight: '500' },
   undoBtnText: { color: '#fbbf24', fontSize: 14, fontWeight: '500' },
   confirmBtn: {
     flexDirection: 'row',
