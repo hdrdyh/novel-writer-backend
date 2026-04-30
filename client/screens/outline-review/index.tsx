@@ -88,6 +88,7 @@ export default function OutlineReviewScreen() {
   // 配置数据
   const [reviewAgents, setReviewAgents] = useState<Agent[]>([]);
   const [apiConfigs, setApiConfigs] = useState<ApiConfig[]>([]);
+  const [applying, setApplying] = useState(false);
   const [defaultApi, setDefaultApi] = useState<{ apiKey: string; baseUrl: string; model: string }>({
     apiKey: '',
     baseUrl: '',
@@ -373,18 +374,103 @@ export default function OutlineReviewScreen() {
     setAdoptHistory(prev => prev.slice(0, -1));
   }, [adoptHistory]);
 
-  // 确定修改
+  // 确定修改：根据采纳的评审意见，让AI修改内容后写回大纲数据
   const handleConfirm = useCallback(() => {
     const adopted = messages.filter(m => adoptedIds.includes(m.id));
-    AsyncStorage.setItem('outline_review_adopted', JSON.stringify({
-      stage: params.stage,
-      suggestions: adopted.map(m => ({ name: m.senderName, content: m.content })),
-      timestamp: new Date().getTime(),
-    }));
-    Alert.alert('已保存', '评审建议已保存，返回大纲页可查看', [
-      { text: '好的', onPress: () => router.back() },
-    ]);
-  }, [messages, adoptedIds, params.stage, router]);
+    if (adopted.length === 0) {
+      Alert.alert('提示', '请先采纳至少一条评审意见');
+      return;
+    }
+
+    const suggestionsText = adopted.map(m => `【${m.senderName}的意见】：${m.content}`).join('\n\n');
+    setApplying(true);
+
+    // 用第一个启用的评审Agent来执行修改
+    const enabledAgents = reviewAgents.filter((a: Agent) => a.enabled);
+    const agent = enabledAgents[0];
+    const api = agent ? getApiForAgent(agent) : apiConfigs[0];
+
+    if (!api || !api.apiKey || !api.baseUrl) {
+      Alert.alert('错误', '请先配置API');
+      setApplying(false);
+      return;
+    }
+
+    const base = api.baseUrl.replace(/\/+$/, '');
+    const url = base.includes('/v1') ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+
+    const systemPrompt = '你是一个专业的小说编辑。你的任务是根据评审意见修改给定的内容。请直接输出修改后的完整内容，不要输出任何解释说明。';
+    const userPrompt = `以下是当前的${stageName}内容：\n${params.content}\n\n请根据以下评审意见修改上述内容：\n${suggestionsText}\n\n请直接输出修改后的完整${stageName}内容：`;
+
+    let result = '';
+
+    const sse = new RNSSE(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${api.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: api.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        stream: true,
+        max_tokens: 16000,
+      }),
+      method: 'POST',
+    });
+
+    sse.addEventListener('message', (event: any) => {
+      if (event.data === '[DONE]') {
+        sse.close();
+        // 修改完成，写回大纲数据
+        const applyResult = async () => {
+          try {
+            const stored = await AsyncStorage.getItem('outline_data');
+            const outlineData = stored ? JSON.parse(stored) : {};
+            const stage = params.stage as string;
+            if (stage === 'outline') {
+              outlineData.outline = result.trim();
+              outlineData.outlineLocked = false; // 解除定稿，让用户可以再编辑
+            } else if (stage === 'rough') {
+              // 粗纲是字符串数组，把修改后的内容按行拆分
+              const lines = result.trim().split('\n').filter((l: string) => l.trim());
+              outlineData.rough = lines;
+              outlineData.roughLocked = false;
+            } else if (stage === 'detail') {
+              // 细纲也是字符串数组
+              const lines = result.trim().split('\n').filter((l: string) => l.trim());
+              outlineData.detail = lines;
+              outlineData.detailLocked = false;
+            }
+            await AsyncStorage.setItem('outline_data', JSON.stringify(outlineData));
+            setApplying(false);
+            Alert.alert('修改完成', '已根据评审意见修改内容，返回大纲页可查看', [
+              { text: '好的', onPress: () => router.back() },
+            ]);
+          } catch {
+            setApplying(false);
+            Alert.alert('错误', '保存修改失败');
+          }
+        };
+        applyResult();
+        return;
+      }
+      try {
+        const parsed = JSON.parse(event.data);
+        const delta = parsed.choices?.[0]?.delta?.content;
+        if (delta) {
+          result += delta;
+        }
+      } catch {}
+    });
+
+    sse.addEventListener('error', () => {
+      setApplying(false);
+      Alert.alert('修改失败', 'AI修改内容时出错，请检查API配置');
+    });
+  }, [messages, adoptedIds, params.stage, params.content, reviewAgents, apiConfigs, stageName, getApiForAgent, router]);
 
   return (
     <Screen style={styles.screen}>
@@ -519,9 +605,9 @@ export default function OutlineReviewScreen() {
                     </Pressable>
                   )}
                   {adoptedIds.length > 0 && (
-                    <Pressable style={styles.confirmBtn} onPress={handleConfirm}>
+                    <Pressable style={[styles.confirmBtn, applying && { opacity: 0.5 }]} onPress={handleConfirm} disabled={applying}>
                       <Feather name="check-circle" size={14} color="#000" />
-                      <Text style={styles.confirmText}>确定修改</Text>
+                      <Text style={styles.confirmText}>{applying ? 'AI修改中...' : '确定修改'}</Text>
                     </Pressable>
                   )}
                 </View>

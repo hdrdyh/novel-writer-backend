@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   View,
@@ -50,6 +50,8 @@ export default function OutlineScreen() {
   const [editIndex, setEditIndex] = useState(-1); // 当前编辑的粗纲/细纲索引
   const [editStage, setEditStage] = useState<'rough' | 'detail'>('rough'); // 当前编辑的是粗纲还是细纲
   const [editText, setEditText] = useState('');
+  const [targetInput, setTargetInput] = useState(String(data.targetChapters || 300));
+  useEffect(() => { setTargetInput(String(data.targetChapters || 300)); }, [data.targetChapters]);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importStage, setImportStage] = useState<OutlineStage>('outline');
@@ -387,8 +389,9 @@ export default function OutlineScreen() {
                 <Text style={styles.chapterCountLabel}>目标章节数</Text>
                 <TextInput
                   style={styles.chapterCountInput}
-                  value={String(data.targetChapters || 300)}
+                  value={targetInput}
                   onChangeText={(text) => {
+                    setTargetInput(text);
                     const num = parseInt(text, 10);
                     if (!isNaN(num) && num > 0) {
                       saveData({ ...data, targetChapters: num });

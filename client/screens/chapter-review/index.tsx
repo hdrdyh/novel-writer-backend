@@ -408,25 +408,82 @@ export default function ChapterReviewScreen() {
   };
 
   // 确定修改
+  const [applying, setApplying] = useState(false);
+
   const handleConfirmChanges = () => {
     const adoptedMsgs = messages.filter((m) => m.adopted && m.type === 'agent');
     if (adoptedMsgs.length === 0) {
       Alert.alert('提示', '没有采纳任何建议，请先采纳至少一条建议');
       return;
     }
-    Alert.alert('确定修改', '确认采纳的建议将应用到章节内容？', [
+    Alert.alert('确定修改', 'AI将根据采纳的建议重写章节内容，确认继续？', [
       { text: '取消', style: 'cancel' },
       {
         text: '确定',
-        onPress: () => {
-          // 把采纳的建议合并到内容中
-          const suggestions = adoptedMsgs.map((m) => `[${m.agentName}的建议] ${m.suggestion}`).join('\n\n');
-          const updatedContent = currentContent + '\n\n--- 评审建议 ---\n' + suggestions;
-          setCurrentContent(updatedContent);
-          Alert.alert('成功', '已应用采纳的建议到章节内容');
-        },
+        onPress: () => applyReviewToChapter(adoptedMsgs),
       },
     ]);
+  };
+
+  const applyReviewToChapter = async (adoptedMsgs: ChatMessage[]) => {
+    setApplying(true);
+    try {
+      const suggestions = adoptedMsgs.map((m) => `[${m.agentName}] ${m.suggestion}`).join('\n\n');
+      const apiConfigsRaw = await AsyncStorage.getItem('apiConfigs');
+      const apiConfigs: ApiConfig[] = apiConfigsRaw ? JSON.parse(apiConfigsRaw) : [];
+      if (apiConfigs.length === 0) {
+        Alert.alert('错误', '请先在设置中配置API');
+        setApplying(false);
+        return;
+      }
+      const api = apiConfigs[0];
+      const apiKey = api.apiKey || '';
+      const baseUrl = api.baseUrl || '';
+      if (!apiKey || !baseUrl) {
+        Alert.alert('错误', '请先配置API Key和地址');
+        setApplying(false);
+        return;
+      }
+      const url = baseUrl.replace(/\/+$/, '') + (baseUrl.includes('/v1') ? '' : '/v1') + '/chat/completions';
+
+      const systemPrompt = '你是一个专业的小说修改编辑。根据评审建议修改章节内容，保持原有风格和故事线，只修改评审指出的部分。直接输出修改后的完整章节内容，不要加任何说明。';
+      const userPrompt = `以下是当前章节内容：\n${currentContent}\n\n请根据以下评审建议修改：\n${suggestions}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: api.model || 'deepseek-chat',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          max_tokens: 16000,
+        }),
+      });
+
+      const result = await response.json();
+      const revisedContent = result.choices?.[0]?.message?.content || '';
+      if (revisedContent) {
+        setCurrentContent(revisedContent);
+        // 保存修改后的内容到AsyncStorage，写作台会读取
+        await AsyncStorage.setItem('chapter_review_result', JSON.stringify({
+          chapterNumber,
+          content: revisedContent,
+          timestamp: Date.now(),
+        }));
+        Alert.alert('成功', '已根据评审建议重写章节内容');
+      } else {
+        Alert.alert('错误', 'AI未返回有效内容，请重试');
+      }
+    } catch (e: any) {
+      Alert.alert('修改失败', e.message || '未知错误');
+    } finally {
+      setApplying(false);
+    }
   };
 
   const getAgentColor = (name?: string) => {

@@ -113,6 +113,25 @@ export default function WritingScreen() {
     useCallback(() => {
       loadSavedItems();
       loadMemory();
+      // 检查章节评审结果
+      (async () => {
+        try {
+          const resultStr = await AsyncStorage.getItem('chapter_review_result');
+          if (resultStr) {
+            const result = JSON.parse(resultStr);
+            await AsyncStorage.removeItem('chapter_review_result');
+            // 找到对应章节，更新内容
+            const idx = queue.findIndex(q => q.chapterNumber === Number(result.chapterNumber));
+            if (idx >= 0) {
+              const newQueue = [...queue];
+              newQueue[idx] = { ...newQueue[idx], content: result.content, status: 'done' as const };
+              setQueue(newQueue);
+            } else {
+              setGeneratedContent(result.content);
+            }
+          }
+        } catch (_e) { /* ignore */ }
+      })();
       // 自动从大纲页加载细纲
       if (parsedDetail.length > 0 && !hasAutoLoaded) {
         setIsMultiMode(true);
@@ -123,7 +142,7 @@ export default function WritingScreen() {
           setChapterNumber(1);
         }
       }
-    }, [loadSavedItems, loadMemory, parsedDetail, hasAutoLoaded])
+    }, [loadSavedItems, loadMemory, parsedDetail, hasAutoLoaded, queue])
   );
 
   // 生成单章
@@ -132,7 +151,7 @@ export default function WritingScreen() {
     const targetChNum = chNum || chapterNumber;
 
     if (!targetOutline.trim()) {
-      Alert.alert('提示', '请输入本章章纲');
+      Alert.alert('提示', '请先在大纲页生成细纲，然后从大纲页点击"开始写作"');
       return;
     }
 
@@ -387,29 +406,33 @@ export default function WritingScreen() {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.outlineSection}>
-                <Text style={styles.sectionLabel}>章纲</Text>
-                <TextInput
-                  style={styles.outlineInput}
-                  placeholder="输入本章章纲，描述本章主要情节..."
-                  placeholderTextColor="#555"
-                  value={outlineInput}
-                  onChangeText={setOutlineInput}
-                  multiline
-                />
-              </View>
+              {outlineInput ? (
+                <View style={styles.outlineSection}>
+                  <Text style={styles.sectionLabel}>本章细纲</Text>
+                  <ScrollView style={styles.outlineDisplay} nestedScrollEnabled>
+                    <Text style={styles.outlineDisplayText}>{outlineInput}</Text>
+                  </ScrollView>
+                </View>
+              ) : (
+                <View style={styles.noOutlineHint}>
+                  <Ionicons name="information-circle-outline" size={20} color="#666" />
+                  <Text style={styles.noOutlineHintText}>请先在大纲页生成细纲，然后点击&ldquo;开始写作&rdquo;进入创作</Text>
+                </View>
+              )}
 
               <TouchableOpacity
-                style={[styles.generateBtn, isGenerating && styles.generateBtnDisabled]}
+                style={[styles.generateBtn, (isGenerating || !outlineInput) && styles.generateBtnDisabled]}
                 onPress={() => handleGenerate()}
-                disabled={isGenerating}
+                disabled={isGenerating || !outlineInput}
               >
                 {isGenerating ? (
                   <ActivityIndicator color="#000" />
                 ) : (
                   <>
-                    <Ionicons name="bulb" size={20} color="#000" />
-                    <Text style={styles.generateBtnText}>开始创作</Text>
+                    <Ionicons name="bulb" size={20} color={!outlineInput ? '#333' : '#000'} />
+                    <Text style={[styles.generateBtnText, !outlineInput && { color: '#333' }]}>
+                      {outlineInput ? '开始创作' : '请先生成细纲'}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -728,16 +751,33 @@ const styles = StyleSheet.create({
   chapterText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   outlineSection: { marginBottom: 16 },
   sectionLabel: { color: '#888', fontSize: 13, marginBottom: 8, fontWeight: '500' },
-  outlineInput: {
+  outlineDisplay: {
     backgroundColor: '#1a1a1a',
     borderRadius: 8,
     padding: 14,
-    color: '#fff',
-    fontSize: 15,
-    minHeight: 60,
-    textAlignVertical: 'top',
     borderWidth: 1,
     borderColor: '#333',
+    maxHeight: 120,
+  },
+  outlineDisplayText: {
+    color: '#ccc',
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  noOutlineHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#333',
+    gap: 8,
+  },
+  noOutlineHintText: {
+    color: '#666',
+    fontSize: 13,
+    flex: 1,
   },
   generateBtn: {
     backgroundColor: '#fff',
