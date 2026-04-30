@@ -32,7 +32,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: '粗纲',
+          title: '设计',
           tabBarIcon: ({ color }) => (
             <Ionicons name="document-text-outline" size={22} color={color} />
           ),
