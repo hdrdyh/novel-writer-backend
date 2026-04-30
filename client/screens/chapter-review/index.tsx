@@ -82,9 +82,9 @@ export default function ChapterReviewScreen() {
   });
   const [apiConfigs, setApiConfigs] = useState<ApiConfig[]>([]);
   const [defaultApi, setDefaultApi] = useState<{ apiKey: string; baseUrl: string; model: string }>({
-    apiKey: 'sk-2d333ed0b01a4fe899df1c7c6cbe5617',
-    baseUrl: 'https://api.deepseek.com',
-    model: 'deepseek-v4-flash',
+    apiKey: '',
+    baseUrl: '',
+    model: '',
   });
 
   // 后端Agent列表
@@ -136,6 +136,12 @@ export default function ChapterReviewScreen() {
   // 开始AI评审
   const handleStartReview = async () => {
     if (isReviewing) return;
+
+    // 检查API配置
+    if (apiConfigs.length === 0) {
+      Alert.alert('未配置API', '请先在写作流水线中添加API配置');
+      return;
+    }
 
     const reviewAgents = getReviewAgents();
     if (reviewAgents.length === 0) {

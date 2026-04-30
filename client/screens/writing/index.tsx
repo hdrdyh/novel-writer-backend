@@ -90,6 +90,14 @@ export default function WritingScreen() {
       return;
     }
 
+    // 检查API配置
+    const storedApi = await AsyncStorage.getItem('apiConfigs');
+    const apiList = storedApi ? JSON.parse(storedApi) : [];
+    if (apiList.length === 0) {
+      Alert.alert('提示', '请先在"写作流水线"中配置API');
+      return;
+    }
+
     setIsGenerating(true);
     setContent('');
     setCurrentStep(0);
@@ -97,13 +105,23 @@ export default function WritingScreen() {
     let fullContent = '';
 
     try {
+      // 读取用户配置的API
+      const apisStr = await AsyncStorage.getItem('api_configs');
+      const apis = apisStr ? JSON.parse(apisStr) : [];
+      if (apis.length === 0) {
+        Alert.alert('提示', '请先在写作流水线中配置API');
+        setIsGenerating(false);
+        return;
+      }
+      const api = apis[0];
+
       const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': 'sk-2d333ed0b01a4fe899df1c7c6cbe5617',
-          'x-model': 'deepseek-v4-flash',
-          'x-base-url': 'https://api.deepseek.com',
+          'x-api-key': api.apiKey || '',
+          'x-model': api.model || 'deepseek-chat',
+          'x-base-url': api.baseUrl || 'https://api.deepseek.com',
         },
         body: JSON.stringify({
           chapterId: `ch_${targetChNum}`,
