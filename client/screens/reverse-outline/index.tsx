@@ -55,10 +55,19 @@ export default function ReverseOutlineScreen() {
     try {
       const generated: any = {};
 
+      // 获取Agent对应的API配置
+      const getApiForAgent = (agent: any) => {
+        if (agent?.apiId) {
+          const cfg = apiConfigs.find((c: any) => c.id === agent.apiId);
+          if (cfg) return cfg;
+        }
+        return apiConfigs[0];
+      };
+
       // 第1步：提取世界观
       setProgress('正在提取世界观设定...');
       const worldAgent = enabledAgents.find((a: any) => a.role === 'worldbuilder') || enabledAgents[0];
-      const worldApi = apiConfigs.find((c: any) => c.name === worldAgent?.apiName) || apiConfigs[0];
+      const worldApi = getApiForAgent(worldAgent);
 
       if (worldApi) {
         const worldRes = await fetch(`${worldApi.baseUrl}/chat/completions`, {
@@ -85,7 +94,7 @@ export default function ReverseOutlineScreen() {
       // 第2步：提取人物
       setProgress('正在提取人物设定...');
       const charAgent = enabledAgents.find((a: any) => a.role === 'character') || enabledAgents[1] || enabledAgents[0];
-      const charApi = apiConfigs.find((c: any) => c.name === charAgent?.apiName) || apiConfigs[0];
+      const charApi = getApiForAgent(charAgent);
 
       if (charApi) {
         const charRes = await fetch(`${charApi.baseUrl}/chat/completions`, {
@@ -112,7 +121,7 @@ export default function ReverseOutlineScreen() {
       // 第3步：提取大纲
       setProgress('正在反推大纲...');
       const plotAgent = enabledAgents.find((a: any) => a.role === 'plotter') || enabledAgents[2] || enabledAgents[0];
-      const plotApi = apiConfigs.find((c: any) => c.name === plotAgent?.apiName) || apiConfigs[0];
+      const plotApi = getApiForAgent(plotAgent);
 
       if (plotApi) {
         const outlineRes = await fetch(`${plotApi.baseUrl}/chat/completions`, {
@@ -194,18 +203,37 @@ export default function ReverseOutlineScreen() {
 
   const handleSaveToOutline = async () => {
     try {
+      // 读取现有大纲数据
+      const existingStr = await AsyncStorage.getItem('outline_data');
+      const existing = existingStr ? JSON.parse(existingStr) : {};
+
+      // 将反推结果合并到大纲数据结构
+      const roughLines = result.roughOutline.split('\n').filter((l: string) => l.trim());
+      const detailLines = result.detailedOutline.split('\n').filter((l: string) => l.trim());
+
       const outlineData = {
-        outline: result.outline,
-        roughOutline: result.roughOutline,
-        detailedOutline: result.detailedOutline,
-        characters: result.characters,
-        worldview: result.worldview,
-        outlineFinalized: true,
-        roughFinalized: true,
-        detailedFinalized: true,
+        outline: result.outline || existing.outline || '',
+        rough: roughLines.length > 0 ? roughLines : existing.rough || [],
+        detail: detailLines.length > 0 ? detailLines : existing.detail || [],
+        stage: 'detail' as const,
+        outlineLocked: true,
+        roughLocked: true,
+        detailLocked: true,
       };
-      await AsyncStorage.setItem('outlineData', JSON.stringify(outlineData));
-      Alert.alert('保存成功', '已写入设计页，可前往查看和编辑', [
+      await AsyncStorage.setItem('outline_data', JSON.stringify(outlineData));
+
+      // 同时保存人物和世界观到记忆库
+      const memStr = await AsyncStorage.getItem('memory');
+      const memories = memStr ? JSON.parse(memStr) : [];
+      if (result.worldview) {
+        memories.push({ id: `worldview_${new Date().getTime()}`, type: 'worldview', content: result.worldview, timestamp: new Date().getTime() });
+      }
+      if (result.characters) {
+        memories.push({ id: `character_${new Date().getTime()}`, type: 'character', content: result.characters, timestamp: new Date().getTime() });
+      }
+      await AsyncStorage.setItem('memory', JSON.stringify(memories));
+
+      Alert.alert('保存成功', '大纲已写入设计页，人物和世界观已存入记忆库', [
         { text: '去看看', onPress: () => router.replace('/') },
       ]);
     } catch {

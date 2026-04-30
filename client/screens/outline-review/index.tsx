@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,25 +8,67 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import RNSSE from 'react-native-sse';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
+
+interface Agent {
+  id: string;
+  name: string;
+  role: string;
+  prompt: string;
+  enabled: boolean;
+  order: number;
+  apiId?: string;
+}
+
+interface ApiConfig {
+  id: string;
+  name: string;
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
+interface ReviewConfig {
+  focusDirection: string;
+  rounds: number;
+  maxWords: number;
+}
 
 interface ChatMessage {
   id: string;
-  sender: 'user' | 'agent';
+  sender: 'user' | 'agent' | 'system';
   senderName: string;
   content: string;
   agentRole?: string;
   adopted?: boolean;
+  suggestion?: string;
 }
 
 const STAGE_NAMES: Record<string, string> = {
   outline: '大纲',
   rough: '粗纲',
   detail: '细纲',
+};
+
+const AGENT_COLORS: Record<string, string> = {
+  '逻辑审查员': '#60a5fa',
+  '节奏分析师': '#fbbf24',
+  '读者视角': '#f472b6',
+  '世界观架构师': '#60a5fa',
+  '人物设定师': '#f472b6',
+  '情节设计师': '#fbbf24',
+  '文笔润色师': '#a78bfa',
+  '审核校对师': '#4ade80',
 };
 
 export default function OutlineReviewScreen() {
@@ -41,83 +83,219 @@ export default function OutlineReviewScreen() {
   const [adoptHistory, setAdoptHistory] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
 
-  // 读取配置
-  const getConfig = useCallback(async () => {
-    const agentsStr = await AsyncStorage.getItem('agentConfigs');
-    const apisStr = await AsyncStorage.getItem('apiConfigs');
-    const reviewStr = await AsyncStorage.getItem('reviewConfig');
-    const agents = agentsStr ? JSON.parse(agentsStr) : [];
-    const apis = apisStr ? JSON.parse(apisStr) : [];
-    const review = reviewStr ? JSON.parse(reviewStr) : {};
-    const enabledAgents = agents.filter((a: any) => a.enabled);
-    const reviewAgents = enabledAgents.filter((a: any) =>
-      review.agentIds ? review.agentIds.includes(a.id) : true
-    );
-    const wordLimit = review.wordLimit || 80;
-    return { agents: reviewAgents.length > 0 ? reviewAgents : enabledAgents, apis, wordLimit };
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // 配置数据
+  const [reviewAgents, setReviewAgents] = useState<Agent[]>([]);
+  const [apiConfigs, setApiConfigs] = useState<ApiConfig[]>([]);
+  const [defaultApi, setDefaultApi] = useState<{ apiKey: string; baseUrl: string; model: string }>({
+    apiKey: '',
+    baseUrl: '',
+    model: '',
+  });
+  const [reviewConfig, setReviewConfig] = useState<ReviewConfig>({
+    focusDirection: '',
+    rounds: 1,
+    maxWords: 80,
+  });
+
+  const loadConfig = useCallback(async () => {
+    try {
+      const [reviewTeamData, apiData, reviewData] = await Promise.all([
+        AsyncStorage.getItem('reviewTeamConfigs'),
+        AsyncStorage.getItem('apiConfigs'),
+        AsyncStorage.getItem('reviewConfig'),
+      ]);
+      if (reviewTeamData) setReviewAgents(JSON.parse(reviewTeamData));
+      if (apiData) {
+        const parsed: ApiConfig[] = JSON.parse(apiData);
+        setApiConfigs(parsed);
+        if (parsed.length > 0) {
+          setDefaultApi({ apiKey: parsed[0].apiKey, baseUrl: parsed[0].baseUrl, model: parsed[0].model });
+        }
+      }
+      if (reviewData) {
+        const parsed = JSON.parse(reviewData);
+        setReviewConfig({
+          focusDirection: parsed.focusDirection || '',
+          rounds: parsed.rounds || 1,
+          maxWords: parsed.maxWords || 80,
+        });
+      }
+    } catch (e) {}
   }, []);
 
-  // 开始AI评审
-  const handleStartReview = useCallback(async () => {
-    const { agents, apis, wordLimit } = await getConfig();
-    if (agents.length === 0 || apis.length === 0) {
-      Alert.alert('提示', '请先在写作流水线中配置Agent和API');
+  useFocusEffect(
+    useCallback(() => {
+      loadConfig();
+    }, [loadConfig])
+  );
+
+  // 滚动到底部
+  useEffect(() => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd?.({ animated: true });
+    }, 100);
+  }, [messages]);
+
+  // 获取启用的评审Agent
+  const getEnabledReviewAgents = () => {
+    return reviewAgents.filter((a) => a.enabled);
+  };
+
+  // 确定用哪个API
+  const getApiForAgent = (agent: Agent) => {
+    if (agent.apiId) {
+      const cfg = apiConfigs.find((c) => c.id === agent.apiId);
+      if (cfg) return { apiKey: cfg.apiKey, baseUrl: cfg.baseUrl, model: cfg.model };
+    }
+    return defaultApi;
+  };
+
+  const addSystemMessage = (text: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `sys_${new Date().getTime()}_${Math.random()}`,
+        sender: 'system',
+        senderName: '系统',
+        content: text,
+      },
+    ]);
+  };
+
+  // 单个Agent评审（SSE流式）
+  const reviewWithAgent = async (agent: Agent): Promise<void> => {
+    return new Promise((resolve) => {
+      const agentName = agent.name || 'Agent';
+      const thinkingId = `thinking_${new Date().getTime()}`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: thinkingId,
+          sender: 'agent',
+          senderName: agentName,
+          content: '正在思考...',
+          agentRole: agent.role,
+        },
+      ]);
+
+      const focusText = reviewConfig.focusDirection ? `\n\n评审重点：${reviewConfig.focusDirection}` : '';
+      const reviewPrompt = `你是"${agentName}"。${agent.prompt || ''}\n\n你正在评审一份小说${stageName}。请用${reviewConfig.maxWords}字以内给出你的评审意见和改进建议。简洁直接。\n\n以下是需要评审的${stageName}内容：\n${params.content}${focusText}`;
+
+      let agentResponse = '';
+      const api = getApiForAgent(agent);
+
+      try {
+        const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': api.apiKey,
+            'x-model': api.model,
+            'x-base-url': api.baseUrl,
+          },
+          body: JSON.stringify({
+            chapterId: `outline_review_${new Date().getTime()}`,
+            chapterNumber: 1,
+            outline: reviewPrompt,
+            memoryContext: [],
+            agentCount: 1,
+          }),
+        });
+
+        sse.addEventListener('message', (event) => {
+          if (event.data === '[DONE]') {
+            sse.close();
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === thinkingId
+                  ? { ...m, content: agentResponse || '无意见', suggestion: agentResponse }
+                  : m
+              )
+            );
+            resolve();
+            return;
+          }
+
+          try {
+            const json = JSON.parse(event.data || '{}');
+            if (json.type === 'chunk' && json.content) {
+              agentResponse += json.content;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === thinkingId
+                    ? { ...m, content: agentResponse, suggestion: agentResponse }
+                    : m
+                )
+              );
+            } else if (json.type === 'done' && json.content) {
+              agentResponse = json.content;
+            }
+          } catch (e) {}
+        });
+
+        sse.addEventListener('error', () => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === thinkingId ? { ...m, content: '评审失败，请检查API配置' } : m
+            )
+          );
+          resolve();
+        });
+
+        setTimeout(() => {
+          if (agentResponse) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === thinkingId ? { ...m, content: agentResponse, suggestion: agentResponse } : m
+              )
+            );
+          }
+          resolve();
+        }, 30000);
+
+      } catch (error) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkingId ? { ...m, content: '评审失败' } : m
+          )
+        );
+        resolve();
+      }
+    });
+  };
+
+  // 开始AI评审（使用SSE流式）
+  const handleStartReview = async () => {
+    const agents = getEnabledReviewAgents();
+    if (agents.length === 0) {
+      Alert.alert('提示', '请先在写作流水线的评审团中启用Agent');
+      return;
+    }
+    if (apiConfigs.length === 0) {
+      Alert.alert('提示', '请先在写作流水线中配置API');
       return;
     }
 
     setLoading(true);
-    const newMessages: ChatMessage[] = [];
+    setMessages([]);
+    setAdoptedIds([]);
+    setAdoptHistory([]);
+
+    addSystemMessage(`开始${stageName}评审（${agents.length}位Agent参与）...`);
 
     for (const agent of agents) {
-      try {
-        const api = apis.find((a: any) => a.name === agent.apiName) || apis[0];
-        const response = await fetch(`${api.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${api.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: api.model,
-            messages: [
-              {
-                role: 'system',
-                content: `${agent.systemPrompt}\n你正在评审一份小说${stageName}。请用${wordLimit}字以内给出你的评审意见和改进建议。简洁直接。`,
-              },
-              { role: 'user', content: `以下是需要评审的${stageName}内容：\n${params.content}` },
-            ],
-            max_tokens: 500,
-          }),
-        });
-
-        const result = await response.json();
-        const content = result.choices?.[0]?.message?.content || '评审失败，请重试';
-
-        newMessages.push({
-          id: `agent_${agent.id}_${new Date().getTime()}`,
-          sender: 'agent',
-          senderName: agent.name,
-          content,
-          agentRole: agent.role,
-        });
-      } catch (e: any) {
-        newMessages.push({
-          id: `error_${agent.id}_${new Date().getTime()}`,
-          sender: 'agent',
-          senderName: agent.name,
-          content: `评审出错：${e.message}`,
-          agentRole: agent.role,
-        });
-      }
+      await reviewWithAgent(agent);
     }
 
-    setMessages(newMessages);
+    addSystemMessage('所有Agent已发言完毕，你可以采纳建议或继续讨论。');
     setLoading(false);
-  }, [getConfig, params.content, stageName]);
+  };
 
   // 用户发言
-  const handleSend = useCallback(async () => {
-    if (!inputText.trim()) return;
+  const handleSend = async () => {
+    if (!inputText.trim() || loading) return;
 
     const userMsg: ChatMessage = {
       id: `user_${new Date().getTime()}`,
@@ -126,59 +304,79 @@ export default function OutlineReviewScreen() {
       content: inputText.trim(),
     };
     setMessages(prev => [...prev, userMsg]);
+    const userText = inputText.trim();
     setInputText('');
 
-    // 触发Agent回复
-    const { agents, apis, wordLimit } = await getConfig();
-    if (agents.length === 0 || apis.length === 0) return;
+    // 触发一个Agent回复
+    const agents = getEnabledReviewAgents();
+    if (agents.length === 0) return;
+
+    const agentIndex = messages.filter((m) => m.sender === 'agent' && m.content !== '正在思考...').length % agents.length;
+    const agent = agents[agentIndex];
+    const agentName = agent.name || 'Agent';
+
+    const thinkingId = `discuss_${new Date().getTime()}`;
+    setMessages(prev => [
+      ...prev,
+      { id: thinkingId, sender: 'agent', senderName: agentName, content: '正在思考...', agentRole: agent.role },
+    ]);
+
+    const discussPrompt = `你是"${agentName}"。${agent.prompt || ''}\n\n你正在参与${stageName}的群聊讨论。作者说："${userText}"\n\n用${reviewConfig.maxWords}字以内回复，简洁直接，给出你的看法或建议。`;
+    let agentResponse = '';
+    const api = getApiForAgent(agent);
 
     setLoading(true);
-    const replies: ChatMessage[] = [];
-    const chatHistory = [...messages, userMsg].map(m => ({
-      role: m.sender === 'user' ? 'user' as const : 'assistant' as const,
-      content: `${m.senderName}：${m.content}`,
-    }));
+    try {
+      const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': api.apiKey,
+          'x-model': api.model,
+          'x-base-url': api.baseUrl,
+        },
+        body: JSON.stringify({
+          chapterId: `discuss_${new Date().getTime()}`,
+          chapterNumber: 1,
+          outline: discussPrompt,
+          memoryContext: [],
+          agentCount: 1,
+        }),
+      });
 
-    for (const agent of agents) {
-      try {
-        const api = apis.find((a: any) => a.name === agent.apiName) || apis[0];
-        const response = await fetch(`${api.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${api.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: api.model,
-            messages: [
-              {
-                role: 'system',
-                content: `${agent.systemPrompt}\n你正在参与${stageName}的群聊讨论。用${wordLimit}字以内回复，简洁直接，给出你的看法或建议。`,
-              },
-              ...chatHistory.slice(-10),
-            ],
-            max_tokens: 300,
-          }),
-        });
+      sse.addEventListener('message', (event) => {
+        if (event.data === '[DONE]') {
+          sse.close();
+          setMessages(prev =>
+            prev.map(m => m.id === thinkingId ? { ...m, content: agentResponse || '暂无回应', suggestion: agentResponse } : m)
+          );
+          return;
+        }
+        try {
+          const json = JSON.parse(event.data || '{}');
+          if (json.type === 'chunk' && json.content) {
+            agentResponse += json.content;
+            setMessages(prev =>
+              prev.map(m => m.id === thinkingId ? { ...m, content: agentResponse, suggestion: agentResponse } : m)
+            );
+          }
+        } catch (e) {}
+      });
 
-        const result = await response.json();
-        const content = result.choices?.[0]?.message?.content || '';
+      sse.addEventListener('error', () => {
+        setMessages(prev => prev.map(m => m.id === thinkingId ? { ...m, content: '回复失败' } : m));
+      });
 
-        replies.push({
-          id: `reply_${agent.id}_${new Date().getTime()}`,
-          sender: 'agent',
-          senderName: agent.name,
-          content,
-          agentRole: agent.role,
-        });
-      } catch (e: any) {
-        // 静默失败
-      }
+      setTimeout(() => {
+        setMessages(prev =>
+          prev.map(m => m.id === thinkingId ? { ...m, content: agentResponse || '回复超时', suggestion: agentResponse } : m)
+        );
+      }, 20000);
+    } catch (e) {
+      setMessages(prev => prev.map(m => m.id === thinkingId ? { ...m, content: '回复失败' } : m));
     }
-
-    setMessages(prev => [...prev, ...replies]);
     setLoading(false);
-  }, [inputText, messages, getConfig, params.content, stageName]);
+  };
 
   // 采纳
   const handleAdopt = useCallback((msgId: string) => {
@@ -197,7 +395,6 @@ export default function OutlineReviewScreen() {
   // 确定修改
   const handleConfirm = useCallback(() => {
     const adopted = messages.filter(m => adoptedIds.includes(m.id));
-    // 将采纳的建议存到AsyncStorage，大纲页读取后应用
     AsyncStorage.setItem('outline_review_adopted', JSON.stringify({
       stage: params.stage,
       suggestions: adopted.map(m => ({ name: m.senderName, content: m.content })),
@@ -222,7 +419,6 @@ export default function OutlineReviewScreen() {
       </View>
 
       {showPreview ? (
-        // 原文预览
         <ScrollView style={styles.previewArea} contentContainerStyle={styles.previewContent}>
           <Text style={styles.previewLabel}>原文内容</Text>
           <Text style={styles.previewText}>{params.content}</Text>
@@ -230,38 +426,73 @@ export default function OutlineReviewScreen() {
       ) : (
         <>
           {/* 聊天区 */}
-          <ScrollView style={styles.chatArea} contentContainerStyle={styles.chatContent}>
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.chatArea}
+            contentContainerStyle={styles.chatContent}
+            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd?.({ animated: true })}
+          >
             {messages.length === 0 && !loading && (
               <View style={styles.emptyState}>
                 <Feather name="message-circle" size={48} color="#555" />
                 <Text style={styles.emptyText}>点击下方按钮开始AI评审</Text>
+                {reviewConfig.focusDirection ? (
+                  <Text style={styles.focusHint}>评审重点：{reviewConfig.focusDirection}</Text>
+                ) : null}
               </View>
             )}
-            {messages.map(msg => (
-              <View
-                key={msg.id}
-                style={[
-                  styles.msgBubble,
-                  msg.sender === 'user' ? styles.userBubble : styles.agentBubble,
-                  adoptedIds.includes(msg.id) && styles.adoptedBubble,
-                ]}
-              >
-                <Text style={styles.msgSender}>{msg.senderName}</Text>
-                <Text style={styles.msgContent}>{msg.content}</Text>
-                {msg.sender === 'agent' && !adoptedIds.includes(msg.id) && (
-                  <Pressable style={styles.adoptBtn} onPress={() => handleAdopt(msg.id)}>
-                    <Feather name="check" size={12} color="#000" />
-                    <Text style={styles.adoptBtnText}>采纳</Text>
-                  </Pressable>
-                )}
-                {adoptedIds.includes(msg.id) && (
-                  <View style={styles.adoptedTag}>
-                    <Feather name="check-circle" size={12} color="#4ade80" />
-                    <Text style={styles.adoptedTagText}>已采纳</Text>
+            {messages.map(msg => {
+              if (msg.sender === 'system') {
+                return (
+                  <View key={msg.id} style={styles.systemMsg}>
+                    <Text style={styles.systemMsgText}>{msg.content}</Text>
                   </View>
-                )}
-              </View>
-            ))}
+                );
+              }
+
+              const agentColor = AGENT_COLORS[msg.senderName] || '#888';
+
+              if (msg.sender === 'user') {
+                return (
+                  <View key={msg.id} style={styles.userBubbleWrap}>
+                    <View style={styles.userBubble}>
+                      <Text style={styles.userMsgText}>{msg.content}</Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              // Agent消息
+              return (
+                <View
+                  key={msg.id}
+                  style={[
+                    styles.msgBubble,
+                    adoptedIds.includes(msg.id) && styles.adoptedBubble,
+                  ]}
+                >
+                  <View style={styles.agentMsgHeader}>
+                    <View style={[styles.agentAvatar, { backgroundColor: agentColor + '22' }]}>
+                      <Ionicons name="sparkles" size={12} color={agentColor} />
+                    </View>
+                    <Text style={[styles.msgSender, { color: agentColor }]}>{msg.senderName}</Text>
+                    {adoptedIds.includes(msg.id) && (
+                      <View style={styles.adoptedTag}>
+                        <Feather name="check-circle" size={12} color="#4ade80" />
+                        <Text style={styles.adoptedTagText}>已采纳</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.msgContent}>{msg.content}</Text>
+                  {msg.sender === 'agent' && !adoptedIds.includes(msg.id) && msg.content !== '正在思考...' && !msg.content.startsWith('评审失败') && !msg.content.startsWith('回复') && (
+                    <Pressable style={[styles.adoptBtn, { borderColor: agentColor }]} onPress={() => handleAdopt(msg.id)}>
+                      <Feather name="check" size={12} color={agentColor} />
+                      <Text style={[styles.adoptBtnText, { color: agentColor }]}>采纳</Text>
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })}
             {loading && (
               <View style={styles.loadingBubble}>
                 <ActivityIndicator size="small" color="#888" />
@@ -287,9 +518,10 @@ export default function OutlineReviewScreen() {
                     placeholder="说你的想法..."
                     placeholderTextColor="#555"
                     onSubmitEditing={handleSend}
+                    editable={!loading}
                   />
-                  <Pressable style={styles.sendBtn} onPress={handleSend} disabled={loading}>
-                    <Feather name="send" size={18} color="#000" />
+                  <Pressable style={styles.sendBtn} onPress={handleSend} disabled={loading || !inputText.trim()}>
+                    <Feather name="send" size={18} color={inputText.trim() && !loading ? '#000' : '#555'} />
                   </Pressable>
                 </View>
                 <View style={styles.actionRow}>
@@ -327,6 +559,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#222',
+    paddingTop: 56,
   },
   backBtn: {
     padding: 8,
@@ -374,6 +607,19 @@ const styles = StyleSheet.create({
     color: '#555',
     marginTop: 16,
   },
+  focusHint: {
+    color: '#fbbf24',
+    fontSize: 13,
+    marginTop: 8,
+  },
+  systemMsg: {
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  systemMsgText: {
+    color: '#555',
+    fontSize: 12,
+  },
   msgBubble: {
     backgroundColor: '#1a1a1a',
     borderRadius: 14,
@@ -381,14 +627,37 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: '#333',
+    marginRight: 20,
+  },
+  userBubbleWrap: {
+    alignItems: 'flex-end',
+    marginVertical: 6,
   },
   userBubble: {
-    backgroundColor: '#1a2a1a',
-    borderColor: '#2a3a2a',
-    marginLeft: 40,
+    backgroundColor: '#1e3a5f',
+    borderRadius: 14,
+    borderBottomRightRadius: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    maxWidth: '75%',
   },
-  agentBubble: {
-    marginRight: 20,
+  userMsgText: {
+    color: '#fff',
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  agentMsgHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  agentAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   adoptedBubble: {
     borderColor: '#4ade80',
@@ -397,8 +666,6 @@ const styles = StyleSheet.create({
   msgSender: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#888',
-    marginBottom: 6,
   },
   msgContent: {
     fontSize: 14,
@@ -409,24 +676,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-end',
-    backgroundColor: '#fff',
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
     gap: 4,
     marginTop: 8,
+    borderWidth: 1,
   },
   adoptBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#000',
   },
   adoptedTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-end',
     gap: 4,
-    marginTop: 8,
+    marginTop: 0,
   },
   adoptedTagText: {
     fontSize: 12,
@@ -455,67 +720,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff',
+    paddingVertical: 14,
     borderRadius: 12,
-    paddingVertical: 16,
     gap: 8,
   },
   startReviewText: {
-    fontSize: 16,
-    fontWeight: '800',
     color: '#000',
+    fontSize: 17,
+    fontWeight: '600',
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 8,
   },
   input: {
     flex: 1,
     backgroundColor: '#1a1a1a',
     borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 15,
+    padding: 14,
     color: '#fff',
+    fontSize: 15,
     borderWidth: 1,
     borderColor: '#333',
+    maxHeight: 80,
   },
   sendBtn: {
+    backgroundColor: '#fff',
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   actionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 12,
     marginTop: 8,
   },
   undoBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#fbbf2444',
   },
   undoText: {
-    fontSize: 13,
-    color: '#888',
+    color: '#fbbf24',
+    fontSize: 14,
+    fontWeight: '500',
   },
   confirmBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    gap: 4,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#fff',
   },
   confirmText: {
-    fontSize: 13,
-    fontWeight: '700',
     color: '#000',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

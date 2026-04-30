@@ -82,7 +82,7 @@ export default function SettingsScreen() {
         text: '清除',
         style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.multiRemove(['novels', 'memory', 'savedItems', 'apiConfigs', 'agentConfigs', 'reviewConfig', 'outlineData']);
+          await AsyncStorage.multiRemove(['novels', 'memory', 'savedItems', 'apiConfigs', 'agentConfigs', 'reviewTeamConfigs', 'reviewConfig', 'outline_data']);
           setStats({ totalChapters: 0, totalWords: 0, totalMemory: 0 });
           Alert.alert('完成', '所有本地数据已清除');
         },
@@ -96,13 +96,15 @@ export default function SettingsScreen() {
       const memoryData = await AsyncStorage.getItem('memory');
       const apiConfigsData = await AsyncStorage.getItem('apiConfigs');
       const agentConfigsData = await AsyncStorage.getItem('agentConfigs');
-      const outlineData = await AsyncStorage.getItem('outlineData');
+      const reviewTeamData = await AsyncStorage.getItem('reviewTeamConfigs');
+      const outlineData = await AsyncStorage.getItem('outline_data');
 
       const exportObj = {
         novels: novelsData ? JSON.parse(novelsData) : [],
         memory: memoryData ? JSON.parse(memoryData) : [],
         apiConfigs: apiConfigsData ? JSON.parse(apiConfigsData) : [],
         agentConfigs: agentConfigsData ? JSON.parse(agentConfigsData) : [],
+        reviewTeamConfigs: reviewTeamData ? JSON.parse(reviewTeamData) : [],
         outlineData: outlineData ? JSON.parse(outlineData) : null,
       };
 

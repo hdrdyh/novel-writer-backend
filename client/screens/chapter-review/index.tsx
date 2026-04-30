@@ -31,8 +31,17 @@ interface ChatMessage {
   timestamp: number;
 }
 
+interface Agent {
+  id: string;
+  name: string;
+  role: string;
+  prompt: string;
+  enabled: boolean;
+  order: number;
+  apiId?: string;
+}
+
 interface ReviewConfig {
-  selectedAgents: string[];
   focusDirection: string;
   rounds: number;
   maxWords: number;
@@ -53,6 +62,9 @@ const AGENT_COLORS: Record<string, string> = {
   '文笔润色师': '#a78bfa',
   '审核校对师': '#4ade80',
   '记忆压缩师': '#fb923c',
+  '逻辑审查员': '#60a5fa',
+  '节奏分析师': '#fbbf24',
+  '读者视角': '#f472b6',
 };
 
 export default function ChapterReviewScreen() {
@@ -75,7 +87,6 @@ export default function ChapterReviewScreen() {
 
   // 从本地读取配置
   const [reviewConfig, setReviewConfig] = useState<ReviewConfig>({
-    selectedAgents: [],
     focusDirection: '',
     rounds: 1,
     maxWords: 80,
@@ -87,26 +98,34 @@ export default function ChapterReviewScreen() {
     model: '',
   });
 
-  // 后端Agent列表
-  const [agents, setAgents] = useState<any[]>([]);
+  // 评审团Agent列表（从本地存储读取）
+  const [reviewAgents, setReviewAgents] = useState<Agent[]>([]);
 
   const loadConfig = useCallback(async () => {
     try {
-      const [reviewData, apiData, agentsRes] = await Promise.all([
+      const [reviewData, apiData, reviewTeamData] = await Promise.all([
         AsyncStorage.getItem('reviewConfig'),
         AsyncStorage.getItem('apiConfigs'),
-        fetch(`${API_BASE_URL}/api/v1/agents`).then((r) => r.json()).catch(() => ({ agents: [] })),
+        AsyncStorage.getItem('reviewTeamConfigs'),
       ]);
-      if (reviewData) setReviewConfig(JSON.parse(reviewData));
+      if (reviewData) {
+        const parsed = JSON.parse(reviewData);
+        setReviewConfig({
+          focusDirection: parsed.focusDirection || '',
+          rounds: parsed.rounds || 1,
+          maxWords: parsed.maxWords || 80,
+        });
+      }
       if (apiData) {
         const parsed: ApiConfig[] = JSON.parse(apiData);
         setApiConfigs(parsed);
-        // 第一个API作为默认
         if (parsed.length > 0) {
           setDefaultApi({ apiKey: parsed[0].apiKey, baseUrl: parsed[0].baseUrl, model: parsed[0].model });
         }
       }
-      if (agentsRes.agents) setAgents(agentsRes.agents);
+      if (reviewTeamData) {
+        setReviewAgents(JSON.parse(reviewTeamData));
+      }
     } catch (e) {}
   }, []);
 
@@ -123,46 +142,9 @@ export default function ChapterReviewScreen() {
     }, 100);
   }, [messages]);
 
-  // 获取参与评审的Agent
+  // 获取参与评审的Agent（只使用评审团中已启用的）
   const getReviewAgents = () => {
-    const enabledAgents = agents.filter((a: any) => a.enabled !== false);
-    if (reviewConfig.selectedAgents.length > 0) {
-      return enabledAgents.filter((a: any) => reviewConfig.selectedAgents.includes(a.id));
-    }
-    // 没配置就全部启用Agent参与
-    return enabledAgents;
-  };
-
-  // 开始AI评审
-  const handleStartReview = async () => {
-    if (isReviewing) return;
-
-    // 检查API配置
-    if (apiConfigs.length === 0) {
-      Alert.alert('未配置API', '请先在写作流水线中添加API配置');
-      return;
-    }
-
-    const reviewAgents = getReviewAgents();
-    if (reviewAgents.length === 0) {
-      Alert.alert('提示', '没有可用的Agent，请先在写作流水线中启用Agent');
-      return;
-    }
-
-    setIsReviewing(true);
-    setReviewStarted(true);
-    setMessages([]);
-    setAdoptedHistory([]);
-    setContentSnapshots([currentContent]);
-
-    addSystemMessage(`开始评审第${chapterNumber}章（${reviewAgents.length}位Agent参与）...`);
-
-    for (const agent of reviewAgents) {
-      await reviewWithAgent(agent);
-    }
-
-    addSystemMessage('所有Agent已发言完毕，你可以采纳建议或继续讨论。');
-    setIsReviewing(false);
+    return reviewAgents.filter((a) => a.enabled);
   };
 
   const addSystemMessage = (text: string) => {
@@ -181,7 +163,6 @@ export default function ChapterReviewScreen() {
   const reviewWithAgent = async (agent: any): Promise<void> => {
     return new Promise((resolve) => {
       const agentName = agent.name || 'Agent';
-      const agentColor = AGENT_COLORS[agentName] || '#888';
 
       const thinkingId = `thinking_${new Date().getTime()}`;
       setMessages((prev) => [
@@ -197,7 +178,7 @@ export default function ChapterReviewScreen() {
       ]);
 
       const focusText = reviewConfig.focusDirection ? `\n\n评审重点：${reviewConfig.focusDirection}` : '';
-      const reviewPrompt = `你是"${agentName}"，负责${agent.role === 'world' ? '世界观一致性' : agent.role === 'character' ? '人物设定合理性' : agent.role === 'plot' ? '情节节奏和逻辑' : agent.role === 'style' ? '文笔和表达质量' : '内容审核校对'}的评审。\n\n请评审以下章节内容（${reviewConfig.maxWords}字以内简要评价，指出1-2个具体问题和改进建议）：\n\n章纲：${chapterOutline}\n\n正文：${currentContent.substring(0, 2000)}${focusText}`;
+      const reviewPrompt = `你是"${agentName}"。${agent.prompt || ''}\n\n请评审以下章节内容（${reviewConfig.maxWords}字以内简要评价，指出1-2个具体问题和改进建议）：\n\n章纲：${chapterOutline}\n\n正文：${currentContent.substring(0, 2000)}${focusText}`;
 
       let agentResponse = '';
 
@@ -294,6 +275,38 @@ export default function ChapterReviewScreen() {
     });
   };
 
+  // 开始AI评审
+  const handleStartReview = async () => {
+    if (isReviewing) return;
+
+    // 检查API配置
+    if (apiConfigs.length === 0) {
+      Alert.alert('未配置API', '请先在写作流水线中添加API配置');
+      return;
+    }
+
+    const activeReviewAgents = getReviewAgents();
+    if (activeReviewAgents.length === 0) {
+      Alert.alert('提示', '没有可用的评审Agent，请先在写作流水线的评审团中启用Agent');
+      return;
+    }
+
+    setIsReviewing(true);
+    setReviewStarted(true);
+    setMessages([]);
+    setAdoptedHistory([]);
+    setContentSnapshots([currentContent]);
+
+    addSystemMessage(`开始评审第${chapterNumber}章（${activeReviewAgents.length}位Agent参与）...`);
+
+    for (const agent of activeReviewAgents) {
+      await reviewWithAgent(agent);
+    }
+
+    addSystemMessage('所有Agent已发言完毕，你可以采纳建议或继续讨论。');
+    setIsReviewing(false);
+  };
+
   // 用户发言 + 触发AI回复讨论
   const handleUserSend = () => {
     if (!userInput.trim() || isReviewing) return;
@@ -313,12 +326,12 @@ export default function ChapterReviewScreen() {
 
   // 用户讨论后，让一个Agent回复
   const discussWithAgent = async (userText: string) => {
-    const reviewAgents = getReviewAgents();
-    if (reviewAgents.length === 0) return;
+    const activeReviewAgents = getReviewAgents();
+    if (activeReviewAgents.length === 0) return;
 
     // 轮流选一个Agent回复
-    const agentIndex = messages.filter((m) => m.type === 'agent' && m.content !== '正在思考...').length % reviewAgents.length;
-    const agent = reviewAgents[agentIndex];
+    const agentIndex = messages.filter((m) => m.type === 'agent' && m.content !== '正在思考...').length % activeReviewAgents.length;
+    const agent = activeReviewAgents[agentIndex];
     const agentName = agent.name || 'Agent';
 
     const thinkingId = `discuss_${new Date().getTime()}`;
@@ -334,7 +347,7 @@ export default function ChapterReviewScreen() {
       },
     ]);
 
-    const discussPrompt = `你是"${agentName}"。作者说："${userText}"\n\n请基于章节内容回应作者的想法（${reviewConfig.maxWords}字以内）：\n\n章纲：${chapterOutline}\n\n正文：${currentContent.substring(0, 1500)}`;
+    const discussPrompt = `你是"${agentName}"。${agent.prompt || ''}\n\n作者说："${userText}"\n\n请基于章节内容回应作者的想法（${reviewConfig.maxWords}字以内）：\n\n章纲：${chapterOutline}\n\n正文：${currentContent.substring(0, 1500)}`;
 
     let agentResponse = '';
 
