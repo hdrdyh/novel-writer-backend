@@ -351,6 +351,103 @@ app.get('/api/v1/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// 通用LLM代理（单次调用，SSE流式返回）
+app.post('/api/v1/llm/chat', async (req, res) => {
+  res.setHeader('X-Accel-Buffering', 'no');
+  (res as any).flush?.();
+
+  const schema = z.object({
+    messages: z.array(z.object({
+      role: z.enum(['system', 'user', 'assistant']),
+      content: z.string(),
+    })),
+  });
+
+  try {
+    const data = schema.parse(req.body);
+    const config = getLLMConfig(req);
+
+    if (!config.apiKey) {
+      return res.status(400).json({ error: 'API Key 未配置' });
+    }
+
+    // 设置 SSE 流式响应头
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store, no-transform, must-revalidate');
+    res.setHeader('Connection', 'keep-alive');
+
+    const response = await fetch(`${config.baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: data.messages,
+        stream: true,
+        temperature: 0.7,
+        max_tokens: 4096,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      res.write(`data: ${JSON.stringify({ type: 'error', content: errText })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      res.write('data: [DONE]\n\n');
+      res.end();
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const dataStr = trimmed.slice(6);
+        if (dataStr === '[DONE]') {
+          res.write('data: [DONE]\n\n');
+          continue;
+        }
+        try {
+          const json = JSON.parse(dataStr);
+          const content = json.choices?.[0]?.delta?.content;
+          if (content) {
+            res.write(`data: ${JSON.stringify({ type: 'chunk', content })}\n\n`);
+          }
+        } catch (e) {}
+      }
+    }
+
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (error: any) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || 'LLM调用失败' });
+    } else {
+      res.write(`data: ${JSON.stringify({ type: 'error', content: error.message })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    }
+  }
+});
+
 // 获取章节列表
 app.get('/api/v1/chapters', (req, res) => {
   const chapterList = Array.from(chapters.values())

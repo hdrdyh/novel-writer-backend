@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View,
   Text,
@@ -12,6 +13,8 @@ import {
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL as string;
 
 type ReverseStep = 'idle' | 'analyzing' | 'done';
 
@@ -27,6 +30,21 @@ export default function ReverseOutlineScreen() {
     characters: '',
     worldview: '',
   });
+
+  // 从AsyncStorage读取书架传来的小说内容
+  useFocusEffect(
+    useCallback(() => {
+      const loadSource = async () => {
+        const stored = await AsyncStorage.getItem('reverse_outline_source');
+        if (stored) {
+          setSourceText(stored);
+          // 用完即清，避免重复填充
+          await AsyncStorage.removeItem('reverse_outline_source');
+        }
+      };
+      loadSource();
+    }, [])
+  );
 
   const handleReverse = async () => {
     if (!sourceText.trim()) {
@@ -55,6 +73,46 @@ export default function ReverseOutlineScreen() {
     try {
       const generated: any = {};
 
+      // 辅助函数：通过后端代理调用LLM
+      const callLLMProxy = async (api: any, messages: Array<{ role: string; content: string }>, maxRetries = 1): Promise<string> => {
+        const res = await fetch(`${API_BASE_URL}/api/v1/llm/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': api?.apiKey || '',
+            'x-model': api?.model || 'deepseek-chat',
+            'x-base-url': api?.baseUrl || 'https://api.deepseek.com',
+          },
+          body: JSON.stringify({ messages }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(errText || 'LLM调用失败');
+        }
+
+        // 读取完整响应（非流式模式，简单处理）
+        const text = await res.text();
+        let fullContent = '';
+        for (const line of text.split('\n')) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          const dataStr = trimmed.slice(6);
+          if (dataStr === '[DONE]') break;
+          try {
+            const json = JSON.parse(dataStr);
+            if (json.type === 'chunk' && json.content) {
+              fullContent += json.content;
+            } else if (json.type === 'error') {
+              throw new Error(json.content);
+            }
+          } catch (e: any) {
+            if (e.message && !e.message.includes('JSON')) throw e;
+          }
+        }
+        return fullContent || '提取失败';
+      };
+
       // 获取Agent对应的API配置
       const getApiForAgent = (agent: any) => {
         if (agent?.apiId) {
@@ -70,23 +128,10 @@ export default function ReverseOutlineScreen() {
       const worldApi = getApiForAgent(worldAgent);
 
       if (worldApi) {
-        const worldRes = await fetch(`${worldApi.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${worldApi.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: worldApi.model,
-            messages: [
-              { role: 'system', content: worldAgent?.systemPrompt || '你是一个精通世界观架构的小说分析师。' },
-              { role: 'user', content: `请阅读以下小说片段，提取并总结其中的世界观设定（修仙体系、势力分布、历史背景、规则法则等），300字以内：\n\n${sourceText.substring(0, 3000)}` },
-            ],
-            max_tokens: 500,
-          }),
-        });
-        const worldData = await worldRes.json();
-        generated.worldview = worldData.choices?.[0]?.message?.content || '提取失败';
+        generated.worldview = await callLLMProxy(worldApi, [
+          { role: 'system', content: worldAgent?.prompt || '你是一个精通世界观架构的小说分析师。' },
+          { role: 'user', content: `请阅读以下小说片段，提取并总结其中的世界观设定（修仙体系、势力分布、历史背景、规则法则等），300字以内：\n\n${sourceText.substring(0, 3000)}` },
+        ]);
       } else {
         generated.worldview = '未配置API';
       }
@@ -97,23 +142,10 @@ export default function ReverseOutlineScreen() {
       const charApi = getApiForAgent(charAgent);
 
       if (charApi) {
-        const charRes = await fetch(`${charApi.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${charApi.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: charApi.model,
-            messages: [
-              { role: 'system', content: charAgent?.systemPrompt || '你是一个擅长塑造人物的小说分析师。' },
-              { role: 'user', content: `请阅读以下小说片段，提取并总结其中的主要人物设定（姓名、性格、背景、关系网），300字以内：\n\n${sourceText.substring(0, 3000)}` },
-            ],
-            max_tokens: 500,
-          }),
-        });
-        const charData = await charRes.json();
-        generated.characters = charData.choices?.[0]?.message?.content || '提取失败';
+        generated.characters = await callLLMProxy(charApi, [
+          { role: 'system', content: charAgent?.prompt || '你是一个擅长塑造人物的小说分析师。' },
+          { role: 'user', content: `请阅读以下小说片段，提取并总结其中的主要人物设定（姓名、性格、背景、关系网），300字以内：\n\n${sourceText.substring(0, 3000)}` },
+        ]);
       } else {
         generated.characters = '未配置API';
       }
@@ -124,23 +156,10 @@ export default function ReverseOutlineScreen() {
       const plotApi = getApiForAgent(plotAgent);
 
       if (plotApi) {
-        const outlineRes = await fetch(`${plotApi.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${plotApi.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: plotApi.model,
-            messages: [
-              { role: 'system', content: plotAgent?.systemPrompt || '你是一个精通情节设计的小说分析师。' },
-              { role: 'user', content: `请阅读以下小说片段，反推出整本书的大纲（起承转合、核心冲突、主要转折点），300字以内：\n\n${sourceText.substring(0, 3000)}` },
-            ],
-            max_tokens: 500,
-          }),
-        });
-        const outlineData = await outlineRes.json();
-        generated.outline = outlineData.choices?.[0]?.message?.content || '提取失败';
+        generated.outline = await callLLMProxy(plotApi, [
+          { role: 'system', content: plotAgent?.prompt || '你是一个精通情节设计的小说分析师。' },
+          { role: 'user', content: `请阅读以下小说片段，反推出整本书的大纲（起承转合、核心冲突、主要转折点），300字以内：\n\n${sourceText.substring(0, 3000)}` },
+        ]);
       } else {
         generated.outline = '未配置API';
       }
@@ -148,23 +167,10 @@ export default function ReverseOutlineScreen() {
       // 第4步：提取粗纲
       setProgress('正在反推粗纲...');
       if (plotApi) {
-        const roughRes = await fetch(`${plotApi.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${plotApi.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: plotApi.model,
-            messages: [
-              { role: 'system', content: '你是小说分析师，擅长从正文中反推章节结构。' },
-              { role: 'user', content: `请阅读以下小说片段，反推出每章的粗纲（每章一句话概括），格式为"第X章: xxx"：\n\n${sourceText.substring(0, 4000)}` },
-            ],
-            max_tokens: 800,
-          }),
-        });
-        const roughData = await roughRes.json();
-        generated.roughOutline = roughData.choices?.[0]?.message?.content || '提取失败';
+        generated.roughOutline = await callLLMProxy(plotApi, [
+          { role: 'system', content: '你是小说分析师，擅长从正文中反推章节结构。' },
+          { role: 'user', content: `请阅读以下小说片段，反推出每章的粗纲（每章一句话概括），格式为"第X章: xxx"：\n\n${sourceText.substring(0, 4000)}` },
+        ]);
       } else {
         generated.roughOutline = '未配置API';
       }
@@ -172,23 +178,10 @@ export default function ReverseOutlineScreen() {
       // 第5步：提取细纲
       setProgress('正在反推细纲...');
       if (plotApi) {
-        const detailRes = await fetch(`${plotApi.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${plotApi.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: plotApi.model,
-            messages: [
-              { role: 'system', content: '你是小说分析师，擅长从正文中反推详细情节。' },
-              { role: 'user', content: `请阅读以下小说片段，反推出每章的细纲（具体情节、场景、情绪走向、悬念），格式为"第X章细纲: xxx"：\n\n${sourceText.substring(0, 4000)}` },
-            ],
-            max_tokens: 1500,
-          }),
-        });
-        const detailData = await detailRes.json();
-        generated.detailedOutline = detailData.choices?.[0]?.message?.content || '提取失败';
+        generated.detailedOutline = await callLLMProxy(plotApi, [
+          { role: 'system', content: '你是小说分析师，擅长从正文中反推详细情节。' },
+          { role: 'user', content: `请阅读以下小说片段，反推出每章的细纲（具体情节、场景、情绪走向、悬念），格式为"第X章细纲: xxx"：\n\n${sourceText.substring(0, 4000)}` },
+        ]);
       } else {
         generated.detailedOutline = '未配置API';
       }
@@ -223,15 +216,15 @@ export default function ReverseOutlineScreen() {
       await AsyncStorage.setItem('outline_data', JSON.stringify(outlineData));
 
       // 同时保存人物和世界观到记忆库
-      const memStr = await AsyncStorage.getItem('memory');
+      const memStr = await AsyncStorage.getItem('memories');
       const memories = memStr ? JSON.parse(memStr) : [];
       if (result.worldview) {
-        memories.push({ id: `worldview_${new Date().getTime()}`, type: 'worldview', content: result.worldview, timestamp: new Date().getTime() });
+        memories.push({ id: `worldview_${new Date().getTime()}`, type: 'world', name: '世界观设定', description: result.worldview, createdAt: new Date().toISOString() });
       }
       if (result.characters) {
-        memories.push({ id: `character_${new Date().getTime()}`, type: 'character', content: result.characters, timestamp: new Date().getTime() });
+        memories.push({ id: `character_${new Date().getTime()}`, type: 'character', name: '人物设定', description: result.characters, createdAt: new Date().toISOString() });
       }
-      await AsyncStorage.setItem('memory', JSON.stringify(memories));
+      await AsyncStorage.setItem('memories', JSON.stringify(memories));
 
       Alert.alert('保存成功', '大纲已写入设计页，人物和世界观已存入记忆库', [
         { text: '去看看', onPress: () => router.replace('/') },

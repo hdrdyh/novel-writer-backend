@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View,
   Text,
@@ -73,8 +74,12 @@ export default function OutlineScreen() {
     }
   }, []);
 
-  // 初始化加载
-  useState(() => { loadData(); });
+  // 页面聚焦时加载数据（从反向大纲返回后也能刷新）
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   // 读取Agent和API配置
   const getConfig = useCallback(async () => {
@@ -106,7 +111,7 @@ export default function OutlineScreen() {
 
       // 用第一个启用的Agent和其绑定的API
       const agent = agents[0];
-      const api = apis.find((a: any) => a.name === agent.apiName) || apis[0];
+      const api = apis.find((a: any) => a.id === agent.apiId) || apis[0];
 
       const response = await fetch(`${api.baseUrl}/chat/completions`, {
         method: 'POST',
@@ -117,7 +122,7 @@ export default function OutlineScreen() {
         body: JSON.stringify({
           model: api.model,
           messages: [
-            { role: 'system', content: agent.systemPrompt || '你是一个专业的小说策划师。严格按照用户要求的格式输出，不要添加额外信息。' },
+            { role: 'system', content: agent.prompt || '你是一个专业的小说策划师。严格按照用户要求的格式输出，不要添加额外信息。' },
             { role: 'user', content: prompt },
           ],
           max_tokens: 2000,

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -68,6 +68,16 @@ export default function WritingScreen() {
   const [hasAutoLoaded, setHasAutoLoaded] = useState(false);
   const [currentQueueIdx, setCurrentQueueIdx] = useState(-1);
 
+  // 用 ref 跟踪最新值，避免 SSE 回调闭包陈旧
+  const isMultiModeRef = useRef(isMultiMode);
+  const currentQueueIdxRef = useRef(currentQueueIdx);
+  const queueRef = useRef(queue);
+  useEffect(() => {
+    isMultiModeRef.current = isMultiMode;
+    currentQueueIdxRef.current = currentQueueIdx;
+    queueRef.current = queue;
+  }, [isMultiMode, currentQueueIdx, queue]);
+
   // 预览
   const [previewModal, setPreviewModal] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
@@ -89,7 +99,7 @@ export default function WritingScreen() {
 
   const loadMemory = useCallback(async () => {
     try {
-      const data = await AsyncStorage.getItem('memory');
+      const data = await AsyncStorage.getItem('memories');
       if (data) setMemoryItems(JSON.parse(data));
     } catch (e) {}
   }, []);
@@ -118,14 +128,6 @@ export default function WritingScreen() {
 
     if (!targetOutline.trim()) {
       Alert.alert('提示', '请输入本章章纲');
-      return;
-    }
-
-    // 检查API配置
-    const storedApi = await AsyncStorage.getItem('apiConfigs');
-    const apiList = storedApi ? JSON.parse(storedApi) : [];
-    if (apiList.length === 0) {
-      Alert.alert('提示', '请先在"写作流水线"中配置API');
       return;
     }
 
@@ -158,7 +160,7 @@ export default function WritingScreen() {
           chapterId: `ch_${targetChNum}`,
           chapterNumber: targetChNum,
           outline: targetOutline,
-          memoryContext: memoryItems.slice(-2).map((m) => m.summary || m.content?.substring(0, 500) || ''),
+          memoryContext: memoryItems.slice(-2).map((m) => `${m.name || ''}: ${m.description || ''}`),
           agentCount: 3,
         }),
       });
@@ -169,18 +171,20 @@ export default function WritingScreen() {
           setCurrentStep(-1);
           sse.close();
           // 多章模式：更新队列
-          if (isMultiMode && currentQueueIdx >= 0) {
+          if (isMultiModeRef.current && currentQueueIdxRef.current >= 0) {
+            const curIdx = currentQueueIdxRef.current;
             setQueue((prev) =>
               prev.map((item, idx) =>
-                idx === currentQueueIdx ? { ...item, content: fullContent, status: 'done' as const } : item
+                idx === curIdx ? { ...item, content: fullContent, status: 'done' as const } : item
               )
             );
             // 自动生成下一章
-            const nextIdx = currentQueueIdx + 1;
-            if (nextIdx < queue.length && queue[nextIdx].status === 'pending') {
+            const nextIdx = curIdx + 1;
+            const currentQueue = queueRef.current;
+            if (nextIdx < currentQueue.length && currentQueue[nextIdx].status === 'pending') {
               setCurrentQueueIdx(nextIdx);
               setTimeout(() => {
-                handleGenerate(queue[nextIdx].outline, queue[nextIdx].chapterNumber);
+                handleGenerate(currentQueue[nextIdx].outline, currentQueue[nextIdx].chapterNumber);
               }, 1000);
             } else {
               setCurrentQueueIdx(-1);

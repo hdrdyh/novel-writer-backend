@@ -40,6 +40,25 @@ export default function SettingsScreen() {
     },
   ]);
 
+  // 从 AsyncStorage 恢复设置
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const savedSettings = await AsyncStorage.getItem('app_settings');
+        if (savedSettings) {
+          const parsed = JSON.parse(savedSettings);
+          setSettings((prev) =>
+            prev.map((s) => ({
+              ...s,
+              value: parsed[s.key] !== undefined ? parsed[s.key] : s.value,
+            }))
+          );
+        }
+      } catch (e) {}
+    };
+    loadSettings();
+  }, []);
+
   const [stats, setStats] = useState({
     totalChapters: 0,
     totalWords: 0,
@@ -50,7 +69,7 @@ export default function SettingsScreen() {
     const loadStats = async () => {
       try {
         const novelsData = await AsyncStorage.getItem('novels');
-        const memoryData = await AsyncStorage.getItem('memory');
+        const memoryData = await AsyncStorage.getItem('memories');
         const novels = novelsData ? JSON.parse(novelsData) : [];
         const memory = memoryData ? JSON.parse(memoryData) : [];
 
@@ -70,9 +89,14 @@ export default function SettingsScreen() {
   }, []);
 
   const handleToggle = (key: string) => {
-    setSettings((prev) =>
-      prev.map((s) => (s.key === key ? { ...s, value: !s.value } : s))
-    );
+    setSettings((prev) => {
+      const updated = prev.map((s) => (s.key === key ? { ...s, value: !s.value } : s));
+      // 持久化到 AsyncStorage
+      const settingsObj: Record<string, boolean> = {};
+      updated.forEach((s) => { settingsObj[s.key] = s.value; });
+      AsyncStorage.setItem('app_settings', JSON.stringify(settingsObj)).catch((_e) => { /* ignore */ });
+      return updated;
+    });
   };
 
   const handleClearData = () => {
@@ -82,7 +106,7 @@ export default function SettingsScreen() {
         text: '清除',
         style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.multiRemove(['novels', 'memory', 'savedItems', 'apiConfigs', 'agentConfigs', 'reviewTeamConfigs', 'reviewConfig', 'outline_data']);
+          await AsyncStorage.multiRemove(['novels', 'memories', 'savedItems', 'apiConfigs', 'agentConfigs', 'reviewTeamConfigs', 'reviewConfig', 'outline_data', 'app_settings']);
           setStats({ totalChapters: 0, totalWords: 0, totalMemory: 0 });
           Alert.alert('完成', '所有本地数据已清除');
         },
@@ -93,7 +117,7 @@ export default function SettingsScreen() {
   const handleExportData = async () => {
     try {
       const novelsData = await AsyncStorage.getItem('novels');
-      const memoryData = await AsyncStorage.getItem('memory');
+      const memoryData = await AsyncStorage.getItem('memories');
       const apiConfigsData = await AsyncStorage.getItem('apiConfigs');
       const agentConfigsData = await AsyncStorage.getItem('agentConfigs');
       const reviewTeamData = await AsyncStorage.getItem('reviewTeamConfigs');
