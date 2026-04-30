@@ -43,9 +43,9 @@ export default function OutlineReviewScreen() {
 
   // 读取配置
   const getConfig = useCallback(async () => {
-    const agentsStr = await AsyncStorage.getItem('agent_configs');
-    const apisStr = await AsyncStorage.getItem('api_configs');
-    const reviewStr = await AsyncStorage.getItem('review_config');
+    const agentsStr = await AsyncStorage.getItem('agentConfigs');
+    const apisStr = await AsyncStorage.getItem('apiConfigs');
+    const reviewStr = await AsyncStorage.getItem('reviewConfig');
     const agents = agentsStr ? JSON.parse(agentsStr) : [];
     const apis = apisStr ? JSON.parse(apisStr) : [];
     const review = reviewStr ? JSON.parse(reviewStr) : {};

@@ -82,7 +82,7 @@ export default function SettingsScreen() {
         text: '清除',
         style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.multiRemove(['novels', 'memory', 'savedItems']);
+          await AsyncStorage.multiRemove(['novels', 'memory', 'savedItems', 'apiConfigs', 'agentConfigs', 'reviewConfig', 'outlineData']);
           setStats({ totalChapters: 0, totalWords: 0, totalMemory: 0 });
           Alert.alert('完成', '所有本地数据已清除');
         },
@@ -90,8 +90,30 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const handleExportData = () => {
-    Alert.alert('提示', '数据导出功能开发中');
+  const handleExportData = async () => {
+    try {
+      const novelsData = await AsyncStorage.getItem('novels');
+      const memoryData = await AsyncStorage.getItem('memory');
+      const apiConfigsData = await AsyncStorage.getItem('apiConfigs');
+      const agentConfigsData = await AsyncStorage.getItem('agentConfigs');
+      const outlineData = await AsyncStorage.getItem('outlineData');
+
+      const exportObj = {
+        novels: novelsData ? JSON.parse(novelsData) : [],
+        memory: memoryData ? JSON.parse(memoryData) : [],
+        apiConfigs: apiConfigsData ? JSON.parse(apiConfigsData) : [],
+        agentConfigs: agentConfigsData ? JSON.parse(agentConfigsData) : [],
+        outlineData: outlineData ? JSON.parse(outlineData) : null,
+      };
+
+      const exportText = JSON.stringify(exportObj, null, 2);
+      Alert.alert('数据已准备', '请复制导出内容（已在控制台输出）', [{ text: '确定' }]);
+      console.log('=== EXPORT_DATA_START ===');
+      console.log(exportText);
+      console.log('=== EXPORT_DATA_END ===');
+    } catch (e) {
+      Alert.alert('错误', '导出失败');
+    }
   };
 
   return (

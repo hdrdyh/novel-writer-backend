@@ -45,6 +45,7 @@ export default function OutlineScreen() {
   });
   const [loading, setLoading] = useState(false);
   const [editIndex, setEditIndex] = useState(-1); // 当前编辑的粗纲/细纲索引
+  const [editStage, setEditStage] = useState<'rough' | 'detail'>('rough'); // 当前编辑的是粗纲还是细纲
   const [editText, setEditText] = useState('');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -77,8 +78,8 @@ export default function OutlineScreen() {
 
   // 读取Agent和API配置
   const getConfig = useCallback(async () => {
-    const agentsStr = await AsyncStorage.getItem('agent_configs');
-    const apisStr = await AsyncStorage.getItem('api_configs');
+    const agentsStr = await AsyncStorage.getItem('agentConfigs');
+    const apisStr = await AsyncStorage.getItem('apiConfigs');
     const agents = agentsStr ? JSON.parse(agentsStr) : [];
     const apis = apisStr ? JSON.parse(apisStr) : [];
     return { agents: agents.filter((a: any) => a.enabled), apis };
@@ -196,6 +197,7 @@ export default function OutlineScreen() {
   const handleEditItem = useCallback((stage: 'rough' | 'detail', index: number) => {
     const list = stage === 'rough' ? data.rough : data.detail;
     setEditIndex(index);
+    setEditStage(stage);
     setEditText(list[index] || '');
     setEditModalVisible(true);
   }, [data]);
@@ -459,14 +461,7 @@ export default function OutlineScreen() {
               <Pressable
                 style={styles.saveBtn}
                 onPress={() => {
-                  // 判断是粗纲还是细纲
-                  if (editIndex < data.rough.length && data.roughLocked) {
-                    handleSaveItem('detail');
-                  } else if (editIndex < data.rough.length) {
-                    handleSaveItem('rough');
-                  } else {
-                    handleSaveItem('detail');
-                  }
+                  handleSaveItem(editStage);
                 }}
               >
                 <Text style={styles.saveBtnText}>保存</Text>

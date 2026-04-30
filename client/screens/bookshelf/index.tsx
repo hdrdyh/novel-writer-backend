@@ -100,7 +100,7 @@ export default function BookshelfScreen() {
   // AI反推
   const handleReverseEngine = useCallback(
     async (novel: NovelItem) => {
-      router.push('/outline-reverse', { novelId: novel.id, novelTitle: novel.title, novelContent: novel.content });
+      router.push('/reverse-outline', { novelId: novel.id, novelTitle: novel.title, novelContent: novel.content });
     },
     [router]
   );

@@ -106,7 +106,7 @@ export default function WritingScreen() {
 
     try {
       // 读取用户配置的API
-      const apisStr = await AsyncStorage.getItem('api_configs');
+      const apisStr = await AsyncStorage.getItem('apiConfigs');
       const apis = apisStr ? JSON.parse(apisStr) : [];
       if (apis.length === 0) {
         Alert.alert('提示', '请先在写作流水线中配置API');

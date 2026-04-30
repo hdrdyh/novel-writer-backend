@@ -206,7 +206,7 @@ export default function ReverseOutlineScreen() {
       };
       await AsyncStorage.setItem('outlineData', JSON.stringify(outlineData));
       Alert.alert('保存成功', '已写入设计页，可前往查看和编辑', [
-        { text: '去看看', onPress: () => router.replace('/outline') },
+        { text: '去看看', onPress: () => router.replace('/') },
       ]);
     } catch {
       Alert.alert('保存失败', '请重试');
