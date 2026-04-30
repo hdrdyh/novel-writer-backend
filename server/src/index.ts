@@ -1124,12 +1124,4 @@ app.listen(9091, () => {
   console.log(`📝 API 端点: /api/v1/`);
 });
 
-// 5000: 静态页面（给Coze预览窗口用，替代Metro）
-const previewApp = express();
-previewApp.use(express.static('public'));
-previewApp.get('*', (_req, res) => {
-  res.sendFile('index.html', { root: 'public' });
-});
-previewApp.listen(5000, () => {
-  console.log(`🖥️ 预览服务已启动: http://localhost:5000/`);
-});
+
