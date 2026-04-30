@@ -20,6 +20,7 @@ import { Screen } from '@/components/Screen';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useFocusEffect } from 'expo-router';
+import { PRESET_AGENTS, PresetAgent, AgentCategory } from '@/utils/presetAgents';
 
 // ============== 类型 ==============
 interface ApiConfig {
@@ -30,7 +31,16 @@ interface ApiConfig {
   model: string;
 }
 
-interface Agent {
+interface AgentConfig {
+  presetId: string;       // 对应 PRESET_AGENTS 的 id
+  name: string;           // 可被用户修改
+  prompt: string;         // 可被用户修改
+  enabled: boolean;
+  apiId?: string;         // 绑定的API配置ID
+  order: number;          // 执行顺序
+}
+
+interface ReviewAgent {
   id: string;
   name: string;
   role: string;
@@ -40,24 +50,6 @@ interface Agent {
   apiId?: string;
 }
 
-// ============== 默认写作线Agent模板 ==============
-const DEFAULT_WRITING_AGENTS: Omit<Agent, 'id'>[] = [
-  { name: '世界观架构师', role: 'worldbuilder', prompt: '你是世界观架构师，负责构建小说的世界观体系，包括历史背景、地理环境、社会制度、魔法/科技体系等。确保世界观自洽、丰富、有深度。', enabled: true, order: 1 },
-  { name: '人物设定师', role: 'character', prompt: '你是人物设定师，负责塑造鲜活的人物角色，包括性格特征、外貌描写、行为习惯、说话方式、成长弧线等。确保人物立体、真实、有魅力。', enabled: true, order: 2 },
-  { name: '情节设计师', role: 'plotter', prompt: '你是情节设计师，负责设计引人入胜的故事情节，包括主线支线、起承转合、悬念设置、伏笔呼应、高潮节奏等。确保情节紧凑、有张力、有意外。', enabled: true, order: 3 },
-  { name: '文笔润色师', role: 'polisher', prompt: '你是文笔润色师，负责润色和优化文字表达，包括修辞手法、节奏韵律、画面感营造、情感渲染等。确保文笔优美、细腻、有感染力。', enabled: true, order: 4 },
-  { name: '审核校对师', role: 'reviewer', prompt: '你是审核校对师，负责检查章节的逻辑一致性、前后矛盾、人物行为是否合理、世界观是否违反已设定规则等。确保内容严谨、无破绽。', enabled: true, order: 5 },
-  { name: '记忆压缩师', role: 'compressor', prompt: '你是记忆压缩师，负责将长篇内容压缩为关键信息摘要，保留核心情节、人物状态、世界观要点等，供后续章节参考。确保摘要精准、不遗漏关键信息。', enabled: true, order: 6 },
-];
-
-// ============== 默认评审团Agent模板 ==============
-const DEFAULT_REVIEW_AGENTS: Omit<Agent, 'id'>[] = [
-  { name: '逻辑审查员', role: 'logic', prompt: '你是逻辑审查员，负责检查内容的逻辑一致性，找出前后矛盾、因果不通、设定冲突等问题。用简短直接的语言指出问题所在。', enabled: true, order: 1 },
-  { name: '节奏分析师', role: 'pacing', prompt: '你是节奏分析师，负责分析叙事节奏是否合理，是否存在拖沓、跳跃、冗余等问题。给出具体的调整建议。', enabled: true, order: 2 },
-  { name: '读者视角', role: 'reader', prompt: '你站在读者视角，评价这段内容的吸引力、可读性和代入感。告诉作者读者最关心的点和最可能弃读的地方。', enabled: true, order: 3 },
-];
-
-// ============== 评审配置 ==============
 interface ReviewConfig {
   focusDirection: string;
   rounds: number;
@@ -117,13 +109,10 @@ function ApiConfigModal({
               <ScrollView style={m.modalBody}>
                 <Text style={m.fieldLabel}>名称</Text>
                 <TextInput style={m.fieldInput} placeholder="如：DeepSeek" placeholderTextColor="#555" value={name} onChangeText={setName} />
-
                 <Text style={m.fieldLabel}>API Key</Text>
                 <TextInput style={m.fieldInput} placeholder="sk-xxxx" placeholderTextColor="#555" value={apiKey} onChangeText={setApiKey} autoCapitalize="none" />
-
                 <Text style={m.fieldLabel}>Base URL</Text>
                 <TextInput style={m.fieldInput} placeholder="https://api.deepseek.com" placeholderTextColor="#555" value={baseUrl} onChangeText={setBaseUrl} autoCapitalize="none" />
-
                 <Text style={m.fieldLabel}>模型名称</Text>
                 <TextInput style={m.fieldInput} placeholder="deepseek-chat" placeholderTextColor="#555" value={model} onChangeText={setModel} autoCapitalize="none" />
               </ScrollView>
@@ -139,8 +128,109 @@ function ApiConfigModal({
   );
 }
 
-// ============== 子组件：Agent编辑弹窗 ==============
-function AgentEditModal({
+// ============== 子组件：协作Agent编辑弹窗 ==============
+function CollabAgentEditModal({
+  visible,
+  agent,
+  preset,
+  apiConfigs,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  agent: AgentConfig | null;
+  preset: PresetAgent | null;
+  apiConfigs: ApiConfig[];
+  onClose: () => void;
+  onSave: (data: { name: string; prompt: string; apiId: string }) => void;
+}) {
+  const initName = agent?.name || preset?.name || '';
+  const initPrompt = agent?.prompt || preset?.prompt || '';
+  const initApiId = agent?.apiId || '';
+
+  const [name, setName] = useState(initName);
+  const [prompt, setPrompt] = useState(initPrompt);
+  const [apiId, setApiId] = useState(initApiId);
+
+  const [prevPresetId, setPrevPresetId] = useState<string | null>(preset?.id ?? null);
+  if ((preset?.id ?? null) !== prevPresetId) {
+    setPrevPresetId(preset?.id ?? null);
+    setName(initName);
+    setPrompt(initPrompt);
+    setApiId(initApiId);
+  }
+
+  const handleSave = () => {
+    if (!name.trim()) {
+      Alert.alert('提示', '请填写Agent名称');
+      return;
+    }
+    onSave({ name: name.trim(), prompt: prompt.trim(), apiId });
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} disabled={Platform.OS === 'web'}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={m.modalContainer}>
+            <View style={[m.modalContent, { maxHeight: '90%' }]}>
+              <View style={m.modalHeader}>
+                <Text style={m.modalTitle}>编辑 {preset?.name || 'Agent'}</Text>
+                <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#888" /></TouchableOpacity>
+              </View>
+              <ScrollView style={m.modalBody}>
+                <Text style={m.fieldLabel}>名称</Text>
+                <TextInput style={m.fieldInput} placeholder="Agent名称" placeholderTextColor="#555" value={name} onChangeText={setName} />
+
+                <Text style={m.fieldLabel}>规则 Prompt</Text>
+                <TextInput
+                  style={[m.fieldInput, m.promptInput]}
+                  placeholder="编写Agent的执行规则和prompt..."
+                  placeholderTextColor="#555"
+                  value={prompt}
+                  onChangeText={setPrompt}
+                  multiline
+                  textAlignVertical="top"
+                />
+
+                <Text style={m.fieldLabel}>绑定API</Text>
+                <View style={m.pickerWrap}>
+                  <ScrollView style={m.pickerScroll} nestedScrollEnabled>
+                    <TouchableOpacity
+                      style={[m.pickerItem, apiId === '' && m.pickerItemActive]}
+                      onPress={() => setApiId('')}
+                    >
+                      <Text style={[m.pickerItemText, apiId === '' && m.pickerItemTextActive]}>默认API</Text>
+                    </TouchableOpacity>
+                    {apiConfigs.map((cfg) => (
+                      <TouchableOpacity
+                        key={cfg.id}
+                        style={[m.pickerItem, apiId === cfg.id && m.pickerItemActive]}
+                        onPress={() => setApiId(cfg.id)}
+                      >
+                        <Text style={[m.pickerItemText, apiId === cfg.id && m.pickerItemTextActive]}>
+                          {cfg.name} ({cfg.model})
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </ScrollView>
+              <View style={m.modalFooter}>
+                <TouchableOpacity style={[m.modalBtn, m.cancelBtn]} onPress={onClose}><Text style={m.cancelBtnText}>取消</Text></TouchableOpacity>
+                <TouchableOpacity style={[m.modalBtn, m.submitBtn]} onPress={handleSave}><Text style={m.submitBtnText}>保存</Text></TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+}
+
+// ============== 子组件：评审Agent编辑弹窗 ==============
+function ReviewAgentEditModal({
   visible,
   agent,
   apiConfigs,
@@ -148,7 +238,7 @@ function AgentEditModal({
   onSave,
 }: {
   visible: boolean;
-  agent: Agent | null;
+  agent: ReviewAgent | null;
   apiConfigs: ApiConfig[];
   onClose: () => void;
   onSave: (data: { name: string; prompt: string; apiId: string }) => void;
@@ -185,42 +275,31 @@ function AgentEditModal({
           <View style={m.modalContainer}>
             <View style={[m.modalContent, { maxHeight: '90%' }]}>
               <View style={m.modalHeader}>
-                <Text style={m.modalTitle}>{agent ? '编辑Agent' : '添加Agent'}</Text>
+                <Text style={m.modalTitle}>{agent ? '编辑评审Agent' : '添加评审Agent'}</Text>
                 <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#888" /></TouchableOpacity>
               </View>
               <ScrollView style={m.modalBody}>
-                <Text style={m.sectionNum}>① 名称</Text>
-                <TextInput style={m.fieldInput} placeholder="给Agent取个名字" placeholderTextColor="#555" value={name} onChangeText={setName} />
-
-                <Text style={m.sectionNum}>② 规则</Text>
+                <Text style={m.fieldLabel}>名称</Text>
+                <TextInput style={m.fieldInput} placeholder="Agent名称" placeholderTextColor="#555" value={name} onChangeText={setName} />
+                <Text style={m.fieldLabel}>规则 Prompt</Text>
                 <TextInput
                   style={[m.fieldInput, m.promptInput]}
-                  placeholder="编写Agent的执行规则和prompt..."
+                  placeholder="编写评审规则..."
                   placeholderTextColor="#555"
                   value={prompt}
                   onChangeText={setPrompt}
                   multiline
                   textAlignVertical="top"
                 />
-
-                <Text style={m.sectionNum}>③ 绑定API</Text>
+                <Text style={m.fieldLabel}>绑定API</Text>
                 <View style={m.pickerWrap}>
                   <ScrollView style={m.pickerScroll} nestedScrollEnabled>
-                    <TouchableOpacity
-                      style={[m.pickerItem, apiId === '' && m.pickerItemActive]}
-                      onPress={() => setApiId('')}
-                    >
+                    <TouchableOpacity style={[m.pickerItem, apiId === '' && m.pickerItemActive]} onPress={() => setApiId('')}>
                       <Text style={[m.pickerItemText, apiId === '' && m.pickerItemTextActive]}>默认API</Text>
                     </TouchableOpacity>
                     {apiConfigs.map((cfg) => (
-                      <TouchableOpacity
-                        key={cfg.id}
-                        style={[m.pickerItem, apiId === cfg.id && m.pickerItemActive]}
-                        onPress={() => setApiId(cfg.id)}
-                      >
-                        <Text style={[m.pickerItemText, apiId === cfg.id && m.pickerItemTextActive]}>
-                          {cfg.name} ({cfg.model})
-                        </Text>
+                      <TouchableOpacity key={cfg.id} style={[m.pickerItem, apiId === cfg.id && m.pickerItemActive]} onPress={() => setApiId(cfg.id)}>
+                        <Text style={[m.pickerItemText, apiId === cfg.id && m.pickerItemTextActive]}>{cfg.name} ({cfg.model})</Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -238,201 +317,35 @@ function AgentEditModal({
   );
 }
 
-// ============== 子组件：导入导出弹窗 ==============
-function ImportExportModal({
-  visible,
-  title,
-  initialValue,
-  onClose,
-  onImport,
-}: {
-  visible: boolean;
-  title: string;
-  initialValue: string;
-  onClose: () => void;
-  onImport: (text: string) => void;
-}) {
-  const [text, setText] = useState(initialValue);
-  const [prevVisible, setPrevVisible] = useState(false);
-  React.useEffect(() => {
-    if (visible && !prevVisible) {
-      setText(initialValue);
-    }
-    setPrevVisible(visible);
-  }, [visible, initialValue, prevVisible]);
-
-  const handleImport = () => {
-    if (!text.trim()) {
-      Alert.alert('提示', '内容不能为空');
-      return;
-    }
-    onImport(text.trim());
-    onClose();
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} disabled={Platform.OS === 'web'}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={m.modalContainer}>
-            <View style={[m.modalContent, { maxHeight: '90%' }]}>
-              <View style={m.modalHeader}>
-                <Text style={m.modalTitle}>{title}</Text>
-                <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#888" /></TouchableOpacity>
-              </View>
-              <ScrollView style={m.modalBody}>
-                <TextInput
-                  style={[m.fieldInput, { minHeight: 300, textAlignVertical: 'top' }]}
-                  placeholder="粘贴导入文本..."
-                  placeholderTextColor="#555"
-                  value={text}
-                  onChangeText={setText}
-                  multiline
-                  textAlignVertical="top"
-                  autoCapitalize="none"
-                />
-              </ScrollView>
-              <View style={m.modalFooter}>
-                <TouchableOpacity style={[m.modalBtn, m.cancelBtn]} onPress={onClose}><Text style={m.cancelBtnText}>取消</Text></TouchableOpacity>
-                <TouchableOpacity style={[m.modalBtn, m.submitBtn]} onPress={handleImport}><Text style={m.submitBtnText}>导入</Text></TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </TouchableWithoutFeedback>
-    </Modal>
-  );
-}
-
-// ============== 子组件：Agent列表（写作线/评审团共用） ==============
-function AgentListSection({
-  title,
-  agents,
-  apiConfigs,
-  onAdd,
-  onEdit,
-  onDelete,
-  onToggle,
-  onMoveUp,
-  onMoveDown,
-  onReset,
-  onExport,
-  onImport,
-  onImportAgent,
-  desc,
-}: {
-  title: string;
-  agents: Agent[];
-  apiConfigs: ApiConfig[];
-  onAdd: () => void;
-  onEdit: (agent: Agent) => void;
-  onDelete: (agent: Agent) => void;
-  onToggle: (agent: Agent) => void;
-  onMoveUp: (index: number) => void;
-  onMoveDown: (index: number) => void;
-  onReset: () => void;
-  onExport: () => void;
-  onImport: () => void;
-  onImportAgent: (text: string) => void;
-  desc: string;
-}) {
-  const getApiName = (apiId?: string) => {
-    if (!apiId) return '默认';
-    const cfg = apiConfigs.find((c) => c.id === apiId);
-    return cfg ? cfg.name : '默认';
-  };
-
-  return (
-    <>
-      <View style={s.sectionHeader}>
-        <Text style={s.sectionTitle}>{title}</Text>
-        <View style={s.sectionBtns}>
-          <TouchableOpacity style={s.impExpBtn} onPress={onExport}>
-            <Ionicons name="download-outline" size={16} color="#888" />
-            <Text style={s.impExpBtnText}>导出</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.impExpBtn} onPress={onImport}>
-            <Ionicons name="cloud-upload-outline" size={16} color="#888" />
-            <Text style={s.impExpBtnText}>导入</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-      <Text style={s.sectionDesc}>{desc}</Text>
-
-      {agents.map((agent, index) => (
-        <View key={agent.id} style={[s.agentCard, !agent.enabled && s.agentCardDisabled]}>
-          <View style={s.agentOrder}>
-            <TouchableOpacity onPress={() => onMoveUp(index)} disabled={index === 0}>
-              <Ionicons name="chevron-up" size={22} color={index === 0 ? '#333' : '#888'} />
-            </TouchableOpacity>
-            <Text style={[s.agentOrderNum, !agent.enabled && s.textDisabled]}>{index + 1}</Text>
-            <TouchableOpacity onPress={() => onMoveDown(index)} disabled={index === agents.length - 1}>
-              <Ionicons name="chevron-down" size={22} color={index === agents.length - 1 ? '#333' : '#888'} />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity style={s.agentInfo} onPress={() => onEdit(agent)} activeOpacity={0.7}>
-            <Text style={[s.agentName, !agent.enabled && s.textDisabled]}>{agent.name}</Text>
-            <Text style={s.agentApi}>API: {getApiName(agent.apiId)}</Text>
-          </TouchableOpacity>
-
-          <View style={s.agentRightActions}>
-            <Switch
-              value={agent.enabled}
-              onValueChange={() => onToggle(agent)}
-              trackColor={{ false: '#333', true: '#666' }}
-              thumbColor={agent.enabled ? '#fff' : '#555'}
-            />
-            <TouchableOpacity onPress={() => onDelete(agent)} style={s.iconBtn}>
-              <Ionicons name="trash-outline" size={18} color="#666" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      ))}
-
-      <TouchableOpacity style={s.addBtn} onPress={onAdd}>
-        <Ionicons name="add" size={20} color="#fff" />
-        <Text style={s.addBtnText}>添加Agent</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={s.resetBtn} onPress={onReset}>
-        <Text style={s.resetBtnText}>重置为默认</Text>
-      </TouchableOpacity>
-    </>
-  );
-}
+// ============== 默认评审团Agent ==============
+const DEFAULT_REVIEW_AGENTS: Omit<ReviewAgent, 'id'>[] = [
+  { name: '逻辑审查员', role: 'logic', prompt: '你是逻辑审查员，负责检查内容的逻辑一致性，找出前后矛盾、因果不通、设定冲突等问题。用简短直接的语言指出问题所在。', enabled: true, order: 1 },
+  { name: '节奏分析师', role: 'pacing', prompt: '你是节奏分析师，负责分析叙事节奏是否合理，是否存在拖沓、跳跃、冗余等问题。给出具体的调整建议。', enabled: true, order: 2 },
+  { name: '读者视角', role: 'reader', prompt: '你站在读者视角，评价这段内容的吸引力、可读性和代入感。告诉作者读者最关心的点和最可能弃读的地方。', enabled: true, order: 3 },
+];
 
 // ============== 主页面 ==============
 export default function AgentConfigScreen() {
   const router = useSafeRouter();
 
   // Tab状态
-  const [activeTab, setActiveTab] = useState<'writing' | 'review' | 'api'>('writing');
+  const [activeTab, setActiveTab] = useState<'collab' | 'review' | 'api'>('collab');
 
-  // API配置（本地存储）
+  // API配置
   const [apiConfigs, setApiConfigs] = useState<ApiConfig[]>([]);
   const [apiModalVisible, setApiModalVisible] = useState(false);
   const [editingApi, setEditingApi] = useState<ApiConfig | null>(null);
 
-  // 写作线Agent（本地存储）
-  const [writingAgents, setWritingAgents] = useState<Agent[]>([]);
-  const [agentModalVisible, setAgentModalVisible] = useState(false);
-  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
-  const [isAddingAgent, setIsAddingAgent] = useState(false);
+  // 协作Agent（预置Agent的用户配置）
+  const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>([]);
+  const [collabEditVisible, setCollabEditVisible] = useState(false);
+  const [editingPreset, setEditingPreset] = useState<PresetAgent | null>(null);
 
-  // 评审团Agent（本地存储）
-  const [reviewAgents, setReviewAgents] = useState<Agent[]>([]);
+  // 评审团Agent
+  const [reviewAgents, setReviewAgents] = useState<ReviewAgent[]>([]);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
-  const [editingReviewAgent, setEditingReviewAgent] = useState<Agent | null>(null);
+  const [editingReviewAgent, setEditingReviewAgent] = useState<ReviewAgent | null>(null);
   const [isAddingReviewAgent, setIsAddingReviewAgent] = useState(false);
-
-  // 导入弹窗
-  const [importModalVisible, setImportModalVisible] = useState(false);
-  const [importType, setImportType] = useState<'api' | 'writing' | 'review'>('api');
-  const [importText, setImportText] = useState('');
-
-  // API测试
-  const [testingApis, setTestingApis] = useState<Record<string, 'testing' | 'ok' | 'fail'>>({});
 
   // 评审配置
   const [reviewConfig, setReviewConfig] = useState<ReviewConfig>({
@@ -440,6 +353,11 @@ export default function AgentConfigScreen() {
     rounds: 1,
     maxWords: 80,
   });
+
+  // 智能搭配弹窗
+  const [smartMatchVisible, setSmartMatchVisible] = useState(false);
+  const [smartMatchSuggestion, setSmartMatchSuggestion] = useState('');
+  const [smartMatchLoading, setSmartMatchLoading] = useState(false);
 
   // ============== 加载数据 ==============
   const loadApiConfigs = useCallback(async () => {
@@ -449,18 +367,23 @@ export default function AgentConfigScreen() {
     } catch (_e) {}
   }, []);
 
-  const loadWritingAgents = useCallback(async () => {
+  const loadAgentConfigs = useCallback(async () => {
     try {
       const data = await AsyncStorage.getItem('agentConfigs');
       if (data) {
-        setWritingAgents(JSON.parse(data));
+        setAgentConfigs(JSON.parse(data));
       } else {
-        const defaultList: Agent[] = DEFAULT_WRITING_AGENTS.map((a, i) => ({
-          ...a,
-          id: new Date().getTime().toString() + '_w' + i,
+        // 初始化默认配置：核心和推荐启用，可选关闭
+        const defaultConfigs: AgentConfig[] = PRESET_AGENTS.map((p, i) => ({
+          presetId: p.id,
+          name: p.name,
+          prompt: p.prompt,
+          enabled: p.category === 'core' || p.category === 'recommended',
+          apiId: '',
+          order: i + 1,
         }));
-        setWritingAgents(defaultList);
-        await AsyncStorage.setItem('agentConfigs', JSON.stringify(defaultList));
+        setAgentConfigs(defaultConfigs);
+        await AsyncStorage.setItem('agentConfigs', JSON.stringify(defaultConfigs));
       }
     } catch (_e) {}
   }, []);
@@ -471,7 +394,7 @@ export default function AgentConfigScreen() {
       if (data) {
         setReviewAgents(JSON.parse(data));
       } else {
-        const defaultList: Agent[] = DEFAULT_REVIEW_AGENTS.map((a, i) => ({
+        const defaultList: ReviewAgent[] = DEFAULT_REVIEW_AGENTS.map((a, i) => ({
           ...a,
           id: new Date().getTime().toString() + '_r' + i,
         }));
@@ -491,10 +414,10 @@ export default function AgentConfigScreen() {
   useFocusEffect(
     useCallback(() => {
       loadApiConfigs();
-      loadWritingAgents();
+      loadAgentConfigs();
       loadReviewAgents();
       loadReviewConfig();
-    }, [loadApiConfigs, loadWritingAgents, loadReviewAgents, loadReviewConfig])
+    }, [loadApiConfigs, loadAgentConfigs, loadReviewAgents, loadReviewConfig])
   );
 
   // ============== 保存函数 ==============
@@ -503,12 +426,12 @@ export default function AgentConfigScreen() {
     await AsyncStorage.setItem('apiConfigs', JSON.stringify(configs));
   };
 
-  const saveWritingAgents = async (list: Agent[]) => {
-    setWritingAgents(list);
+  const saveAgentConfigs = async (list: AgentConfig[]) => {
+    setAgentConfigs(list);
     await AsyncStorage.setItem('agentConfigs', JSON.stringify(list));
   };
 
-  const saveReviewAgents = async (list: Agent[]) => {
+  const saveReviewAgents = async (list: ReviewAgent[]) => {
     setReviewAgents(list);
     await AsyncStorage.setItem('reviewTeamConfigs', JSON.stringify(list));
   };
@@ -518,247 +441,121 @@ export default function AgentConfigScreen() {
     await AsyncStorage.setItem('reviewConfig', JSON.stringify(config));
   };
 
-  // ============== API导入导出 ==============
-  const exportApiText = () => {
-    return apiConfigs.map((cfg) =>
-      `模型: ${cfg.name}\nAPI: ${cfg.baseUrl}\nKey: ${cfg.apiKey}\n模型名: ${cfg.model}`
-    ).join('\n---\n');
+  // ============== 协作Agent操作 ==============
+  const handleEditCollabAgent = (preset: PresetAgent) => {
+    setEditingPreset(preset);
+    setCollabEditVisible(true);
   };
 
-  const handleImportApi = (text: string) => {
-    const blocks = text.split('---');
-    const newConfigs: ApiConfig[] = [];
-    for (const block of blocks) {
-      const lines = block.trim().split('\n').map((l) => l.trim()).filter(Boolean);
-      const getValue = (prefix: string) => {
-        const line = lines.find((l) => l.startsWith(prefix));
-        return line ? line.substring(prefix.length).trim() : '';
-      };
-      const name = getValue('模型:');
-      const baseUrl = getValue('API:');
-      const apiKey = getValue('Key:');
-      const model = getValue('模型名:');
-      if (name && apiKey && baseUrl && model) {
-        newConfigs.push({ id: new Date().getTime().toString() + '_' + newConfigs.length, name, apiKey, baseUrl, model });
-      }
-    }
-    if (newConfigs.length === 0) {
-      Alert.alert('导入失败', '未识别到有效的API配置，请检查格式');
-      return;
-    }
-    saveApiConfigs([...apiConfigs, ...newConfigs]);
-    Alert.alert('导入成功', `已导入 ${newConfigs.length} 个API配置`);
+  const handleSaveCollabAgent = (data: { name: string; prompt: string; apiId: string }) => {
+    if (!editingPreset) return;
+    const next = agentConfigs.map((a) =>
+      a.presetId === editingPreset.id ? { ...a, ...data } : a
+    );
+    saveAgentConfigs(next);
   };
 
-  // ============== Agent导入导出（通用） ==============
-  const exportAgentText = (agentList: Agent[]) => {
-    return agentList.map((a) =>
-      `名称: ${a.name}\n规则: ${a.prompt}\nAPI: ${getApiName(a.apiId)}\n顺序: ${a.order}\n启用: ${a.enabled ? '是' : '否'}`
-    ).join('\n---\n');
+  const handleToggleCollabAgent = (presetId: string) => {
+    const preset = PRESET_AGENTS.find((p) => p.id === presetId);
+    if (preset?.category === 'core') return; // 核心Agent不可禁用
+    const next = agentConfigs.map((a) =>
+      a.presetId === presetId ? { ...a, enabled: !a.enabled } : a
+    );
+    saveAgentConfigs(next);
   };
 
-  const handleImportAgent = (text: string, existingAgents: Agent[], saveFn: (list: Agent[]) => Promise<void>) => {
-    const blocks = text.split('---');
-    const newAgents: Agent[] = [];
-    const maxOrder = existingAgents.length > 0 ? Math.max(...existingAgents.map((a) => a.order)) : 0;
-    for (const block of blocks) {
-      const lines = block.trim().split('\n').map((l) => l.trim()).filter(Boolean);
-      const getValue = (prefix: string) => {
-        const line = lines.find((l) => l.startsWith(prefix));
-        return line ? line.substring(prefix.length).trim() : '';
-      };
-      const name = getValue('名称:');
-      const prompt = getValue('规则:');
-      const apiName = getValue('API:');
-      const orderStr = getValue('顺序:');
-      const enabledStr = getValue('启用:');
-      if (name && prompt) {
-        const apiId = apiName ? (apiConfigs.find((c) => c.name === apiName)?.id || '') : '';
-        newAgents.push({
-          id: new Date().getTime().toString() + '_a' + newAgents.length,
-          name,
-          role: 'custom',
-          prompt,
-          apiId,
-          order: orderStr ? parseInt(orderStr, 10) : maxOrder + newAgents.length + 1,
-          enabled: enabledStr !== '否',
-        });
-      }
-    }
-    if (newAgents.length === 0) {
-      Alert.alert('导入失败', '未识别到有效的Agent配置，请检查格式');
-      return;
-    }
-    saveFn([...existingAgents, ...newAgents]);
-    Alert.alert('导入成功', `已导入 ${newAgents.length} 个Agent`);
-  };
-
-  // ============== API一键测试 ==============
-  const testApiConnection = async (cfg: ApiConfig) => {
-    setTestingApis((prev) => ({ ...prev, [cfg.id]: 'testing' }));
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      const baseEndpoint = cfg.baseUrl.endsWith('/v1') ? cfg.baseUrl : `${cfg.baseUrl}/v1`;
-      const res = await fetch(`${baseEndpoint}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${cfg.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: cfg.model,
-          messages: [{ role: 'user', content: 'hi' }],
-          max_tokens: 5,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      if (res.ok) {
-        setTestingApis((prev) => ({ ...prev, [cfg.id]: 'ok' }));
-      } else {
-        const errText = await res.text().catch(() => '');
-        setTestingApis((prev) => ({ ...prev, [cfg.id]: 'fail' }));
-        Alert.alert('连接失败', `${cfg.name}: HTTP ${res.status}\n${errText.substring(0, 200)}`);
-      }
-    } catch (e: any) {
-      setTestingApis((prev) => ({ ...prev, [cfg.id]: 'fail' }));
-      Alert.alert('连接失败', `${cfg.name}: ${e.message || '网络错误'}`);
-    }
-  };
-
-  const testAllApis = async () => {
-    if (apiConfigs.length === 0) {
-      Alert.alert('提示', '没有可测试的API配置');
-      return;
-    }
-    for (const cfg of apiConfigs) {
-      await testApiConnection(cfg);
-    }
-    const okCount = Object.values(testingApis).filter((v) => v === 'ok').length;
-    Alert.alert('测试完成', `${okCount}/${apiConfigs.length} 个API连接正常`);
-  };
-
-  // ============== API配置操作 ==============
-  const handleAddApi = () => {
-    setEditingApi(null);
-    setApiModalVisible(true);
-  };
-
-  const handleEditApi = (cfg: ApiConfig) => {
-    setEditingApi(cfg);
-    setApiModalVisible(true);
-  };
-
-  const handleDeleteApi = (cfg: ApiConfig) => {
-    Alert.alert('确认', `确定删除API "${cfg.name}" 吗？`, [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: () => {
-          const next = apiConfigs.filter((c) => c.id !== cfg.id);
-          saveApiConfigs(next);
-        },
-      },
-    ]);
-  };
-
-  const handleSaveApi = (data: Omit<ApiConfig, 'id'> & { id?: string }) => {
-    if (data.id) {
-      const next = apiConfigs.map((c) => (c.id === data.id ? { ...c, ...data } : c));
-      saveApiConfigs(next);
-    } else {
-      const newCfg: ApiConfig = { ...data, id: new Date().getTime().toString() };
-      saveApiConfigs([...apiConfigs, newCfg]);
-    }
-  };
-
-  // ============== 写作线Agent操作 ==============
-  const handleAddWritingAgent = () => {
-    setIsAddingAgent(true);
-    setEditingAgent(null);
-    setAgentModalVisible(true);
-  };
-
-  const handleEditWritingAgent = (agent: Agent) => {
-    setIsAddingAgent(false);
-    setEditingAgent(agent);
-    setAgentModalVisible(true);
-  };
-
-  const handleSaveWritingAgent = (data: { name: string; prompt: string; apiId: string }) => {
-    if (editingAgent && !isAddingAgent) {
-      const next = writingAgents.map((a) => a.id === editingAgent.id ? { ...a, ...data } : a);
-      saveWritingAgents(next);
-    } else {
-      const newAgent: Agent = {
-        id: new Date().getTime().toString() + '_wnew',
-        name: data.name,
-        role: 'custom',
-        prompt: data.prompt,
-        apiId: data.apiId,
-        enabled: true,
-        order: writingAgents.length + 1,
-      };
-      saveWritingAgents([...writingAgents, newAgent]);
-    }
-  };
-
-  const handleDeleteWritingAgent = (agent: Agent) => {
-    Alert.alert('确认', `确定删除Agent "${agent.name}" 吗？`, [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: () => {
-          const next = writingAgents.filter((a) => a.id !== agent.id);
-          saveWritingAgents(next);
-        },
-      },
-    ]);
-  };
-
-  const handleToggleWritingAgent = (agent: Agent) => {
-    const next = writingAgents.map((a) => a.id === agent.id ? { ...a, enabled: !a.enabled } : a);
-    saveWritingAgents(next);
-  };
-
-  const handleMoveWritingUp = (index: number) => {
-    if (index === 0) return;
-    const newAgents = [...writingAgents];
-    const temp = newAgents[index];
-    newAgents[index] = newAgents[index - 1];
-    newAgents[index - 1] = temp;
-    const reordered = newAgents.map((a, i) => ({ ...a, order: i + 1 }));
-    saveWritingAgents(reordered);
-  };
-
-  const handleMoveWritingDown = (index: number) => {
-    if (index === writingAgents.length - 1) return;
-    const newAgents = [...writingAgents];
-    const temp = newAgents[index];
-    newAgents[index] = newAgents[index + 1];
-    newAgents[index + 1] = temp;
-    const reordered = newAgents.map((a, i) => ({ ...a, order: i + 1 }));
-    saveWritingAgents(reordered);
-  };
-
-  const handleResetWritingAgents = () => {
-    Alert.alert('确认', '确定重置写作线Agent为默认吗？自定义Agent将丢失。', [
+  const handleResetAgentConfigs = () => {
+    Alert.alert('确认', '确定重置所有协作Agent为默认配置吗？', [
       { text: '取消', style: 'cancel' },
       {
         text: '重置',
         style: 'destructive',
         onPress: () => {
-          const defaultList: Agent[] = DEFAULT_WRITING_AGENTS.map((a, i) => ({
-            ...a,
-            id: new Date().getTime().toString() + '_w' + i,
+          const defaultConfigs: AgentConfig[] = PRESET_AGENTS.map((p, i) => ({
+            presetId: p.id,
+            name: p.name,
+            prompt: p.prompt,
+            enabled: p.category === 'core' || p.category === 'recommended',
+            apiId: '',
+            order: i + 1,
           }));
-          saveWritingAgents(defaultList);
+          saveAgentConfigs(defaultConfigs);
         },
       },
     ]);
+  };
+
+  // ============== 智能搭配 ==============
+  const handleSmartMatch = async () => {
+    setSmartMatchLoading(true);
+    setSmartMatchVisible(true);
+
+    try {
+      // 读取第一个API配置
+      const firstApi = apiConfigs[0];
+      if (!firstApi) {
+        setSmartMatchSuggestion('请先配置至少一个API，才能使用智能搭配功能。');
+        setSmartMatchLoading(false);
+        return;
+      }
+
+      const baseEndpoint = firstApi.baseUrl.endsWith('/v1') ? firstApi.baseUrl : `${firstApi.baseUrl}/v1`;
+      const res = await fetch(`${baseEndpoint}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${firstApi.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: firstApi.model,
+          messages: [
+            { role: 'system', content: '你是小说写作AI助手，负责推荐最佳Agent协作方案。' },
+            { role: 'user', content: `我正在写一部小说，有以下可用Agent：\n${PRESET_AGENTS.map((p) => `- ${p.name}(${p.id}): ${p.description}`).join('\n')}\n\n请根据小说创作的最佳实践，推荐哪些Agent应该启用、哪些可以关闭。格式要求：每行一个Agent，格式为"启用/关闭 Agent名: 理由"。限200字以内。` },
+          ],
+          max_tokens: 500,
+        }),
+      });
+
+      if (!res.ok) {
+        setSmartMatchSuggestion('API调用失败，请检查API配置。');
+        setSmartMatchLoading(false);
+        return;
+      }
+
+      const json = await res.json();
+      const suggestion = json.choices?.[0]?.message?.content || '无法获取建议';
+      setSmartMatchSuggestion(suggestion);
+    } catch (_e) {
+      setSmartMatchSuggestion('网络错误，请检查API配置。');
+    }
+    setSmartMatchLoading(false);
+  };
+
+  const handleApplySmartMatch = () => {
+    // 简单解析：如果建议中包含"启用"某Agent名，则启用；包含"关闭"则关闭
+    const next = agentConfigs.map((a) => {
+      const preset = PRESET_AGENTS.find((p) => p.id === a.presetId);
+      if (!preset) return a;
+      if (preset.category === 'core') return { ...a, enabled: true }; // 核心始终启用
+      const nameInSuggestion = smartMatchSuggestion.includes(preset.name);
+      const shouldEnable = nameInSuggestion && (
+        smartMatchSuggestion.includes(`启用${preset.name}`) ||
+        smartMatchSuggestion.includes(`启用 ${preset.name}`) ||
+        smartMatchSuggestion.includes(`推荐${preset.name}`) ||
+        smartMatchSuggestion.includes(`建议${preset.name}`)
+      );
+      const shouldDisable = nameInSuggestion && (
+        smartMatchSuggestion.includes(`关闭${preset.name}`) ||
+        smartMatchSuggestion.includes(`关闭 ${preset.name}`) ||
+        smartMatchSuggestion.includes(`不需要${preset.name}`)
+      );
+      if (shouldDisable) return { ...a, enabled: false };
+      if (shouldEnable) return { ...a, enabled: true };
+      return a;
+    });
+    saveAgentConfigs(next);
+    setSmartMatchVisible(false);
+    Alert.alert('成功', '已根据AI建议调整Agent配置');
   };
 
   // ============== 评审团Agent操作 ==============
@@ -768,7 +565,7 @@ export default function AgentConfigScreen() {
     setReviewModalVisible(true);
   };
 
-  const handleEditReviewAgent = (agent: Agent) => {
+  const handleEditReviewAgent = (agent: ReviewAgent) => {
     setIsAddingReviewAgent(false);
     setEditingReviewAgent(agent);
     setReviewModalVisible(true);
@@ -779,7 +576,7 @@ export default function AgentConfigScreen() {
       const next = reviewAgents.map((a) => a.id === editingReviewAgent.id ? { ...a, ...data } : a);
       saveReviewAgents(next);
     } else {
-      const newAgent: Agent = {
+      const newAgent: ReviewAgent = {
         id: new Date().getTime().toString() + '_rnew',
         name: data.name,
         role: 'custom',
@@ -792,53 +589,26 @@ export default function AgentConfigScreen() {
     }
   };
 
-  const handleDeleteReviewAgent = (agent: Agent) => {
+  const handleDeleteReviewAgent = (agent: ReviewAgent) => {
     Alert.alert('确认', `确定删除评审Agent "${agent.name}" 吗？`, [
       { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: () => {
-          const next = reviewAgents.filter((a) => a.id !== agent.id);
-          saveReviewAgents(next);
-        },
-      },
+      { text: '删除', style: 'destructive', onPress: () => saveReviewAgents(reviewAgents.filter((a) => a.id !== agent.id)) },
     ]);
   };
 
-  const handleToggleReviewAgent = (agent: Agent) => {
+  const handleToggleReviewAgent = (agent: ReviewAgent) => {
     const next = reviewAgents.map((a) => a.id === agent.id ? { ...a, enabled: !a.enabled } : a);
     saveReviewAgents(next);
   };
 
-  const handleMoveReviewUp = (index: number) => {
-    if (index === 0) return;
-    const newAgents = [...reviewAgents];
-    const temp = newAgents[index];
-    newAgents[index] = newAgents[index - 1];
-    newAgents[index - 1] = temp;
-    const reordered = newAgents.map((a, i) => ({ ...a, order: i + 1 }));
-    saveReviewAgents(reordered);
-  };
-
-  const handleMoveReviewDown = (index: number) => {
-    if (index === reviewAgents.length - 1) return;
-    const newAgents = [...reviewAgents];
-    const temp = newAgents[index];
-    newAgents[index] = newAgents[index + 1];
-    newAgents[index + 1] = temp;
-    const reordered = newAgents.map((a, i) => ({ ...a, order: i + 1 }));
-    saveReviewAgents(reordered);
-  };
-
   const handleResetReviewAgents = () => {
-    Alert.alert('确认', '确定重置评审团Agent为默认吗？自定义Agent将丢失。', [
+    Alert.alert('确认', '确定重置评审团Agent为默认吗？', [
       { text: '取消', style: 'cancel' },
       {
         text: '重置',
         style: 'destructive',
         onPress: () => {
-          const defaultList: Agent[] = DEFAULT_REVIEW_AGENTS.map((a, i) => ({
+          const defaultList: ReviewAgent[] = DEFAULT_REVIEW_AGENTS.map((a, i) => ({
             ...a,
             id: new Date().getTime().toString() + '_r' + i,
           }));
@@ -848,11 +618,90 @@ export default function AgentConfigScreen() {
     ]);
   };
 
-  // 获取绑定的API名称
+  // ============== API操作 ==============
+  const handleAddApi = () => { setEditingApi(null); setApiModalVisible(true); };
+  const handleEditApi = (cfg: ApiConfig) => { setEditingApi(cfg); setApiModalVisible(true); };
+  const handleDeleteApi = (cfg: ApiConfig) => {
+    Alert.alert('确认', `确定删除API "${cfg.name}" 吗？`, [
+      { text: '取消', style: 'cancel' },
+      { text: '删除', style: 'destructive', onPress: () => saveApiConfigs(apiConfigs.filter((c) => c.id !== cfg.id)) },
+    ]);
+  };
+  const handleSaveApi = (data: Omit<ApiConfig, 'id'> & { id?: string }) => {
+    if (data.id) {
+      saveApiConfigs(apiConfigs.map((c) => (c.id === data.id ? { ...c, ...data } : c)));
+    } else {
+      saveApiConfigs([...apiConfigs, { ...data, id: new Date().getTime().toString() }]);
+    }
+  };
+
+  const testApiConnection = async (cfg: ApiConfig) => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const baseEndpoint = cfg.baseUrl.endsWith('/v1') ? cfg.baseUrl : `${cfg.baseUrl}/v1`;
+      const res = await fetch(`${baseEndpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey}` },
+        body: JSON.stringify({ model: cfg.model, messages: [{ role: 'user', content: 'hi' }], max_tokens: 5 }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (res.ok) {
+        Alert.alert('成功', `${cfg.name} 连接正常`);
+      } else {
+        Alert.alert('失败', `${cfg.name}: HTTP ${res.status}`);
+      }
+    } catch (e: any) {
+      Alert.alert('失败', `${cfg.name}: ${e.message || '网络错误'}`);
+    }
+  };
+
+  // ============== 工具函数 ==============
   const getApiName = (apiId?: string) => {
     if (!apiId) return '默认';
     const cfg = apiConfigs.find((c) => c.id === apiId);
     return cfg ? cfg.name : '默认';
+  };
+
+  const getAgentConfig = (presetId: string): AgentConfig | undefined => {
+    return agentConfigs.find((a) => a.presetId === presetId);
+  };
+
+  // 按分类分组
+  const coreAgents = PRESET_AGENTS.filter((p) => p.category === 'core');
+  const recommendedAgents = PRESET_AGENTS.filter((p) => p.category === 'recommended');
+  const optionalAgents = PRESET_AGENTS.filter((p) => p.category === 'optional');
+
+  // ============== 渲染Agent卡片 ==============
+  const renderAgentCard = (preset: PresetAgent) => {
+    const config = getAgentConfig(preset.id);
+    if (!config) return null;
+    const isCore = preset.category === 'core';
+
+    return (
+      <View key={preset.id} style={[s.agentCard, !config.enabled && s.agentCardDisabled]}>
+        <TouchableOpacity style={s.agentInfo} onPress={() => handleEditCollabAgent(preset)} activeOpacity={0.7}>
+          <View style={s.agentNameRow}>
+            <Text style={s.agentIcon}>{preset.icon}</Text>
+            <View style={s.agentNameCol}>
+              <Text style={[s.agentName, !config.enabled && s.textDisabled]}>{config.name}</Text>
+              <Text style={s.agentDesc} numberOfLines={2}>{preset.description}</Text>
+              <Text style={s.agentApi}>API: {getApiName(config.apiId)}</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+        <View style={s.agentRightActions}>
+          <Switch
+            value={config.enabled}
+            onValueChange={() => handleToggleCollabAgent(preset.id)}
+            trackColor={{ false: '#333', true: isCore ? '#555' : '#7C5CFF' }}
+            thumbColor={config.enabled ? '#fff' : '#555'}
+            disabled={isCore}
+          />
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -863,14 +712,14 @@ export default function AgentConfigScreen() {
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>写作流水线</Text>
+          <Text style={s.headerTitle}>Agent配置</Text>
           <View style={{ width: 40 }} />
         </View>
 
         {/* Tab切换 */}
         <View style={s.tabBar}>
           {([
-            { key: 'writing' as const, label: '写作线' },
+            { key: 'collab' as const, label: '协作Agent' },
             { key: 'review' as const, label: '评审团' },
             { key: 'api' as const, label: 'API配置' },
           ]).map((tab) => (
@@ -886,65 +735,81 @@ export default function AgentConfigScreen() {
 
         <ScrollView style={s.scrollView} contentContainerStyle={s.scrollContent}>
 
-          {/* ====== 写作线 Tab ====== */}
-          {activeTab === 'writing' && (
-            <AgentListSection
-              title="写作线Agent"
-              agents={writingAgents}
-              apiConfigs={apiConfigs}
-              onAdd={handleAddWritingAgent}
-              onEdit={handleEditWritingAgent}
-              onDelete={handleDeleteWritingAgent}
-              onToggle={handleToggleWritingAgent}
-              onMoveUp={handleMoveWritingUp}
-              onMoveDown={handleMoveWritingDown}
-              onReset={handleResetWritingAgents}
-              onExport={() => {
-                setImportType('writing');
-                setImportText(exportAgentText(writingAgents));
-                setImportModalVisible(true);
-              }}
-              onImport={() => {
-                setImportType('writing');
-                setImportText('');
-                setImportModalVisible(true);
-              }}
-              onImportAgent={(text) => handleImportAgent(text, writingAgents, saveWritingAgents)}
-              desc="从上往下依次执行，上下箭头调整顺序"
-            />
+          {/* ====== 协作Agent Tab ====== */}
+          {activeTab === 'collab' && (
+            <>
+              {/* 智能搭配按钮 */}
+              <TouchableOpacity style={s.smartMatchBtn} onPress={handleSmartMatch}>
+                <Ionicons name="sparkles" size={18} color="#7C5CFF" />
+                <Text style={s.smartMatchBtnText}>智能搭配</Text>
+              </TouchableOpacity>
+
+              {/* 核心Agent */}
+              <View style={s.categoryHeader}>
+                <Text style={s.categoryTitle}>核心（不可禁用）</Text>
+              </View>
+              {coreAgents.map(renderAgentCard)}
+
+              {/* 推荐Agent */}
+              <View style={s.categoryHeader}>
+                <Text style={s.categoryTitle}>推荐（默认启用）</Text>
+              </View>
+              {recommendedAgents.map(renderAgentCard)}
+
+              {/* 可选Agent */}
+              <View style={s.categoryHeader}>
+                <Text style={s.categoryTitle}>可选（默认关闭）</Text>
+              </View>
+              {optionalAgents.map(renderAgentCard)}
+
+              {/* 重置按钮 */}
+              <TouchableOpacity style={s.resetBtn} onPress={handleResetAgentConfigs}>
+                <Text style={s.resetBtnText}>重置为默认</Text>
+              </TouchableOpacity>
+            </>
           )}
 
           {/* ====== 评审团 Tab ====== */}
           {activeTab === 'review' && (
             <>
-              <AgentListSection
-                title="评审团Agent"
-                agents={reviewAgents}
-                apiConfigs={apiConfigs}
-                onAdd={handleAddReviewAgent}
-                onEdit={handleEditReviewAgent}
-                onDelete={handleDeleteReviewAgent}
-                onToggle={handleToggleReviewAgent}
-                onMoveUp={handleMoveReviewUp}
-                onMoveDown={handleMoveReviewDown}
-                onReset={handleResetReviewAgents}
-                onExport={() => {
-                  setImportType('review');
-                  setImportText(exportAgentText(reviewAgents));
-                  setImportModalVisible(true);
-                }}
-                onImport={() => {
-                  setImportType('review');
-                  setImportText('');
-                  setImportModalVisible(true);
-                }}
-                onImportAgent={(text) => handleImportAgent(text, reviewAgents, saveReviewAgents)}
-                desc="只有启用的评审Agent会在AI评审时参与讨论"
-              />
+              <View style={s.sectionHeader}>
+                <Text style={s.sectionTitle}>评审团Agent</Text>
+              </View>
+              <Text style={s.sectionDesc}>只有启用的评审Agent会在AI评审时参与讨论</Text>
 
-              {/* 评审参数配置 */}
+              {reviewAgents.map((agent) => (
+                <View key={agent.id} style={[s.agentCard, !agent.enabled && s.agentCardDisabled]}>
+                  <TouchableOpacity style={s.agentInfo} onPress={() => handleEditReviewAgent(agent)} activeOpacity={0.7}>
+                    <View style={s.agentNameCol}>
+                      <Text style={[s.agentName, !agent.enabled && s.textDisabled]}>{agent.name}</Text>
+                      <Text style={s.agentApi}>API: {getApiName(agent.apiId)}</Text>
+                    </View>
+                  </TouchableOpacity>
+                  <View style={s.agentRightActions}>
+                    <Switch
+                      value={agent.enabled}
+                      onValueChange={() => handleToggleReviewAgent(agent)}
+                      trackColor={{ false: '#333', true: '#7C5CFF' }}
+                      thumbColor={agent.enabled ? '#fff' : '#555'}
+                    />
+                    <TouchableOpacity onPress={() => handleDeleteReviewAgent(agent)} style={s.iconBtn}>
+                      <Ionicons name="trash-outline" size={18} color="#666" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+
+              <TouchableOpacity style={s.addBtn} onPress={handleAddReviewAgent}>
+                <Ionicons name="add" size={20} color="#fff" />
+                <Text style={s.addBtnText}>添加评审Agent</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={s.resetBtn} onPress={handleResetReviewAgents}>
+                <Text style={s.resetBtnText}>重置为默认</Text>
+              </TouchableOpacity>
+
+              {/* 评审参数 */}
               <View style={s.divider} />
-
               <Text style={s.sectionTitle}>评审参数</Text>
 
               <Text style={s.fieldTitle}>评审重点</Text>
@@ -990,45 +855,12 @@ export default function AgentConfigScreen() {
             <>
               <View style={s.sectionHeader}>
                 <Text style={s.sectionTitle}>API配置</Text>
-                <View style={s.sectionBtns}>
-                  <TouchableOpacity
-                    style={s.impExpBtn}
-                    onPress={() => {
-                      setImportType('api');
-                      setImportText(exportApiText());
-                      setImportModalVisible(true);
-                    }}
-                  >
-                    <Ionicons name="download-outline" size={16} color="#888" />
-                    <Text style={s.impExpBtnText}>导出</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={s.impExpBtn}
-                    onPress={() => {
-                      setImportType('api');
-                      setImportText('');
-                      setImportModalVisible(true);
-                    }}
-                  >
-                    <Ionicons name="cloud-upload-outline" size={16} color="#888" />
-                    <Text style={s.impExpBtnText}>导入</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.impExpBtn} onPress={testAllApis}>
-                    <Ionicons name="flash-outline" size={16} color="#888" />
-                    <Text style={s.impExpBtnText}>测试</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
 
               {apiConfigs.map((cfg) => (
                 <View key={cfg.id} style={s.apiCard}>
                   <View style={s.apiInfo}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={s.apiName}>{cfg.name}</Text>
-                      {testingApis[cfg.id] === 'ok' && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
-                      {testingApis[cfg.id] === 'fail' && <Ionicons name="close-circle" size={16} color="#F44336" />}
-                      {testingApis[cfg.id] === 'testing' && <ActivityIndicator size={14} color="#888" />}
-                    </View>
+                    <Text style={s.apiName}>{cfg.name}</Text>
                     <Text style={s.apiDetail}>{cfg.model} · {cfg.baseUrl.replace('https://', '').replace('http://', '').split('/')[0]}</Text>
                   </View>
                   <View style={s.apiActions}>
@@ -1061,31 +893,81 @@ export default function AgentConfigScreen() {
           onClose={() => setApiModalVisible(false)}
           onSave={handleSaveApi}
         />
-        <AgentEditModal
-          visible={agentModalVisible}
-          agent={editingAgent}
+        <CollabAgentEditModal
+          visible={collabEditVisible}
+          agent={editingPreset ? getAgentConfig(editingPreset.id) || null : null}
+          preset={editingPreset}
           apiConfigs={apiConfigs}
-          onClose={() => setAgentModalVisible(false)}
-          onSave={handleSaveWritingAgent}
+          onClose={() => setCollabEditVisible(false)}
+          onSave={handleSaveCollabAgent}
         />
-        <AgentEditModal
+        <ReviewAgentEditModal
           visible={reviewModalVisible}
           agent={editingReviewAgent}
           apiConfigs={apiConfigs}
           onClose={() => setReviewModalVisible(false)}
           onSave={handleSaveReviewAgent}
         />
-        <ImportExportModal
-          visible={importModalVisible}
-          title={importType === 'api' ? 'API导入导出' : importType === 'writing' ? '写作线Agent导入导出' : '评审团Agent导入导出'}
-          initialValue={importText}
-          onClose={() => setImportModalVisible(false)}
-          onImport={importType === 'api' ? handleImportApi : (text) => handleImportAgent(text, importType === 'writing' ? writingAgents : reviewAgents, importType === 'writing' ? saveWritingAgents : saveReviewAgents)}
-        />
+
+        {/* 智能搭配弹窗 */}
+        <Modal visible={smartMatchVisible} transparent animationType="slide">
+          <View style={m.modalContainer}>
+            <View style={[m.modalContent, { maxHeight: '80%' }]}>
+              <View style={m.modalHeader}>
+                <Text style={m.modalTitle}>智能搭配</Text>
+                <TouchableOpacity onPress={() => setSmartMatchVisible(false)}><Ionicons name="close" size={24} color="#888" /></TouchableOpacity>
+              </View>
+              <ScrollView style={m.modalBody}>
+                {smartMatchLoading ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                    <ActivityIndicator size="large" color="#7C5CFF" />
+                    <Text style={{ color: '#888', marginTop: 12 }}>AI正在分析最佳搭配方案...</Text>
+                  </View>
+                ) : (
+                  <Text style={{ color: '#ccc', fontSize: 14, lineHeight: 22 }}>{smartMatchSuggestion}</Text>
+                )}
+              </ScrollView>
+              {!smartMatchLoading && smartMatchSuggestion && !smartMatchSuggestion.includes('失败') && !smartMatchSuggestion.includes('错误') && (
+                <View style={m.modalFooter}>
+                  <TouchableOpacity style={[m.modalBtn, m.cancelBtn]} onPress={() => setSmartMatchVisible(false)}>
+                    <Text style={m.cancelBtnText}>取消</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[m.modalBtn, m.submitBtn]} onPress={handleApplySmartMatch}>
+                    <Text style={m.submitBtnText}>采用此方案</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
       </View>
     </Screen>
   );
 }
+
+// ============== 弹窗样式 ==============
+const m = StyleSheet.create({
+  modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
+  modalContent: { backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%', borderWidth: 1, borderColor: '#333' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#333' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
+  modalBody: { padding: 20 },
+  modalFooter: { flexDirection: 'row', gap: 12, padding: 20, borderTopWidth: 1, borderTopColor: '#333' },
+  modalBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  cancelBtn: { backgroundColor: '#333' },
+  cancelBtnText: { color: '#aaa', fontSize: 16, fontWeight: '600' },
+  submitBtn: { backgroundColor: '#7C5CFF' },
+  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  fieldLabel: { color: '#888', fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 12 },
+  fieldInput: { backgroundColor: '#222', borderRadius: 10, padding: 14, color: '#fff', fontSize: 15, borderWidth: 1, borderColor: '#333' },
+  promptInput: { minHeight: 120 },
+  pickerWrap: { backgroundColor: '#222', borderRadius: 10, borderWidth: 1, borderColor: '#333', maxHeight: 150 },
+  pickerScroll: { padding: 8 },
+  pickerItem: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8 },
+  pickerItemActive: { backgroundColor: '#7C5CFF' },
+  pickerItemText: { color: '#888', fontSize: 14 },
+  pickerItemTextActive: { color: '#fff', fontWeight: '600' },
+});
 
 // ============== 页面样式 ==============
 const s = StyleSheet.create({
@@ -1101,7 +983,6 @@ const s = StyleSheet.create({
   backBtn: { padding: 8 },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
 
-  // Tab栏
   tabBar: {
     flexDirection: 'row',
     marginHorizontal: 16,
@@ -1112,36 +993,104 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333',
   },
-  tabItem: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 10,
-  },
-  tabItemActive: {
-    backgroundColor: '#fff',
-  },
-  tabItemText: {
-    color: '#888',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tabItemTextActive: {
-    color: '#000',
-  },
+  tabItem: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
+  tabItemActive: { backgroundColor: '#7C5CFF' },
+  tabItemText: { color: '#888', fontSize: 14, fontWeight: '600' },
+  tabItemTextActive: { color: '#fff' },
 
   scrollView: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 100 },
 
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
+  // 智能搭配
+  smartMatchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#7C5CFF33',
+    marginBottom: 20,
+  },
+  smartMatchBtnText: { color: '#7C5CFF', fontSize: 15, fontWeight: '600' },
+
+  // 分类标题
+  categoryHeader: { marginTop: 16, marginBottom: 8, paddingLeft: 4 },
+  categoryTitle: { color: '#7C5CFF', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5 },
+
+  // Agent卡片
+  agentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  agentCardDisabled: { opacity: 0.5 },
+  agentInfo: { flex: 1 },
+  agentNameRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  agentIcon: { fontSize: 20 },
+  agentNameCol: { flex: 1 },
+  agentName: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  agentDesc: { color: '#888', fontSize: 12, marginTop: 2, lineHeight: 16 },
+  agentApi: { color: '#555', fontSize: 11, marginTop: 4 },
+  textDisabled: { color: '#555' },
+  agentRightActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+
+  // 评审团
+  sectionHeader: { marginTop: 16 },
   sectionTitle: { color: '#888', fontSize: 13, fontWeight: '600', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 },
-  sectionBtns: { flexDirection: 'row', gap: 12 },
   sectionDesc: { color: '#555', fontSize: 12, marginBottom: 12 },
 
-  impExpBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 },
-  impExpBtnText: { color: '#888', fontSize: 13 },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#7C5CFF',
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 12,
+  },
+  addBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 
+  resetBtn: { marginTop: 16, alignItems: 'center' },
+  resetBtnText: { color: '#555', fontSize: 13 },
+
+  iconBtn: { padding: 6 },
+
+  // 评审参数
   divider: { height: 1, backgroundColor: '#222', marginTop: 24, marginBottom: 8 },
+  fieldTitle: { color: '#888', fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 16 },
+  reviewInput: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 14,
+    color: '#fff',
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#333',
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  roundsRow: { flexDirection: 'row', gap: 10 },
+  roundBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  roundBtnActive: { backgroundColor: '#7C5CFF', borderColor: '#7C5CFF' },
+  roundBtnText: { color: '#888', fontSize: 14, fontWeight: '600' },
+  roundBtnTextActive: { color: '#fff' },
 
   // API卡片
   apiCard: {
@@ -1157,103 +1106,5 @@ const s = StyleSheet.create({
   apiInfo: { flex: 1 },
   apiName: { color: '#fff', fontSize: 16, fontWeight: '500' },
   apiDetail: { color: '#888', fontSize: 12, marginTop: 2 },
-  apiActions: { flexDirection: 'row', gap: 4 },
-
-  // Agent卡片
-  agentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  agentCardDisabled: { opacity: 0.45 },
-  agentOrder: { alignItems: 'center', marginRight: 12, width: 36 },
-  agentOrderNum: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginVertical: 2 },
-  agentInfo: { flex: 1 },
-  agentName: { color: '#fff', fontSize: 16, fontWeight: '500' },
-  agentApi: { color: '#888', fontSize: 12, marginTop: 2 },
-  agentRightActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  textDisabled: { color: '#555' },
-
-  // 通用
-  iconBtn: { padding: 8 },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#333',
-    gap: 8,
-    marginTop: 4,
-  },
-  addBtnText: { color: '#fff', fontSize: 15, fontWeight: '500' },
-  resetBtn: { alignItems: 'center', padding: 16, marginTop: 12 },
-  resetBtnText: { color: '#666', fontSize: 14 },
-
-  // 评审参数
-  fieldTitle: { color: '#888', fontSize: 13, fontWeight: '600', marginTop: 18, marginBottom: 8 },
-  reviewInput: {
-    backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14,
-    color: '#fff', fontSize: 15, borderWidth: 1, borderColor: '#333',
-    minHeight: 60, textAlignVertical: 'top',
-  },
-  roundsRow: { flexDirection: 'row', gap: 10 },
-  roundBtn: {
-    flex: 1, backgroundColor: '#1a1a1a', borderRadius: 10, padding: 12,
-    alignItems: 'center', borderWidth: 1, borderColor: '#333',
-  },
-  roundBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },
-  roundBtnText: { color: '#888', fontSize: 14, fontWeight: '500' },
-  roundBtnTextActive: { color: '#000', fontWeight: '600' },
-});
-
-// ============== 弹窗样式 ==============
-const m = StyleSheet.create({
-  modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
-  modalContent: {
-    backgroundColor: '#111',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 20, borderBottomWidth: 1, borderBottomColor: '#333',
-  },
-  modalTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  modalBody: { padding: 20, maxHeight: 500 },
-  modalFooter: {
-    flexDirection: 'row', gap: 12, padding: 20,
-    borderTopWidth: 1, borderTopColor: '#333',
-  },
-  modalBtn: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center' },
-  cancelBtn: { backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#333' },
-  cancelBtnText: { color: '#888', fontSize: 16 },
-  submitBtn: { backgroundColor: '#fff' },
-  submitBtnText: { color: '#000', fontSize: 16, fontWeight: '600' },
-
-  fieldLabel: { color: '#888', fontSize: 13, marginBottom: 6, marginTop: 12 },
-  sectionNum: { color: '#fff', fontSize: 15, fontWeight: '600', marginTop: 16, marginBottom: 8 },
-  fieldInput: {
-    backgroundColor: '#1a1a1a', borderRadius: 10, padding: 14,
-    color: '#fff', fontSize: 15, borderWidth: 1, borderColor: '#333',
-  },
-  promptInput: { height: 160, textAlignVertical: 'top' },
-
-  pickerWrap: {
-    backgroundColor: '#1a1a1a', borderRadius: 10,
-    borderWidth: 1, borderColor: '#333', maxHeight: 150,
-  },
-  pickerScroll: { padding: 6 },
-  pickerItem: { padding: 12, borderRadius: 8, marginBottom: 4 },
-  pickerItemActive: { backgroundColor: '#333' },
-  pickerItemText: { color: '#888', fontSize: 14 },
-  pickerItemTextActive: { color: '#fff', fontWeight: '600' },
+  apiActions: { flexDirection: 'row', gap: 8 },
 });

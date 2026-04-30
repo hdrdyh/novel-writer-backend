@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   View,
@@ -18,6 +18,8 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { orchestrateAgents, type AgentStepResult, type CoordinatorReport } from '@/utils/agentOrchestrator';
+import { getActiveAgentsForStage, type PresetAgent } from '@/utils/presetAgents';
 
 type OutlineStage = 'outline' | 'rough' | 'detail';
 
@@ -87,78 +89,69 @@ export default function OutlineScreen() {
     }, [loadData])
   );
 
-  // 读取Agent和API配置
-  const getConfig = useCallback(async () => {
-    const agentsStr = await AsyncStorage.getItem('agentConfigs');
-    const apisStr = await AsyncStorage.getItem('apiConfigs');
-    const agents = agentsStr ? JSON.parse(agentsStr) : [];
-    const apis = apisStr ? JSON.parse(apisStr) : [];
-    return { agents: agents.filter((a: any) => a.enabled), apis };
-  }, []);
+  // Agent 协作进度
+  const [activeAgentNames, setActiveAgentNames] = useState<string[]>([]);
+  const [currentAgentIdx, setCurrentAgentIdx] = useState(-1);
+  const abortRef = useRef(false);
 
-  // AI扩写
+  // AI扩写 - 使用 agentOrchestrator 编排
   const handleAIExpand = useCallback(async (stage: OutlineStage) => {
-    const { agents, apis } = await getConfig();
-    if (agents.length === 0 || apis.length === 0) {
-      Alert.alert('提示', '请先在写作流水线中配置Agent和API');
-      return;
-    }
-
     setLoading(true);
+    setCurrentAgentIdx(0);
+    abortRef.current = false;
+
+    // 构建上下文
+    const targetOutline = stage === 'outline' ? data.outline :
+      stage === 'rough' ? data.outline :
+        data.rough.join('\n');
+
+    let finalContent = '';
+
     try {
-      let prompt = '';
-      if (stage === 'outline') {
-        prompt = `请根据以下核心概念，扩展为完整的小说大纲，包含起承转合，约300字：\n${data.outline}`;
-      } else if (stage === 'rough') {
-        const chapters = data.targetChapters || 300;
-        prompt = `请根据以下大纲，拆分为${chapters}章的粗纲，每行一章，格式"第X章：xxx"。\n注意：必须生成完整的${chapters}章，不要遗漏，不要只生成前面几章。\n大纲如下：\n${data.outline}`;
-      } else {
-        prompt = `请根据以下粗纲，为每章展开细纲。要求：1.每章格式为"第X章：具体情节描述" 2.不要单独输出字数、不要重复章节标题 3.每章内容包含具体场景、角色出场、冲突点、情绪转折、悬念留尾 4.每章约100字 5.每章占一行，不要换行分段 6.必须为粗纲中的每一章都生成细纲，一章不漏。粗纲如下：\n${data.rough.join('\n')}`;
-      }
-
-      // 用第一个启用的Agent和其绑定的API
-      const agent = agents[0];
-      const api = apis.find((a: any) => a.id === agent.apiId) || apis[0];
-
-      // baseUrl如 https://api.deepseek.com，需要拼 /v1/chat/completions
-      const baseEndpoint = api.baseUrl.endsWith('/v1') ? api.baseUrl : `${api.baseUrl}/v1`;
-      // 根据章节数动态调整 max_tokens，每章约20字+格式开销
-      const chapterCount = stage === 'rough' ? (data.targetChapters || 300) : (data.rough.length || 10);
-      const maxTokens = Math.min(Math.max(chapterCount * 30, 2000), 16000);
-
-      const response = await fetch(`${baseEndpoint}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${api.apiKey}`,
+      await orchestrateAgents({
+        stage: stage === 'outline' ? 'outline' : stage === 'rough' ? 'rough' : 'detail',
+        context: targetOutline,
+        previousContent: '',
+        onAgentStart: (name: string, idx: number, _total: number) => {
+          setCurrentAgentIdx(idx);
+          setActiveAgentNames(prev => {
+            const next = [...prev];
+            next[idx] = name;
+            return next;
+          });
         },
-        body: JSON.stringify({
-          model: api.model,
-          messages: [
-            { role: 'system', content: agent.prompt || '你是一个专业的小说策划师。严格按照用户要求的格式输出，不要添加额外信息。' },
-            { role: 'user', content: prompt },
-          ],
-          max_tokens: maxTokens,
-        }),
+        onAgentChunk: () => {
+          // 大纲扩写不需要实时显示
+        },
+        onAgentComplete: (_agentName: string) => { /* 大纲扩写不需要逐Agent回调 */ },
+        onAllComplete: (_report: CoordinatorReport, allOutputs: AgentStepResult[]) => {
+          // 取最后一个非统筹Agent的输出作为最终内容
+          const contentAgent = allOutputs.filter(o => o.agentId !== 'coordinator').pop();
+          if (contentAgent) {
+            finalContent = contentAgent.output;
+          }
+        },
+        onError: (error: string) => {
+          Alert.alert('AI扩写失败', error);
+        },
       });
 
-      const result = await response.json();
-      const content = result.choices?.[0]?.message?.content || '';
+      if (!finalContent.trim()) {
+        Alert.alert('提示', 'AI扩写返回内容为空');
+        return;
+      }
 
       if (stage === 'outline') {
-        saveData({ ...data, outline: content });
+        saveData({ ...data, outline: finalContent });
       } else if (stage === 'rough') {
-        const lines = content.split('\n').filter((l: string) => l.trim()).filter((l: string) => !/^[\d零一二三四五六七八九十百千]+[、.．]/.test(l.trim()) || l.length > 10);
+        const lines = finalContent.split('\n').filter((l: string) => l.trim()).filter((l: string) => !/^[\d零一二三四五六七八九十百千]+[、.．]/.test(l.trim()) || l.length > 10);
         saveData({ ...data, rough: lines });
       } else {
-        // 过滤纯字数行，合并标题行和内容
-        const rawLines = content.split('\n').filter((l: string) => l.trim());
+        const rawLines = finalContent.split('\n').filter((l: string) => l.trim());
         const filtered: string[] = [];
         for (const line of rawLines) {
           const trimmed = line.trim();
-          // 跳过纯字数行（如"约1500字"、"1500字"）
           if (/^[\d约]+字$/.test(trimmed)) continue;
-          // 跳过纯章节标题行（如"第一章"，没有冒号/描述的）
           if (/^第[零一二三四五六七八九十百千\d]+章$/.test(trimmed)) continue;
           filtered.push(trimmed);
         }
@@ -168,8 +161,10 @@ export default function OutlineScreen() {
       Alert.alert('AI扩写失败', e.message || '请检查API配置');
     } finally {
       setLoading(false);
+      setCurrentAgentIdx(-1);
+      setActiveAgentNames([]);
     }
-  }, [data, getConfig, saveData]);
+  }, [data, saveData]);
 
   // 定稿
   const handleLock = useCallback((stage: OutlineStage) => {
@@ -342,6 +337,16 @@ export default function OutlineScreen() {
         </View>
       </View>
       {content}
+      {loading && activeAgentNames.length > 0 && (
+        <View style={styles.agentProgressContainer}>
+          <View style={styles.agentProgressBar}>
+            <View style={[styles.agentProgressFill, { width: `${((currentAgentIdx + 1) / activeAgentNames.length) * 100}%` }]} />
+          </View>
+          <Text style={styles.agentProgressText}>
+            Agent {currentAgentIdx + 1}/{activeAgentNames.length}: {activeAgentNames[currentAgentIdx] || '处理中...'}
+          </Text>
+        </View>
+      )}
     </View>
   );
 
@@ -972,5 +977,28 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 12,
     marginTop: 16,
+  },
+  agentProgressContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(124, 92, 255, 0.1)',
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  agentProgressBar: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  agentProgressFill: {
+    height: '100%',
+    backgroundColor: '#7C5CFF',
+    borderRadius: 2,
+  },
+  agentProgressText: {
+    color: '#7C5CFF',
+    fontSize: 12,
+    marginTop: 6,
   },
 });

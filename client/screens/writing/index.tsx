@@ -18,7 +18,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen } from '@/components/Screen';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
-import RNSSE from 'react-native-sse';
+import { orchestrateAgents, type OrchestrationParams, type AgentStepResult, type CoordinatorReport } from '@/utils/agentOrchestrator';
+import { PRESET_AGENTS, type PresetAgent } from '@/utils/presetAgents';
 
 interface QueueItem {
   id: string;
@@ -32,7 +33,7 @@ export default function WritingScreen() {
   const router = useSafeRouter();
   const params = useSafeSearchParams<{ chapterNumber: string; outline: string; rough: string; detail: string; novelName: string }>();
 
-  // 解析细纲数据（hooks之前计算）
+  // 解析细纲数据
   const parsedDetail = React.useMemo(() => {
     try {
       return params.detail ? JSON.parse(params.detail) : [];
@@ -41,16 +42,24 @@ export default function WritingScreen() {
     }
   }, [params.detail]);
 
+  // 解析粗纲数据
+  const parsedRough = React.useMemo(() => {
+    try {
+      return params.rough ? JSON.parse(params.rough) : [];
+    } catch {
+      return [];
+    }
+  }, [params.rough]);
+
   // 单章模式
   const [chapterNumber, setChapterNumber] = useState(parseInt(params.chapterNumber || '1') || 1);
   const [outlineInput, setOutlineInput] = useState(() => {
-    // 如果有细纲，用第一章的细纲作为初始值
     if (parsedDetail.length > 0) return parsedDetail[0] || '';
-    // 否则用大纲文本
     return params.outline || '';
   });
   const [content, setContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [switchingChapter, setSwitchingChapter] = useState(false);
 
   // 多章模式
   const [isMultiMode, setIsMultiMode] = useState(() => parsedDetail.length > 0);
@@ -71,7 +80,7 @@ export default function WritingScreen() {
   const [hasAutoLoaded, setHasAutoLoaded] = useState(false);
   const [currentQueueIdx, setCurrentQueueIdx] = useState(-1);
 
-  // 用 ref 跟踪最新值，避免 SSE 回调闭包陈旧
+  // ref 跟踪最新值
   const isMultiModeRef = useRef(isMultiMode);
   const currentQueueIdxRef = useRef(currentQueueIdx);
   const queueRef = useRef(queue);
@@ -81,12 +90,12 @@ export default function WritingScreen() {
     queueRef.current = queue;
   }, [isMultiMode, currentQueueIdx, queue]);
 
-  // AppState 监听：切回应用时，如果之前在生成中，自动重连继续
+  // AppState 监听
   const wasGeneratingRef = useRef(false);
   const isGeneratingRef = useRef(false);
   const lastOutlineRef = useRef('');
   const lastChNumRef = useRef(0);
-  const generateErrorTimeRef = useRef(0); // 记录错误时间，超过60秒不自动重试
+  const generateErrorTimeRef = useRef(0);
   const handleGenerateRef = useRef<((outline?: string, chNum?: number) => Promise<void>) | null>(null);
 
   useEffect(() => {
@@ -94,11 +103,9 @@ export default function WritingScreen() {
       if (nextAppState === 'active' && wasGeneratingRef.current && !isGeneratingRef.current) {
         const errorElapsed = Date.now() - generateErrorTimeRef.current;
         if (errorElapsed > 60000) {
-          // 超过60秒，不再自动重试
           wasGeneratingRef.current = false;
           return;
         }
-        // 从后台切回，之前在生成中且已断开 → 自动重试
         wasGeneratingRef.current = false;
         setTimeout(() => {
           if (handleGenerateRef.current) {
@@ -122,42 +129,60 @@ export default function WritingScreen() {
   const [savedItems, setSavedItems] = useState<any[]>([]);
   const [memoryItems, setMemoryItems] = useState<any[]>([]);
 
-  // Agent 相关状态
-  const [agentNames, setAgentNames] = useState<string[]>([]);
+  // Agent 编排状态
+  const [activeAgentNames, setActiveAgentNames] = useState<string[]>([]);
   const [currentAgentIdx, setCurrentAgentIdx] = useState(-1);
+  const [agentOutputs, setAgentOutputs] = useState<Record<string, string>>({});
   const abortRef = useRef(false);
 
-  // 读取用户配置的 Agent 列表
-  const loadAgentConfigs = useCallback(async () => {
-    try {
-      const str = await AsyncStorage.getItem('agentConfigs');
-      if (str) {
-        const agents = JSON.parse(str);
-        const enabled = agents.filter((a: any) => a.enabled !== false).sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-        setAgentNames(enabled.map((a: any) => a.name || 'Agent'));
-      }
-    } catch (_e) { /* ignore */ }
-  }, []);
+  // 统筹报告弹窗
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportContent, setReportContent] = useState('');
+  const [reportFeedback, setReportFeedback] = useState('');
 
   const loadSavedItems = useCallback(async () => {
     try {
       const data = await AsyncStorage.getItem('savedItems');
       if (data) setSavedItems(JSON.parse(data));
-    } catch (e) {}
+    } catch (_e) { /* ignore */ }
   }, []);
 
   const loadMemory = useCallback(async () => {
     try {
       const data = await AsyncStorage.getItem('memories');
       if (data) setMemoryItems(JSON.parse(data));
-    } catch (e) {}
+    } catch (_e) { /* ignore */ }
   }, []);
+
+  // 章节切换：同步细纲
+  const switchChapter = useCallback((newChNum: number) => {
+    if (newChNum < 1) return;
+
+    // 检查细纲是否存在
+    if (parsedDetail.length > 0 && newChNum > parsedDetail.length) {
+      Alert.alert('章节超出范围', `第${newChNum}章没有对应细纲，当前细纲共${parsedDetail.length}章`);
+      return;
+    }
+
+    setSwitchingChapter(true);
+    setChapterNumber(newChNum);
+    setContent(''); // 切换章节时清空正文
+
+    // 同步细纲
+    if (parsedDetail.length > 0 && newChNum <= parsedDetail.length) {
+      setOutlineInput(parsedDetail[newChNum - 1] || '');
+    } else {
+      setOutlineInput(params.outline || '');
+    }
+
+    // 模拟短暂加载
+    setTimeout(() => setSwitchingChapter(false), 600);
+  }, [parsedDetail, params.outline]);
 
   useFocusEffect(
     useCallback(() => {
       loadSavedItems();
       loadMemory();
-      loadAgentConfigs();
       // 检查章节评审结果
       (async () => {
         try {
@@ -165,7 +190,6 @@ export default function WritingScreen() {
           if (resultStr) {
             const result = JSON.parse(resultStr);
             await AsyncStorage.removeItem('chapter_review_result');
-            // 找到对应章节，更新内容
             const idx = queue.findIndex(q => q.chapterNumber === Number(result.chapterNumber));
             if (idx >= 0) {
               const newQueue = [...queue];
@@ -187,12 +211,10 @@ export default function WritingScreen() {
           setChapterNumber(1);
         }
       }
-    }, [loadSavedItems, loadMemory, loadAgentConfigs, parsedDetail, hasAutoLoaded, queue])
+    }, [loadSavedItems, loadMemory, parsedDetail, hasAutoLoaded, queue])
   );
 
-  // 不单独用 useEffect 调 loadAgentConfigs，放在 useFocusEffect 中
-
-  // 前端 Agent 编排：逐个调 LLM API
+  // 核心：使用 agentOrchestrator 编排 Agent
   const handleGenerate = async (outline?: string, chNum?: number) => {
     const targetOutline = outline || outlineInput;
     const targetChNum = chNum || chapterNumber;
@@ -202,184 +224,120 @@ export default function WritingScreen() {
       return;
     }
 
-    // 记录参数，用于 AppState 恢复
+    // 记录参数用于 AppState 恢复
     lastOutlineRef.current = targetOutline;
     lastChNumRef.current = targetChNum;
 
-    // 读取 API 配置
-    const apisStr = await AsyncStorage.getItem('apiConfigs');
-    const apis = apisStr ? JSON.parse(apisStr) : [];
-    if (apis.length === 0) {
-      Alert.alert('提示', '请先在写作流水线中配置API');
-      return;
+    // 读取记忆
+    let memoryText = '';
+    if (memoryItems.length > 0) {
+      memoryText = memoryItems.map((m: any) => `- ${m.name || m.title || ''}: ${m.description || m.content || ''}`).join('\n');
     }
 
-    // 读取 Agent 配置
-    const agentsStr = await AsyncStorage.getItem('agentConfigs');
-    const allAgents = agentsStr ? JSON.parse(agentsStr) : [];
-    const enabledAgents = allAgents.filter((a: any) => a.enabled !== false).sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-
-    if (enabledAgents.length === 0) {
-      Alert.alert('提示', '请先在写作流水线中启用至少一个Agent');
-      return;
+    // 读取大纲上下文
+    const outlineContext = params.outline || '';
+    let roughContext = '';
+    if (parsedRough.length > 0) {
+      roughContext = parsedRough.map((r: any, i: number) => `第${i + 1}章: ${typeof r === 'string' ? r : r.title || r.content || ''}`).join('\n');
     }
-
-    // 更新 agent 名称列表用于 UI 显示
-    setAgentNames(enabledAgents.map((a: any) => a.name || 'Agent'));
 
     setIsGenerating(true);
-    isGeneratingRef.current = true;    setContent('');
+    isGeneratingRef.current = true;
+    setContent('');
     setCurrentAgentIdx(0);
+    setAgentOutputs({});
     abortRef.current = false;
     wasGeneratingRef.current = true;
 
-    let accumulatedContent = '';
-
-    for (let i = 0; i < enabledAgents.length; i++) {
-      if (abortRef.current) break;
-
-      const agent = enabledAgents[i];
-      setCurrentAgentIdx(i);
-
-      // 找到该 Agent 绑定的 API 配置，没有就用默认（第一个）
-      let useApi = apis[0];
-      if (agent.apiId) {
-        const found = apis.find((c: any) => c.id === agent.apiId);
-        if (found) useApi = found;
-      }
-
-      if (!useApi?.apiKey || !useApi?.baseUrl || !useApi?.model) {
-        Alert.alert('提示', `Agent "${agent.name}" 的API配置不完整，请检查`);
-        setIsGenerating(false);
-        isGeneratingRef.current = false;
-        setCurrentAgentIdx(-1);
-        wasGeneratingRef.current = false;
-        return;
-      }
-
-      // 构建 prompt
-      const agentPrompt = agent.prompt || agent.systemPrompt || `你是${agent.name}，一位专业的小说创作助手。`;
-      const isFirstAgent = i === 0;
-
-      let userPrompt = '';
-      if (isFirstAgent) {
-        // 第一个 Agent：根据细纲创作正文
-        userPrompt = `请根据以下细纲创作小说第${targetChNum}章的正文内容：\n\n${targetOutline}\n\n要求：\n1. 严格按照细纲内容展开，不遗漏任何情节点\n2. 文笔流畅，描写生动\n3. 字数3000-5000字\n4. 直接输出正文内容，不要输出标题、大纲、说明等额外信息`;
-      } else {
-        // 后续 Agent：基于前一 Agent 的输出进行优化
-        userPrompt = `以下是第${targetChNum}章的当前内容：\n\n${accumulatedContent}\n\n请基于你的角色（${agent.name}）对上述内容进行优化和改写。保持故事主线和情节不变，重点在：${agentPrompt}\n\n要求：\n1. 输出完整改写后的章节正文（不是增量修改，而是完整输出）\n2. 保持字数在3000-5000字\n3. 直接输出正文，不要输出标题、说明等额外信息`;
-      }
-
-      // 调用 LLM API（SSE 流式）
-      try {
-        const base = (useApi.baseUrl || '').replace(/\/+$/, '');
-        const endpoint = base.endsWith('/v1') ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
-
-        const sse = new RNSSE(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${useApi.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: useApi.model,
-            messages: [
-              { role: 'system', content: agentPrompt },
-              { role: 'user', content: userPrompt },
-            ],
-            stream: true,
-          }),
-        });
-
-        let agentContent = '';
-
-        await new Promise<void>((resolve, reject) => {
-          sse.addEventListener('message', (event) => {
-            if (abortRef.current) {
-              sse.close();
-              resolve();
-              return;
-            }
-            if (event.data === '[DONE]') {
-              sse.close();
-              accumulatedContent = agentContent;
-              setContent(accumulatedContent);
-              resolve();
-              return;
-            }
-
-            try {
-              const json = JSON.parse(event.data || '{}');
-              const delta = json.choices?.[0]?.delta?.content || '';
-              if (delta) {
-                agentContent += delta;
-                // 实时显示当前 Agent 的输出
-                accumulatedContent = agentContent;
-                setContent(accumulatedContent);
-              }
-            } catch (_e) { /* ignore parse errors */ }
+    try {
+      await orchestrateAgents({
+        stage: 'writing',
+        context: targetOutline || '无细纲',
+        previousContent: memoryText,
+        chapterNumber: targetChNum,
+        novelName: novelName || '',
+        onAgentStart: (name: string, idx: number, total: number) => {
+          setCurrentAgentIdx(idx);
+          setActiveAgentNames(prev => {
+            const next = [...prev];
+            next[idx] = name;
+            return next;
           });
-
-          sse.addEventListener('error', (err: any) => {
-            sse.close();
-            // 非中止错误才弹出提示
-            if (!abortRef.current) {
-              reject(new Error('SSE连接错误'));
-            } else {
-              resolve();
-            }
-          });
-        });
-
-      } catch (error) {
-        // SSE 错误
-        generateErrorTimeRef.current = Number(new Date());
-        setIsGenerating(false);
-        isGeneratingRef.current = false;
-        setCurrentAgentIdx(-1);
-        // 如果已生成部分内容，保留 wasGeneratingRef 让 AppState 恢复时自动重连
-        // 如果一点内容都没有，说明可能是 API 配置错误，给提示
-        if (!accumulatedContent.trim()) {
+        },
+        onAgentChunk: (chunk: string) => {
+          // 实时追加内容
+          setContent(prev => prev + chunk);
+        },
+        onAgentComplete: (name: string, output: string) => {
+          setAgentOutputs(prev => ({ ...prev, [name]: output }));
+        },
+        onAllComplete: (report: CoordinatorReport, allOutputs: AgentStepResult[]) => {
+          // 找写手或润色师的输出作为最终正文
+          const writerOutput = allOutputs.find(o => o.agentId === 'style_polisher')?.output
+            || allOutputs.find(o => o.agentId === 'writer')?.output
+            || '';
+          if (writerOutput) {
+            setContent(writerOutput);
+          }
+          setIsGenerating(false);
+          isGeneratingRef.current = false;
+          setCurrentAgentIdx(-1);
           wasGeneratingRef.current = false;
-          Alert.alert('错误', '生成失败，请检查API配置和网络连接');
-        }
-        return;
-      }
-    }
 
-    // 全部 Agent 完成
-    setIsGenerating(false);
-    isGeneratingRef.current = false;
-    setCurrentAgentIdx(-1);
-    wasGeneratingRef.current = false;
+          // 显示统筹报告
+          setReportContent(report.agents.map(a => `${a.name}：${a.summary}`).join('\n'));
+          setShowReportModal(true);
 
-    // 多章模式：更新队列
-    if (isMultiModeRef.current && currentQueueIdxRef.current >= 0) {
-      const curIdx = currentQueueIdxRef.current;
-      setQueue((prev) =>
-        prev.map((item, idx) =>
-          idx === curIdx ? { ...item, content: accumulatedContent, status: 'done' as const } : item
-        )
-      );
-      // 自动生成下一章
-      const nextIdx = curIdx + 1;
-      const currentQueue = queueRef.current;
-      if (nextIdx < currentQueue.length && currentQueue[nextIdx].status === 'pending') {
-        setCurrentQueueIdx(nextIdx);
-        currentQueueIdxRef.current = nextIdx; // 立即同步 ref
-        setQueue((prev) =>
-          prev.map((item, idx) => (idx === nextIdx ? { ...item, status: 'generating' as const } : item))
-        );
-        setTimeout(() => {
-          handleGenerateRef.current?.(currentQueue[nextIdx].outline, currentQueue[nextIdx].chapterNumber);
-        }, 1000);
-      } else {
-        setCurrentQueueIdx(-1);
+          // 多章模式：更新队列
+          if (isMultiModeRef.current && currentQueueIdxRef.current >= 0) {
+            const curIdx = currentQueueIdxRef.current;
+            const finalContent = writerOutput || allOutputs.map(o => o.output).join('\n') || '';
+            setQueue((prev) =>
+              prev.map((item, idx) =>
+                idx === curIdx ? { ...item, content: finalContent, status: 'done' as const } : item
+              )
+            );
+            // 自动生成下一章
+            const nextIdx = curIdx + 1;
+            const currentQueue = queueRef.current;
+            if (nextIdx < currentQueue.length && currentQueue[nextIdx].status === 'pending') {
+              setCurrentQueueIdx(nextIdx);
+              currentQueueIdxRef.current = nextIdx;
+              setQueue((prev) =>
+                prev.map((item, idx) => (idx === nextIdx ? { ...item, status: 'generating' as const } : item))
+              );
+              setTimeout(() => {
+                handleGenerateRef.current?.(currentQueue[nextIdx].outline, currentQueue[nextIdx].chapterNumber);
+              }, 1000);
+            } else {
+              setCurrentQueueIdx(-1);
+            }
+          }
+        },
+        onError: (error: string) => {
+          generateErrorTimeRef.current = Date.now();
+          setIsGenerating(false);
+          isGeneratingRef.current = false;
+          setCurrentAgentIdx(-1);
+          if (!content.trim()) {
+            wasGeneratingRef.current = false;
+            Alert.alert('错误', error);
+          }
+        },
+      });
+    } catch (error: any) {
+      generateErrorTimeRef.current = Date.now();
+      setIsGenerating(false);
+      isGeneratingRef.current = false;
+      setCurrentAgentIdx(-1);
+      if (!content.trim()) {
+        wasGeneratingRef.current = false;
+        Alert.alert('错误', '生成失败，请检查API配置和网络连接');
       }
     }
   };
 
-  // 更新 ref 供 AppState 使用
+  // 更新 ref
   useEffect(() => {
     handleGenerateRef.current = handleGenerate;
   });
@@ -387,12 +345,14 @@ export default function WritingScreen() {
   // 多章模式：初始化队列
   const handleStartMultiMode = () => {
     const count = parseInt(multiCount) || 3;
+    const startCh = chapterNumber;
     const newQueue: QueueItem[] = [];
     for (let i = 0; i < count; i++) {
+      const chNum = startCh + i;
       newQueue.push({
         id: `ch_${new Date().getTime()}_${i}`,
-        chapterNumber: chapterNumber + i,
-        outline: '',
+        chapterNumber: chNum,
+        outline: parsedDetail.length > 0 && chNum <= parsedDetail.length ? parsedDetail[chNum - 1] : '',
         content: '',
         status: 'pending',
       });
@@ -406,15 +366,15 @@ export default function WritingScreen() {
   const handleGenerateAll = () => {
     const firstPending = queue.findIndex((item) => item.status === 'pending' && item.outline.trim());
     if (firstPending < 0) {
-      Alert.alert('提示', '请至少填写一章的章纲');
+      Alert.alert('提示', '没有可创作的章节（需要有细纲内容）');
       return;
     }
     setCurrentQueueIdx(firstPending);
-    currentQueueIdxRef.current = firstPending; // 立即同步 ref
+    currentQueueIdxRef.current = firstPending;
     handleGenerate(queue[firstPending].outline, queue[firstPending].chapterNumber);
   };
 
-  // 多章模式：更新某章章纲
+  // 多章模式：更新某章细纲
   const updateQueueOutline = (idx: number, text: string) => {
     setQueue((prev) => prev.map((item, i) => (i === idx ? { ...item, outline: text } : item)));
   };
@@ -424,12 +384,15 @@ export default function WritingScreen() {
     setQueue((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  // 多章模式：重新生成某章
+  // 多章模式：重新生成某章（重写）
   const handleRegenerateQueueItem = (idx: number) => {
     const item = queue[idx];
-    if (!item.outline.trim()) return;
+    if (!item.outline.trim()) {
+      Alert.alert('提示', '该章节没有细纲，无法重写');
+      return;
+    }
     setCurrentQueueIdx(idx);
-    currentQueueIdxRef.current = idx; // 立即同步 ref
+    currentQueueIdxRef.current = idx;
     setQueue((prev) => prev.map((q, i) => (i === idx ? { ...q, status: 'generating', content: '' } : q)));
     handleGenerate(item.outline, item.chapterNumber);
   };
@@ -534,16 +497,22 @@ export default function WritingScreen() {
           {!isMultiMode ? (
             /* ========== 单章模式 ========== */
             <>
+              {/* 章节切换 + 加载进度条 */}
               <View style={styles.chapterBadge}>
                 <Ionicons name="document-text" size={16} color="#888" />
                 <Text style={styles.chapterText}>第 {chapterNumber} 章</Text>
-                <TouchableOpacity onPress={() => setChapterNumber(Math.max(1, chapterNumber - 1))}>
+                <TouchableOpacity onPress={() => switchChapter(chapterNumber - 1)}>
                   <Ionicons name="remove-circle-outline" size={20} color="#888" style={{ marginLeft: 8 }} />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setChapterNumber(chapterNumber + 1)}>
+                <TouchableOpacity onPress={() => switchChapter(chapterNumber + 1)}>
                   <Ionicons name="add-circle-outline" size={20} color="#888" />
                 </TouchableOpacity>
               </View>
+              {switchingChapter && (
+                <View style={styles.switchingBar}>
+                  <View style={styles.switchingProgress} />
+                </View>
+              )}
 
               {outlineInput ? (
                 <View style={styles.outlineSection}>
@@ -576,22 +545,30 @@ export default function WritingScreen() {
                 )}
               </TouchableOpacity>
 
-              {isGenerating && (
+              {/* Agent 协作进度区 */}
+              {isGenerating && activeAgentNames.length > 0 && (
                 <View style={styles.agentStatus}>
-                  <Text style={styles.agentStatusTitle}>AI创作进度</Text>
+                  <Text style={styles.agentStatusTitle}>Agent 协作进度</Text>
                   <View style={styles.agentSteps}>
-                    {agentNames.map((name, idx) => (
-                      <View key={idx} style={styles.agentStepItem}>
-                        <View style={[styles.stepDot, currentAgentIdx >= idx && styles.stepDotActive, currentAgentIdx === idx && styles.stepDotCurrent]} />
-                        <Text style={[styles.stepText, currentAgentIdx >= idx && styles.stepTextActive, currentAgentIdx === idx && styles.stepTextCurrent]}>
+                    {activeAgentNames.map((name, idx) => (
+                      <View key={`${name}-${idx}`} style={styles.agentStepItem}>
+                        {currentAgentIdx > idx && <Ionicons name="checkmark-circle" size={14} color="#4ade80" />}
+                        {currentAgentIdx === idx && <ActivityIndicator size={14} color="#7C5CFF" />}
+                        {currentAgentIdx < idx && <View style={styles.stepDotPending} />}
+                        <Text style={[
+                          styles.stepText,
+                          currentAgentIdx > idx && styles.stepTextDone,
+                          currentAgentIdx === idx && styles.stepTextCurrent,
+                          currentAgentIdx < idx && styles.stepTextPending,
+                        ]}>
                           {name}
                         </Text>
                       </View>
                     ))}
                   </View>
-                  {currentAgentIdx >= 0 && currentAgentIdx < agentNames.length && (
+                  {currentAgentIdx >= 0 && currentAgentIdx < activeAgentNames.length && (
                     <Text style={styles.currentStepText}>
-                      正在执行：{agentNames[currentAgentIdx]} ({currentAgentIdx + 1}/{agentNames.length})
+                      正在执行：{activeAgentNames[currentAgentIdx]} ({currentAgentIdx + 1}/{activeAgentNames.length})
                     </Text>
                   )}
                 </View>
@@ -621,9 +598,18 @@ export default function WritingScreen() {
 
                   {/* 操作按钮 */}
                   <View style={styles.actionButtons}>
+                    {/* 重写按钮 - 醒目 */}
+                    <TouchableOpacity
+                      style={styles.rewriteBtn}
+                      onPress={() => handleGenerate()}
+                      disabled={isGenerating}
+                    >
+                      <Ionicons name="refresh" size={18} color="#fff" />
+                      <Text style={styles.rewriteBtnText}>重写</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.saveBtn} onPress={handleSaveAsChapter}>
                       <Ionicons name="bookmark" size={18} color="#000" />
-                      <Text style={styles.saveBtnText}>保存为章节</Text>
+                      <Text style={styles.saveBtnText}>保存</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.reviewBtn}
@@ -638,10 +624,14 @@ export default function WritingScreen() {
                   </View>
                 </View>
               ) : (
-                <View style={styles.emptyContent}>
-                  <Ionicons name="create-outline" size={48} color="#333" />
-                  <Text style={styles.emptyText}>{outlineInput ? '点击开始创作，AI将根据章纲生成正文' : '从大纲页点击"开始写作"，或输入章纲开始创作'}</Text>
-                </View>
+                !isGenerating && (
+                  <View style={styles.emptyContent}>
+                    <Ionicons name="create-outline" size={48} color="#333" />
+                    <Text style={styles.emptyText}>
+                      {outlineInput ? '点击"开始创作"，AI将根据细纲生成正文' : '从大纲页点击"开始写作"进入创作'}
+                    </Text>
+                  </View>
+                )
               )}
             </>
           ) : (
@@ -666,12 +656,12 @@ export default function WritingScreen() {
                     <Text style={styles.queueCardTitle}>第 {item.chapterNumber} 章</Text>
                     <View style={styles.queueCardActions}>
                       {/* pending 状态：显示开始创作按钮 */}
-                      {item.status === 'pending' && !isGenerating && (
+                      {item.status === 'pending' && !isGenerating && item.outline.trim() && (
                         <TouchableOpacity
                           style={[styles.queueActionBtn, { backgroundColor: '#4ade80', borderRadius: 4, paddingHorizontal: 6 }]}
                           onPress={() => {
                             setCurrentQueueIdx(idx);
-                            currentQueueIdxRef.current = idx; // 立即同步 ref
+                            currentQueueIdxRef.current = idx;
                             setQueue((prev) => prev.map((q, i) => (i === idx ? { ...q, status: 'generating' as const } : q)));
                             handleGenerate(item.outline, item.chapterNumber);
                           }}
@@ -680,11 +670,14 @@ export default function WritingScreen() {
                           <Text style={{ color: '#000', fontSize: 12, fontWeight: '600' }}>创作</Text>
                         </TouchableOpacity>
                       )}
+                      {item.status === 'pending' && !item.outline.trim() && (
+                        <Text style={{ color: '#ff6b6b', fontSize: 11 }}>无细纲</Text>
+                      )}
                       {item.status === 'generating' && (
                         <ActivityIndicator size="small" color="#fbbf24" />
                       )}
-                      {/* done 状态：显示操作按钮 */}
-                      {item.status === 'done' && (
+                      {/* done/reviewed 状态：显示操作按钮 */}
+                      {(item.status === 'done' || item.status === 'reviewed') && (
                         <>
                           <TouchableOpacity
                             style={styles.queueActionBtn}
@@ -712,24 +705,17 @@ export default function WritingScreen() {
                           >
                             <Ionicons name="bookmark-outline" size={18} color="#4ade80" />
                           </TouchableOpacity>
+                          {/* 重写按钮 - 醒目 */}
                           {!isGenerating && (
                             <TouchableOpacity
-                              style={styles.queueActionBtn}
+                              style={[styles.queueActionBtn, { backgroundColor: '#7C5CFF22', borderRadius: 4, paddingHorizontal: 6 }]}
                               onPress={() => handleRegenerateQueueItem(idx)}
                             >
-                              <Ionicons name="refresh" size={18} color="#fbbf24" />
+                              <Ionicons name="refresh" size={16} color="#7C5CFF" />
+                              <Text style={{ color: '#7C5CFF', fontSize: 11, fontWeight: '600' }}>重写</Text>
                             </TouchableOpacity>
                           )}
                         </>
-                      )}
-                      {/* reviewed 状态 */}
-                      {item.status === 'reviewed' && !isGenerating && (
-                        <TouchableOpacity
-                          style={styles.queueActionBtn}
-                          onPress={() => handleRegenerateQueueItem(idx)}
-                        >
-                          <Ionicons name="refresh" size={18} color="#fbbf24" />
-                        </TouchableOpacity>
                       )}
                       {!isGenerating && (
                         <TouchableOpacity onPress={() => removeQueueItem(idx)}>
@@ -750,16 +736,12 @@ export default function WritingScreen() {
                     </View>
                   )}
 
-                  {/* 章纲输入 */}
-                  <TextInput
-                    style={styles.queueOutlineInput}
-                    placeholder="细纲内容（可编辑）..."
-                    placeholderTextColor="#555"
-                    value={item.outline}
-                    onChangeText={(text) => updateQueueOutline(idx, text)}
-                    multiline
-                    editable={item.status === 'pending'}
-                  />
+                  {/* 细纲显示（只读） */}
+                  {item.outline ? (
+                    <Text style={styles.queueOutlineText} numberOfLines={3}>{item.outline}</Text>
+                  ) : (
+                    <Text style={styles.queueNoOutlineText}>无细纲内容</Text>
+                  )}
                 </View>
               ))}
 
@@ -778,18 +760,25 @@ export default function WritingScreen() {
                     正在生成：第 {queue[currentQueueIdx]?.chapterNumber} 章
                   </Text>
                   <View style={styles.agentSteps}>
-                    {agentNames.map((name, idx) => (
-                      <View key={idx} style={styles.agentStepItem}>
-                        <View style={[styles.stepDot, currentAgentIdx >= idx && styles.stepDotActive, currentAgentIdx === idx && styles.stepDotCurrent]} />
-                        <Text style={[styles.stepText, currentAgentIdx >= idx && styles.stepTextActive, currentAgentIdx === idx && styles.stepTextCurrent]}>
+                    {activeAgentNames.map((name, idx) => (
+                      <View key={`${name}-${idx}`} style={styles.agentStepItem}>
+                        {currentAgentIdx > idx && <Ionicons name="checkmark-circle" size={14} color="#4ade80" />}
+                        {currentAgentIdx === idx && <ActivityIndicator size={14} color="#7C5CFF" />}
+                        {currentAgentIdx < idx && <View style={styles.stepDotPending} />}
+                        <Text style={[
+                          styles.stepText,
+                          currentAgentIdx > idx && styles.stepTextDone,
+                          currentAgentIdx === idx && styles.stepTextCurrent,
+                          currentAgentIdx < idx && styles.stepTextPending,
+                        ]}>
                           {name}
                         </Text>
                       </View>
                     ))}
                   </View>
-                  {currentAgentIdx >= 0 && currentAgentIdx < agentNames.length && (
+                  {currentAgentIdx >= 0 && currentAgentIdx < activeAgentNames.length && (
                     <Text style={styles.currentStepText}>
-                      正在执行：{agentNames[currentAgentIdx]} ({currentAgentIdx + 1}/{agentNames.length})
+                      正在执行：{activeAgentNames[currentAgentIdx]} ({currentAgentIdx + 1}/{activeAgentNames.length})
                     </Text>
                   )}
                 </View>
@@ -862,6 +851,50 @@ export default function WritingScreen() {
           </View>
         </Modal>
 
+        {/* 统筹报告弹窗 */}
+        <Modal visible={showReportModal} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.reportModalContent}>
+              <Text style={styles.reportTitle}>协作报告</Text>
+              <ScrollView style={styles.reportScroll} nestedScrollEnabled>
+                <Text style={styles.reportText}>{reportContent}</Text>
+              </ScrollView>
+              <Text style={styles.reportFeedbackLabel}>意见反馈（可选）</Text>
+              <TextInput
+                style={styles.reportFeedbackInput}
+                placeholder="对本次协作有什么意见？"
+                placeholderTextColor="#555"
+                value={reportFeedback}
+                onChangeText={setReportFeedback}
+                multiline
+                numberOfLines={3}
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => {
+                    setShowReportModal(false);
+                    setReportFeedback('');
+                  }}
+                >
+                  <Text style={styles.modalCancelText}>确认完成</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalConfirmBtn}
+                  onPress={() => {
+                    setShowReportModal(false);
+                    setReportFeedback('');
+                    // 重新生成
+                    handleGenerate();
+                  }}
+                >
+                  <Text style={styles.modalConfirmText}>重新生成</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* 预览弹窗 */}
         <Modal visible={previewModal} animationType="slide" onRequestClose={() => setPreviewModal(false)}>
           <View style={styles.previewModalContainer}>
@@ -927,12 +960,25 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     alignSelf: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 4,
     gap: 6,
     borderWidth: 1,
     borderColor: '#333',
   },
   chapterText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  switchingBar: {
+    height: 3,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 2,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  switchingProgress: {
+    height: '100%',
+    backgroundColor: '#7C5CFF',
+    borderRadius: 2,
+    width: '60%',
+  },
   outlineSection: { marginBottom: 16 },
   sectionLabel: { color: '#888', fontSize: 13, marginBottom: 8, fontWeight: '500' },
   outlineDisplay: {
@@ -957,6 +1003,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333',
     gap: 8,
+    marginBottom: 16,
   },
   noOutlineHintText: {
     color: '#666',
@@ -983,15 +1030,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333',
   },
-  agentStatusTitle: { color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 8 },
-  agentSteps: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
-  agentStepItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#333' },
-  stepDotActive: { backgroundColor: '#888' },
-  stepDotCurrent: { backgroundColor: '#4ade80', width: 10, height: 10, borderRadius: 5 },
-  stepText: { color: '#555', fontSize: 11 },
-  stepTextActive: { color: '#ccc' },
-  stepTextCurrent: { color: '#4ade80', fontWeight: '600' },
+  agentStatusTitle: { color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 10 },
+  agentSteps: { gap: 8 },
+  agentStepItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stepDotPending: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#333' },
+  stepText: { fontSize: 12 },
+  stepTextDone: { color: '#4ade80' },
+  stepTextCurrent: { color: '#7C5CFF', fontWeight: '700' },
+  stepTextPending: { color: '#555' },
   currentStepText: { color: '#fff', fontSize: 13, marginTop: 8 },
   contentSection: { marginTop: 8 },
   contentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
@@ -1000,40 +1046,59 @@ const styles = StyleSheet.create({
   contentCard: {
     backgroundColor: '#1a1a1a',
     borderRadius: 8,
-    padding: 16,
-    maxHeight: 400,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#333',
+    minHeight: 200,
   },
-  contentScroll: { maxHeight: 380 },
-  contentText: { color: '#fff', fontSize: 15, lineHeight: 26 },
-  actionButtons: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  saveBtn: {
+  contentScroll: { maxHeight: 400 },
+  contentText: { color: '#ddd', fontSize: 15, lineHeight: 26 },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  rewriteBtn: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 8,
+    backgroundColor: '#7C5CFF',
+    borderRadius: 10,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  rewriteBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  saveBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingVertical: 12,
+    gap: 6,
   },
   saveBtnText: { color: '#000', fontSize: 15, fontWeight: '600' },
   reviewBtn: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 8,
+    backgroundColor: '#333',
+    borderRadius: 10,
+    paddingVertical: 12,
+    gap: 6,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#555',
   },
   reviewBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  emptyContent: { alignItems: 'center', paddingVertical: 60 },
-  emptyText: { color: '#888', fontSize: 15, marginTop: 12 },
+  emptyContent: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  emptyText: { color: '#666', fontSize: 14, textAlign: 'center' },
 
   // 多章模式
   multiHeader: {
@@ -1042,125 +1107,149 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  multiTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  multiTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   multiCount: { color: '#888', fontSize: 14 },
   queueCard: {
     backgroundColor: '#1a1a1a',
     borderRadius: 10,
-    padding: 16,
-    marginBottom: 12,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#333',
   },
-  queueCardActive: { borderColor: '#fff' },
-  queueCardReviewed: { borderColor: '#4ade80' },
+  queueCardActive: { borderColor: '#7C5CFF', borderWidth: 2 },
+  queueCardReviewed: { borderColor: '#4ade8044' },
   queueCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
   },
   queueCardTitle: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  queueCardActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  queueActionBtn: { padding: 4 },
-  statusRow: { marginBottom: 8 },
+  queueCardActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  queueActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+  },
+  statusRow: { marginTop: 6 },
   statusBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
     backgroundColor: '#333',
   },
   statusBadgeGenerating: { backgroundColor: '#fbbf2433' },
-  statusBadgeDone: { backgroundColor: '#60a5fa33' },
-  statusBadgeReviewed: { backgroundColor: '#4ade8033' },
-  statusBadgeText: { color: '#888', fontSize: 12, fontWeight: '500' },
-  queueOutlineInput: {
-    backgroundColor: '#111',
-    borderRadius: 6,
-    padding: 10,
-    color: '#fff',
-    fontSize: 14,
-    minHeight: 40,
-    textAlignVertical: 'top',
-    borderWidth: 1,
-    borderColor: '#222',
+  statusBadgeDone: { backgroundColor: '#4ade8033' },
+  statusBadgeReviewed: { backgroundColor: '#7C5CFF33' },
+  statusBadgeText: { fontSize: 11, color: '#ccc' },
+  queueOutlineText: {
+    color: '#999',
+    fontSize: 12,
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  queueNoOutlineText: {
+    color: '#ff6b6b',
+    fontSize: 12,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 
-  // 弹窗通用
+  // 弹窗
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
   modalContent: {
     backgroundColor: '#1a1a1a',
     borderRadius: 16,
     padding: 24,
-    width: '100%',
-    maxWidth: 360,
+    width: '85%',
     borderWidth: 1,
     borderColor: '#333',
   },
-  modalTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold', marginBottom: 12, textAlign: 'center' },
-  modalDesc: { color: '#888', fontSize: 14, marginBottom: 20, textAlign: 'center', lineHeight: 20 },
-  modalLabel: { color: '#888', fontSize: 13, marginBottom: 8, fontWeight: '500' },
+  reportModalContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: '#7C5CFF44',
+  },
+  modalTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold', marginBottom: 8 },
+  modalDesc: { color: '#888', fontSize: 14, marginBottom: 20 },
+  modalLabel: { color: '#ccc', fontSize: 14, marginBottom: 8 },
+  modalInfo: { color: '#888', fontSize: 14, marginBottom: 12 },
   modalInput: {
     backgroundColor: '#000',
     borderRadius: 8,
     padding: 14,
     color: '#fff',
     fontSize: 16,
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#333',
+    marginBottom: 12,
   },
-  modalInfo: { color: '#888', fontSize: 14, marginBottom: 16 },
   modalQuickRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   modalQuickBtn: {
     flex: 1,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#222',
+    backgroundColor: '#000',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#333',
   },
-  modalQuickBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },
-  modalQuickBtnText: { color: '#888', fontSize: 15, fontWeight: '500' },
-  modalQuickBtnTextActive: { color: '#000' },
-  modalButtons: { flexDirection: 'row', gap: 12 },
+  modalQuickBtnActive: { borderColor: '#7C5CFF', backgroundColor: '#7C5CFF22' },
+  modalQuickBtnText: { color: '#888', fontSize: 14 },
+  modalQuickBtnTextActive: { color: '#7C5CFF', fontWeight: '600' },
+  modalButtons: { flexDirection: 'row', gap: 12, marginTop: 8 },
   modalCancelBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 8,
     backgroundColor: '#333',
     alignItems: 'center',
   },
-  modalCancelText: { color: '#888', fontSize: 16 },
+  modalCancelText: { color: '#fff', fontSize: 15, fontWeight: '500' },
   modalConfirmBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#fff',
+    backgroundColor: '#7C5CFF',
     alignItems: 'center',
   },
-  modalConfirmText: { color: '#000', fontSize: 16, fontWeight: '600' },
-
-  // 预览弹窗
-  previewModalContainer: { flex: 1, backgroundColor: '#000', paddingTop: 60 },
+  modalConfirmText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  reportTitle: { color: '#7C5CFF', fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
+  reportScroll: { maxHeight: 200, marginBottom: 12 },
+  reportText: { color: '#ccc', fontSize: 14, lineHeight: 22 },
+  reportFeedbackLabel: { color: '#888', fontSize: 12, marginBottom: 6 },
+  reportFeedbackInput: {
+    backgroundColor: '#000',
+    borderRadius: 8,
+    padding: 12,
+    color: '#fff',
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#333',
+    minHeight: 60,
+    marginBottom: 12,
+    textAlignVertical: 'top',
+  },
+  previewModalContainer: { flex: 1, backgroundColor: '#000' },
   previewHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    padding: 20,
+    paddingTop: 60,
   },
-  previewTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  previewTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
   previewScroll: { flex: 1, padding: 20 },
-  previewText: { color: '#fff', fontSize: 16, lineHeight: 28 },
+  previewText: { color: '#ddd', fontSize: 16, lineHeight: 28 },
 });
