@@ -265,11 +265,28 @@ export default function AgentConfigScreen() {
     } catch (e) {}
   }, []);
 
+  // 评审配置
+  const [reviewConfig, setReviewConfig] = useState({
+    selectedAgents: [] as string[],
+    focusDirection: '',
+    rounds: 1,
+    maxWords: 80,
+  });
+
+  // 加载评审配置
+  const loadReviewConfig = useCallback(async () => {
+    try {
+      const data = await AsyncStorage.getItem('reviewConfig');
+      if (data) setReviewConfig(JSON.parse(data));
+    } catch (e) {}
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadApiConfigs();
       loadAgents();
-    }, [loadApiConfigs, loadAgents])
+      loadReviewConfig();
+    }, [loadApiConfigs, loadAgents, loadReviewConfig])
   );
 
   // 保存API配置到本地
@@ -448,11 +465,25 @@ export default function AgentConfigScreen() {
     } catch (e) {}
   };
 
+  // 保存评审配置
+  const saveReviewConfig = async (config: typeof reviewConfig) => {
+    setReviewConfig(config);
+    await AsyncStorage.setItem('reviewConfig', JSON.stringify(config));
+  };
+
   // 获取绑定的API名称
   const getApiName = (apiId?: string) => {
     if (!apiId) return '默认';
     const cfg = apiConfigs.find((c) => c.id === apiId);
     return cfg ? cfg.name : '默认';
+  };
+
+  // 切换评审Agent勾选
+  const toggleReviewAgent = (agentId: string) => {
+    const next = reviewConfig.selectedAgents.includes(agentId)
+      ? reviewConfig.selectedAgents.filter((id) => id !== agentId)
+      : [...reviewConfig.selectedAgents, agentId];
+    saveReviewConfig({ ...reviewConfig, selectedAgents: next });
   };
 
   return (
@@ -563,6 +594,66 @@ export default function AgentConfigScreen() {
             <Text style={s.resetBtnText}>重置为默认Agent</Text>
           </TouchableOpacity>
 
+          {/* ====== 评审配置 ====== */}
+          <Text style={s.sectionTitle}>评审配置</Text>
+          <Text style={s.sectionDesc}>AI评审时，只有勾选的Agent会参与讨论</Text>
+
+          {/* 勾选参与评审的Agent */}
+          {agents.filter((a) => a.enabled).map((agent) => (
+            <TouchableOpacity
+              key={agent.id}
+              style={s.reviewAgentRow}
+              onPress={() => toggleReviewAgent(agent.id)}
+              activeOpacity={0.7}
+            >
+              <View style={[s.checkbox, reviewConfig.selectedAgents.includes(agent.id) && s.checkboxChecked]}>
+                {reviewConfig.selectedAgents.includes(agent.id) && (
+                  <Ionicons name="checkmark" size={16} color="#000" />
+                )}
+              </View>
+              <Text style={s.reviewAgentName}>{agent.name}</Text>
+            </TouchableOpacity>
+          ))}
+
+          {/* 评审重点/方向 */}
+          <Text style={s.fieldTitle}>评审重点</Text>
+          <TextInput
+            style={s.reviewInput}
+            placeholder="如：重点检查前后矛盾和节奏拖沓..."
+            placeholderTextColor="#555"
+            value={reviewConfig.focusDirection}
+            onChangeText={(text) => saveReviewConfig({ ...reviewConfig, focusDirection: text })}
+            multiline
+          />
+
+          {/* 评审轮数 */}
+          <Text style={s.fieldTitle}>评审轮数</Text>
+          <View style={s.roundsRow}>
+            {[1, 2, 3].map((r) => (
+              <TouchableOpacity
+                key={r}
+                style={[s.roundBtn, reviewConfig.rounds === r && s.roundBtnActive]}
+                onPress={() => saveReviewConfig({ ...reviewConfig, rounds: r })}
+              >
+                <Text style={[s.roundBtnText, reviewConfig.rounds === r && s.roundBtnTextActive]}>{r}轮</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* 字数限制 */}
+          <Text style={s.fieldTitle}>每条回复字数上限</Text>
+          <View style={s.roundsRow}>
+            {[50, 80, 120, 150].map((w) => (
+              <TouchableOpacity
+                key={w}
+                style={[s.roundBtn, reviewConfig.maxWords === w && s.roundBtnActive]}
+                onPress={() => saveReviewConfig({ ...reviewConfig, maxWords: w })}
+              >
+                <Text style={[s.roundBtnText, reviewConfig.maxWords === w && s.roundBtnTextActive]}>{w}字</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
         </ScrollView>
 
         {/* 弹窗 */}
@@ -660,6 +751,64 @@ const s = StyleSheet.create({
     marginTop: 24,
   },
   resetBtnText: { color: '#666', fontSize: 14 },
+
+  // 评审配置
+  reviewAgentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#333',
+    gap: 12,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#555',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#fff',
+    borderColor: '#fff',
+  },
+  reviewAgentName: { color: '#fff', fontSize: 15 },
+  fieldTitle: { color: '#888', fontSize: 13, fontWeight: '600', marginTop: 18, marginBottom: 8 },
+  reviewInput: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 14,
+    color: '#fff',
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: '#333',
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  roundsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  roundBtn: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  roundBtnActive: {
+    backgroundColor: '#fff',
+    borderColor: '#fff',
+  },
+  roundBtnText: { color: '#888', fontSize: 14, fontWeight: '500' },
+  roundBtnTextActive: { color: '#000', fontWeight: '600' },
 });
 
 // ============== 弹窗样式 ==============
