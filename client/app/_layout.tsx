@@ -12,6 +12,7 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="agent-config" />
+          <Stack.Screen name="chapter-review" />
         </Stack>
       </View>
     </Provider>

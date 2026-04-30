@@ -25,13 +25,6 @@ export default function SettingsScreen() {
 
   const [settings, setSettings] = useState<SettingItem[]>([
     {
-      key: 'autoSave',
-      label: '自动保存记忆',
-      description: '生成内容后自动保存到记忆库',
-      type: 'toggle',
-      value: true,
-    },
-    {
       key: 'showAgentSteps',
       label: '显示AI创作过程',
       description: '展示多Agent协作的详细步骤',
