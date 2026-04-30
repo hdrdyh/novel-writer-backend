@@ -30,6 +30,7 @@ interface OutlineData {
   roughLocked: boolean;
   detailLocked: boolean;
   targetChapters: number; // 目标章节数
+  title: string; // 小说名
 }
 
 const STORAGE_KEY = 'outline_data';
@@ -45,6 +46,7 @@ export default function OutlineScreen() {
     roughLocked: false,
     detailLocked: false,
     targetChapters: 300,
+    title: '',
   });
   const [loading, setLoading] = useState(false);
   const [editIndex, setEditIndex] = useState(-1); // 当前编辑的粗纲/细纲索引
@@ -247,6 +249,7 @@ export default function OutlineScreen() {
       outline: data.outline,
       rough: JSON.stringify(data.rough),
       detail: JSON.stringify(data.detail),
+      novelName: data.title || '',
     });
   }, [data, router]);
 
@@ -351,6 +354,17 @@ export default function OutlineScreen() {
       </View>
 
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+        {/* 小说名 */}
+        <View style={styles.novelNameRow}>
+          <Feather name="book" size={16} color="#888" />
+          <TextInput
+            style={styles.novelNameInput}
+            placeholder="输入小说名称"
+            placeholderTextColor="#555"
+            value={data.title}
+            onChangeText={(text: string) => saveData({ ...data, title: text })}
+          />
+        </View>
         {/* 第一层：大纲 */}
         {renderStageCard(
           'outline',
@@ -582,6 +596,25 @@ const styles = StyleSheet.create({
     color: '#888',
     fontWeight: '600',
     letterSpacing: 2,
+  },
+  novelNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  novelNameInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10,
+    paddingVertical: 6,
   },
   title: {
     fontSize: 32,

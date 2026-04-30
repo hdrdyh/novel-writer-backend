@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   ActivityIndicator,
+  AppState,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,8 +19,6 @@ import { Screen } from '@/components/Screen';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import RNSSE from 'react-native-sse';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
 
 interface QueueItem {
   id: string;
@@ -31,7 +30,7 @@ interface QueueItem {
 
 export default function WritingScreen() {
   const router = useSafeRouter();
-  const params = useSafeSearchParams<{ chapterNumber: string; outline: string; rough: string; detail: string }>();
+  const params = useSafeSearchParams<{ chapterNumber: string; outline: string; rough: string; detail: string; novelName: string }>();
 
   // 解析细纲数据（hooks之前计算）
   const parsedDetail = React.useMemo(() => {
@@ -52,7 +51,6 @@ export default function WritingScreen() {
   });
   const [content, setContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [currentStep, setCurrentStep] = useState(-1);
 
   // 多章模式
   const [isMultiMode, setIsMultiMode] = useState(() => parsedDetail.length > 0);
@@ -83,6 +81,35 @@ export default function WritingScreen() {
     queueRef.current = queue;
   }, [isMultiMode, currentQueueIdx, queue]);
 
+  // AppState 监听：切回应用时，如果之前在生成中，自动重连继续
+  const wasGeneratingRef = useRef(false);
+  const isGeneratingRef = useRef(false);
+  const lastOutlineRef = useRef('');
+  const lastChNumRef = useRef(0);
+  const generateErrorTimeRef = useRef(0); // 记录错误时间，超过60秒不自动重试
+  const handleGenerateRef = useRef<((outline?: string, chNum?: number) => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && wasGeneratingRef.current && !isGeneratingRef.current) {
+        const errorElapsed = Date.now() - generateErrorTimeRef.current;
+        if (errorElapsed > 60000) {
+          // 超过60秒，不再自动重试
+          wasGeneratingRef.current = false;
+          return;
+        }
+        // 从后台切回，之前在生成中且已断开 → 自动重试
+        wasGeneratingRef.current = false;
+        setTimeout(() => {
+          if (handleGenerateRef.current) {
+            handleGenerateRef.current(lastOutlineRef.current || undefined, lastChNumRef.current || undefined);
+          }
+        }, 500);
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
   // 预览
   const [previewModal, setPreviewModal] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
@@ -90,10 +117,27 @@ export default function WritingScreen() {
 
   // 保存
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [novelName, setNovelName] = useState('');
+  const [novelName, setNovelName] = useState(params.novelName || '');
 
   const [savedItems, setSavedItems] = useState<any[]>([]);
   const [memoryItems, setMemoryItems] = useState<any[]>([]);
+
+  // Agent 相关状态
+  const [agentNames, setAgentNames] = useState<string[]>([]);
+  const [currentAgentIdx, setCurrentAgentIdx] = useState(-1);
+  const abortRef = useRef(false);
+
+  // 读取用户配置的 Agent 列表
+  const loadAgentConfigs = useCallback(async () => {
+    try {
+      const str = await AsyncStorage.getItem('agentConfigs');
+      if (str) {
+        const agents = JSON.parse(str);
+        const enabled = agents.filter((a: any) => a.enabled !== false).sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        setAgentNames(enabled.map((a: any) => a.name || 'Agent'));
+      }
+    } catch (_e) { /* ignore */ }
+  }, []);
 
   const loadSavedItems = useCallback(async () => {
     try {
@@ -113,6 +157,7 @@ export default function WritingScreen() {
     useCallback(() => {
       loadSavedItems();
       loadMemory();
+      loadAgentConfigs();
       // 检查章节评审结果
       (async () => {
         try {
@@ -127,7 +172,7 @@ export default function WritingScreen() {
               newQueue[idx] = { ...newQueue[idx], content: result.content, status: 'done' as const };
               setQueue(newQueue);
             } else {
-              setGeneratedContent(result.content);
+              setContent(result.content);
             }
           }
         } catch (_e) { /* ignore */ }
@@ -142,10 +187,12 @@ export default function WritingScreen() {
           setChapterNumber(1);
         }
       }
-    }, [loadSavedItems, loadMemory, parsedDetail, hasAutoLoaded, queue])
+    }, [loadSavedItems, loadMemory, loadAgentConfigs, parsedDetail, hasAutoLoaded, queue])
   );
 
-  // 生成单章
+  // 不单独用 useEffect 调 loadAgentConfigs，放在 useFocusEffect 中
+
+  // 前端 Agent 编排：逐个调 LLM API
   const handleGenerate = async (outline?: string, chNum?: number) => {
     const targetOutline = outline || outlineInput;
     const targetChNum = chNum || chapterNumber;
@@ -155,94 +202,187 @@ export default function WritingScreen() {
       return;
     }
 
+    // 记录参数，用于 AppState 恢复
+    lastOutlineRef.current = targetOutline;
+    lastChNumRef.current = targetChNum;
+
+    // 读取 API 配置
+    const apisStr = await AsyncStorage.getItem('apiConfigs');
+    const apis = apisStr ? JSON.parse(apisStr) : [];
+    if (apis.length === 0) {
+      Alert.alert('提示', '请先在写作流水线中配置API');
+      return;
+    }
+
+    // 读取 Agent 配置
+    const agentsStr = await AsyncStorage.getItem('agentConfigs');
+    const allAgents = agentsStr ? JSON.parse(agentsStr) : [];
+    const enabledAgents = allAgents.filter((a: any) => a.enabled !== false).sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+
+    if (enabledAgents.length === 0) {
+      Alert.alert('提示', '请先在写作流水线中启用至少一个Agent');
+      return;
+    }
+
+    // 更新 agent 名称列表用于 UI 显示
+    setAgentNames(enabledAgents.map((a: any) => a.name || 'Agent'));
+
     setIsGenerating(true);
-    setContent('');
-    setCurrentStep(0);
+    isGeneratingRef.current = true;    setContent('');
+    setCurrentAgentIdx(0);
+    abortRef.current = false;
+    wasGeneratingRef.current = true;
 
-    let fullContent = '';
+    let accumulatedContent = '';
 
-    try {
-      // 读取用户配置的API
-      const apisStr = await AsyncStorage.getItem('apiConfigs');
-      const apis = apisStr ? JSON.parse(apisStr) : [];
-      if (apis.length === 0) {
-        Alert.alert('提示', '请先在写作流水线中配置API');
+    for (let i = 0; i < enabledAgents.length; i++) {
+      if (abortRef.current) break;
+
+      const agent = enabledAgents[i];
+      setCurrentAgentIdx(i);
+
+      // 找到该 Agent 绑定的 API 配置，没有就用默认（第一个）
+      let useApi = apis[0];
+      if (agent.apiId) {
+        const found = apis.find((c: any) => c.id === agent.apiId);
+        if (found) useApi = found;
+      }
+
+      if (!useApi?.apiKey || !useApi?.baseUrl || !useApi?.model) {
+        Alert.alert('提示', `Agent "${agent.name}" 的API配置不完整，请检查`);
         setIsGenerating(false);
+        isGeneratingRef.current = false;
+        setCurrentAgentIdx(-1);
+        wasGeneratingRef.current = false;
         return;
       }
-      const api = apis[0];
 
-      const sse = new RNSSE(`${API_BASE_URL}/api/v1/writing/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': api.apiKey || '',
-          'x-model': api.model || 'deepseek-chat',
-          'x-base-url': api.baseUrl || 'https://api.deepseek.com',
-        },
-        body: JSON.stringify({
-          chapterId: `ch_${targetChNum}`,
-          chapterNumber: targetChNum,
-          outline: targetOutline,
-          memoryContext: memoryItems.slice(-2).map((m) => `${m.name || ''}: ${m.description || ''}`),
-          agentCount: 3,
-        }),
-      });
+      // 构建 prompt
+      const agentPrompt = agent.prompt || agent.systemPrompt || `你是${agent.name}，一位专业的小说创作助手。`;
+      const isFirstAgent = i === 0;
 
-      sse.addEventListener('message', (event) => {
-        if (event.data === '[DONE]') {
-          setIsGenerating(false);
-          setCurrentStep(-1);
-          sse.close();
-          // 多章模式：更新队列
-          if (isMultiModeRef.current && currentQueueIdxRef.current >= 0) {
-            const curIdx = currentQueueIdxRef.current;
-            setQueue((prev) =>
-              prev.map((item, idx) =>
-                idx === curIdx ? { ...item, content: fullContent, status: 'done' as const } : item
-              )
-            );
-            // 自动生成下一章
-            const nextIdx = curIdx + 1;
-            const currentQueue = queueRef.current;
-            if (nextIdx < currentQueue.length && currentQueue[nextIdx].status === 'pending') {
-              setCurrentQueueIdx(nextIdx);
-              setTimeout(() => {
-                handleGenerate(currentQueue[nextIdx].outline, currentQueue[nextIdx].chapterNumber);
-              }, 1000);
-            } else {
-              setCurrentQueueIdx(-1);
+      let userPrompt = '';
+      if (isFirstAgent) {
+        // 第一个 Agent：根据细纲创作正文
+        userPrompt = `请根据以下细纲创作小说第${targetChNum}章的正文内容：\n\n${targetOutline}\n\n要求：\n1. 严格按照细纲内容展开，不遗漏任何情节点\n2. 文笔流畅，描写生动\n3. 字数3000-5000字\n4. 直接输出正文内容，不要输出标题、大纲、说明等额外信息`;
+      } else {
+        // 后续 Agent：基于前一 Agent 的输出进行优化
+        userPrompt = `以下是第${targetChNum}章的当前内容：\n\n${accumulatedContent}\n\n请基于你的角色（${agent.name}）对上述内容进行优化和改写。保持故事主线和情节不变，重点在：${agentPrompt}\n\n要求：\n1. 输出完整改写后的章节正文（不是增量修改，而是完整输出）\n2. 保持字数在3000-5000字\n3. 直接输出正文，不要输出标题、说明等额外信息`;
+      }
+
+      // 调用 LLM API（SSE 流式）
+      try {
+        const base = (useApi.baseUrl || '').replace(/\/+$/, '');
+        const endpoint = base.endsWith('/v1') ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+
+        const sse = new RNSSE(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${useApi.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: useApi.model,
+            messages: [
+              { role: 'system', content: agentPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            stream: true,
+          }),
+        });
+
+        let agentContent = '';
+
+        await new Promise<void>((resolve, reject) => {
+          sse.addEventListener('message', (event) => {
+            if (abortRef.current) {
+              sse.close();
+              resolve();
+              return;
             }
-          }
-          return;
-        }
+            if (event.data === '[DONE]') {
+              sse.close();
+              accumulatedContent = agentContent;
+              setContent(accumulatedContent);
+              resolve();
+              return;
+            }
 
-        try {
-          const json = JSON.parse(event.data || '{}');
-          if (json.type === 'step') {
-            setCurrentStep(json.stepIndex);
-          } else if (json.type === 'chunk' && json.content) {
-            fullContent += json.content;
-            setContent(fullContent);
-          } else if (json.type === 'done' && json.content) {
-            fullContent = json.content;
-            setContent(fullContent);
-          }
-        } catch (e) {}
-      });
+            try {
+              const json = JSON.parse(event.data || '{}');
+              const delta = json.choices?.[0]?.delta?.content || '';
+              if (delta) {
+                agentContent += delta;
+                // 实时显示当前 Agent 的输出
+                accumulatedContent = agentContent;
+                setContent(accumulatedContent);
+              }
+            } catch (_e) { /* ignore parse errors */ }
+          });
 
-      sse.addEventListener('error', () => {
+          sse.addEventListener('error', (err: any) => {
+            sse.close();
+            // 非中止错误才弹出提示
+            if (!abortRef.current) {
+              reject(new Error('SSE连接错误'));
+            } else {
+              resolve();
+            }
+          });
+        });
+
+      } catch (error) {
+        // SSE 错误
+        generateErrorTimeRef.current = Number(new Date());
         setIsGenerating(false);
-        setCurrentStep(-1);
-        Alert.alert('错误', '生成失败，请检查网络连接');
-      });
+        isGeneratingRef.current = false;
+        setCurrentAgentIdx(-1);
+        // 如果已生成部分内容，保留 wasGeneratingRef 让 AppState 恢复时自动重连
+        // 如果一点内容都没有，说明可能是 API 配置错误，给提示
+        if (!accumulatedContent.trim()) {
+          wasGeneratingRef.current = false;
+          Alert.alert('错误', '生成失败，请检查API配置和网络连接');
+        }
+        return;
+      }
+    }
 
-    } catch (error) {
-      setIsGenerating(false);
-      setCurrentStep(-1);
-      Alert.alert('错误', '生成失败，请检查网络连接');
+    // 全部 Agent 完成
+    setIsGenerating(false);
+    isGeneratingRef.current = false;
+    setCurrentAgentIdx(-1);
+    wasGeneratingRef.current = false;
+
+    // 多章模式：更新队列
+    if (isMultiModeRef.current && currentQueueIdxRef.current >= 0) {
+      const curIdx = currentQueueIdxRef.current;
+      setQueue((prev) =>
+        prev.map((item, idx) =>
+          idx === curIdx ? { ...item, content: accumulatedContent, status: 'done' as const } : item
+        )
+      );
+      // 自动生成下一章
+      const nextIdx = curIdx + 1;
+      const currentQueue = queueRef.current;
+      if (nextIdx < currentQueue.length && currentQueue[nextIdx].status === 'pending') {
+        setCurrentQueueIdx(nextIdx);
+        currentQueueIdxRef.current = nextIdx; // 立即同步 ref
+        setQueue((prev) =>
+          prev.map((item, idx) => (idx === nextIdx ? { ...item, status: 'generating' as const } : item))
+        );
+        setTimeout(() => {
+          handleGenerateRef.current?.(currentQueue[nextIdx].outline, currentQueue[nextIdx].chapterNumber);
+        }, 1000);
+      } else {
+        setCurrentQueueIdx(-1);
+      }
     }
   };
+
+  // 更新 ref 供 AppState 使用
+  useEffect(() => {
+    handleGenerateRef.current = handleGenerate;
+  });
 
   // 多章模式：初始化队列
   const handleStartMultiMode = () => {
@@ -270,6 +410,7 @@ export default function WritingScreen() {
       return;
     }
     setCurrentQueueIdx(firstPending);
+    currentQueueIdxRef.current = firstPending; // 立即同步 ref
     handleGenerate(queue[firstPending].outline, queue[firstPending].chapterNumber);
   };
 
@@ -288,6 +429,7 @@ export default function WritingScreen() {
     const item = queue[idx];
     if (!item.outline.trim()) return;
     setCurrentQueueIdx(idx);
+    currentQueueIdxRef.current = idx; // 立即同步 ref
     setQueue((prev) => prev.map((q, i) => (i === idx ? { ...q, status: 'generating', content: '' } : q)));
     handleGenerate(item.outline, item.chapterNumber);
   };
@@ -298,7 +440,6 @@ export default function WritingScreen() {
       Alert.alert('提示', '先生成正文后再保存');
       return;
     }
-    setNovelName(`第${chapterNumber}章`);
     setShowSaveModal(true);
   };
 
@@ -329,7 +470,7 @@ export default function WritingScreen() {
 
     const newItem = {
       id: `save_${idx}`,
-      title: `第${item.chapterNumber}章`,
+      title: novelName ? `${novelName} - 第${item.chapterNumber}章` : `第${item.chapterNumber}章`,
       chapterNumber: item.chapterNumber,
       outline: item.outline,
       content: item.content,
@@ -356,8 +497,6 @@ export default function WritingScreen() {
     setQueue([]);
     setCurrentQueueIdx(-1);
   };
-
-  const AGENT_STEPS = ['世界观构建', '人物设定', '情节设计', '正文生成', '审核校对'];
 
   return (
     <Screen>
@@ -441,15 +580,20 @@ export default function WritingScreen() {
                 <View style={styles.agentStatus}>
                   <Text style={styles.agentStatusTitle}>AI创作进度</Text>
                   <View style={styles.agentSteps}>
-                    {AGENT_STEPS.map((step, idx) => (
+                    {agentNames.map((name, idx) => (
                       <View key={idx} style={styles.agentStepItem}>
-                        <View style={[styles.stepDot, currentStep >= idx && styles.stepDotActive]} />
-                        <Text style={[styles.stepText, currentStep >= idx && styles.stepTextActive]}>
-                          {step}
+                        <View style={[styles.stepDot, currentAgentIdx >= idx && styles.stepDotActive, currentAgentIdx === idx && styles.stepDotCurrent]} />
+                        <Text style={[styles.stepText, currentAgentIdx >= idx && styles.stepTextActive, currentAgentIdx === idx && styles.stepTextCurrent]}>
+                          {name}
                         </Text>
                       </View>
                     ))}
                   </View>
+                  {currentAgentIdx >= 0 && currentAgentIdx < agentNames.length && (
+                    <Text style={styles.currentStepText}>
+                      正在执行：{agentNames[currentAgentIdx]} ({currentAgentIdx + 1}/{agentNames.length})
+                    </Text>
+                  )}
                 </View>
               )}
 
@@ -521,6 +665,25 @@ export default function WritingScreen() {
                   <View style={styles.queueCardHeader}>
                     <Text style={styles.queueCardTitle}>第 {item.chapterNumber} 章</Text>
                     <View style={styles.queueCardActions}>
+                      {/* pending 状态：显示开始创作按钮 */}
+                      {item.status === 'pending' && !isGenerating && (
+                        <TouchableOpacity
+                          style={[styles.queueActionBtn, { backgroundColor: '#4ade80', borderRadius: 4, paddingHorizontal: 6 }]}
+                          onPress={() => {
+                            setCurrentQueueIdx(idx);
+                            currentQueueIdxRef.current = idx; // 立即同步 ref
+                            setQueue((prev) => prev.map((q, i) => (i === idx ? { ...q, status: 'generating' as const } : q)));
+                            handleGenerate(item.outline, item.chapterNumber);
+                          }}
+                        >
+                          <Ionicons name="play" size={16} color="#000" />
+                          <Text style={{ color: '#000', fontSize: 12, fontWeight: '600' }}>创作</Text>
+                        </TouchableOpacity>
+                      )}
+                      {item.status === 'generating' && (
+                        <ActivityIndicator size="small" color="#fbbf24" />
+                      )}
+                      {/* done 状态：显示操作按钮 */}
                       {item.status === 'done' && (
                         <>
                           <TouchableOpacity
@@ -549,13 +712,24 @@ export default function WritingScreen() {
                           >
                             <Ionicons name="bookmark-outline" size={18} color="#4ade80" />
                           </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.queueActionBtn}
-                            onPress={() => handleRegenerateQueueItem(idx)}
-                          >
-                            <Ionicons name="refresh" size={18} color="#fbbf24" />
-                          </TouchableOpacity>
+                          {!isGenerating && (
+                            <TouchableOpacity
+                              style={styles.queueActionBtn}
+                              onPress={() => handleRegenerateQueueItem(idx)}
+                            >
+                              <Ionicons name="refresh" size={18} color="#fbbf24" />
+                            </TouchableOpacity>
+                          )}
                         </>
+                      )}
+                      {/* reviewed 状态 */}
+                      {item.status === 'reviewed' && !isGenerating && (
+                        <TouchableOpacity
+                          style={styles.queueActionBtn}
+                          onPress={() => handleRegenerateQueueItem(idx)}
+                        >
+                          <Ionicons name="refresh" size={18} color="#fbbf24" />
+                        </TouchableOpacity>
                       )}
                       {!isGenerating && (
                         <TouchableOpacity onPress={() => removeQueueItem(idx)}>
@@ -603,9 +777,19 @@ export default function WritingScreen() {
                   <Text style={styles.agentStatusTitle}>
                     正在生成：第 {queue[currentQueueIdx]?.chapterNumber} 章
                   </Text>
-                  {currentStep >= 0 && (
+                  <View style={styles.agentSteps}>
+                    {agentNames.map((name, idx) => (
+                      <View key={idx} style={styles.agentStepItem}>
+                        <View style={[styles.stepDot, currentAgentIdx >= idx && styles.stepDotActive, currentAgentIdx === idx && styles.stepDotCurrent]} />
+                        <Text style={[styles.stepText, currentAgentIdx >= idx && styles.stepTextActive, currentAgentIdx === idx && styles.stepTextCurrent]}>
+                          {name}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                  {currentAgentIdx >= 0 && currentAgentIdx < agentNames.length && (
                     <Text style={styles.currentStepText}>
-                      当前步骤：{AGENT_STEPS[Math.min(currentStep, AGENT_STEPS.length - 1)]}
+                      正在执行：{agentNames[currentAgentIdx]} ({currentAgentIdx + 1}/{agentNames.length})
                     </Text>
                   )}
                 </View>
@@ -661,7 +845,7 @@ export default function WritingScreen() {
               <Text style={styles.modalInfo}>章节：第{chapterNumber}章</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="输入章节名称"
+                placeholder={`${params.novelName || '我的小说'} - 第${chapterNumber}章`}
                 placeholderTextColor="#555"
                 value={novelName}
                 onChangeText={setNovelName}
@@ -803,9 +987,11 @@ const styles = StyleSheet.create({
   agentSteps: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   agentStepItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#333' },
-  stepDotActive: { backgroundColor: '#fff' },
+  stepDotActive: { backgroundColor: '#888' },
+  stepDotCurrent: { backgroundColor: '#4ade80', width: 10, height: 10, borderRadius: 5 },
   stepText: { color: '#555', fontSize: 11 },
-  stepTextActive: { color: '#fff' },
+  stepTextActive: { color: '#ccc' },
+  stepTextCurrent: { color: '#4ade80', fontWeight: '600' },
   currentStepText: { color: '#fff', fontSize: 13, marginTop: 8 },
   contentSection: { marginTop: 8 },
   contentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
