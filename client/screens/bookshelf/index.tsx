@@ -5,19 +5,29 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Modal,
   Alert,
+  FlatList,
+  Modal,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen } from '@/components/Screen';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
+
+interface NovelItem {
+  id: string;
+  title: string;
+  chapterNumber: number;
+  outline: string;
+  content: string;
+  createdAt: string;
+  cover: string;
+}
 
 export default function BookshelfScreen() {
-  const [novels, setNovels] = useState<any[]>([]);
-  const [previewModal, setPreviewModal] = useState(false);
-  const [previewItem, setPreviewItem] = useState<any>(null);
+  const [novels, setNovels] = useState<NovelItem[]>([]);
+  const [selectedNovel, setSelectedNovel] = useState<NovelItem | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
 
   const loadNovels = useCallback(async () => {
     try {
@@ -32,13 +42,8 @@ export default function BookshelfScreen() {
     }, [loadNovels])
   );
 
-  const handlePreview = (item: any) => {
-    setPreviewItem(item);
-    setPreviewModal(true);
-  };
-
   const handleDelete = (id: string) => {
-    Alert.alert('确认', '确定删除这本小说吗？', [
+    Alert.alert('确认删除', '确定要删除这本小说吗？', [
       { text: '取消', style: 'cancel' },
       {
         text: '删除',
@@ -47,107 +52,96 @@ export default function BookshelfScreen() {
           const updated = novels.filter((n) => n.id !== id);
           setNovels(updated);
           await AsyncStorage.setItem('novels', JSON.stringify(updated));
+          await AsyncStorage.setItem('savedItems', JSON.stringify(updated));
+          setShowDetail(false);
+          setSelectedNovel(null);
         },
       },
     ]);
   };
 
-  const handleClearAll = () => {
-    Alert.alert('确认', '确定清空所有小说吗？此操作不可恢复。', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '清空',
-        style: 'destructive',
-        onPress: async () => {
-          setNovels([]);
-          await AsyncStorage.removeItem('novels');
-        },
-      },
-    ]);
-  };
+  const renderNovelItem = ({ item }: { item: NovelItem }) => (
+    <TouchableOpacity
+      style={styles.novelCard}
+      onPress={() => {
+        setSelectedNovel(item);
+        setShowDetail(true);
+      }}
+    >
+      <View style={styles.novelCover}>
+        <Ionicons name="book" size={28} color="#555" />
+      </View>
+      <View style={styles.novelInfo}>
+        <Text style={styles.novelTitle} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text style={styles.novelOutline} numberOfLines={2}>
+          {item.outline || '无章纲'}
+        </Text>
+        <Text style={styles.novelDate}>
+          {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '未保存'}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color="#555" />
+    </TouchableOpacity>
+  );
 
   return (
     <Screen>
       <View style={styles.container}>
+        {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>书架</Text>
-            <Text style={styles.headerSubtitle}>{novels.length} 本小说</Text>
-          </View>
-          {novels.length > 0 && (
-            <TouchableOpacity style={styles.clearBtn} onPress={handleClearAll}>
-              <Ionicons name="trash-outline" size={20} color="#888" />
-              <Text style={styles.clearBtnText}>清空</Text>
-            </TouchableOpacity>
-          )}
+          <Text style={styles.headerTitle}>书架</Text>
+          <Text style={styles.headerCount}>{novels.length} 章</Text>
         </View>
 
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-          {novels.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="book-outline" size={64} color="#333" />
-              <Text style={styles.emptyTitle}>书架空空如也</Text>
-              <Text style={styles.emptySubtitle}>创作章节后保存到书架</Text>
-            </View>
-          ) : (
-            novels.map((item) => (
-              <View key={item.id} style={styles.bookCard}>
-                <View style={styles.coverContainer}>
-                  <Image
-                    source={{ uri: item.cover || 'https://picsum.photos/seed/novel/200/300' }}
-                    style={styles.coverImage}
-                    contentFit="cover"
-                  />
-                </View>
-                <View style={styles.bookInfo}>
-                  <Text style={styles.bookTitle}>{item.title}</Text>
-                  <Text style={styles.bookChapter}>第{item.chapterNumber}章</Text>
-                  <Text style={styles.bookOutline} numberOfLines={2}>
-                    {item.outline}
-                  </Text>
-                  <View style={styles.bookActions}>
-                    <TouchableOpacity
-                      style={styles.bookActionBtn}
-                      onPress={() => handlePreview(item)}
-                    >
-                      <Ionicons name="document-text-outline" size={14} color="#888" />
-                      <Text style={styles.bookActionText}>阅读</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.bookActionBtn}
-                      onPress={() => handleDelete(item.id)}
-                    >
-                      <Ionicons name="trash-outline" size={14} color="#888" />
-                      <Text style={styles.bookActionText}>删除</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            ))
-          )}
-        </ScrollView>
+        {/* 列表 */}
+        {novels.length > 0 ? (
+          <FlatList
+            data={novels}
+            keyExtractor={(item) => item.id}
+            renderItem={renderNovelItem}
+            contentContainerStyle={styles.listContent}
+          />
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="library-outline" size={48} color="#333" />
+            <Text style={styles.emptyText}>书架空空如也</Text>
+            <Text style={styles.emptySubText}>在创作中心写作并保存章节后，会出现在这里</Text>
+          </View>
+        )}
 
-        <Modal
-          visible={previewModal}
-          animationType="slide"
-          onRequestClose={() => setPreviewModal(false)}
-        >
-          <View style={styles.previewContainer}>
-            <View style={styles.previewHeader}>
-              <Text style={styles.previewTitle}>{previewItem?.title || '小说预览'}</Text>
-              <TouchableOpacity onPress={() => setPreviewModal(false)}>
-                <Ionicons name="close-circle" size={32} color="#888" />
+        {/* 详情弹窗 - 全屏阅读 */}
+        <Modal visible={showDetail} animationType="slide" onRequestClose={() => setShowDetail(false)}>
+          <View style={styles.detailContainer}>
+            <View style={styles.detailHeader}>
+              <TouchableOpacity onPress={() => setShowDetail(false)} style={styles.detailBackBtn}>
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+              </TouchableOpacity>
+              <Text style={styles.detailTitle} numberOfLines={1}>
+                {selectedNovel?.title}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (selectedNovel) handleDelete(selectedNovel.id);
+                }}
+              >
+                <Ionicons name="trash-outline" size={22} color="#ff6b6b" />
               </TouchableOpacity>
             </View>
-            <View style={styles.previewMeta}>
-              <Text style={styles.previewMetaText}>
-                第{previewItem?.chapterNumber}章
-              </Text>
-            </View>
-            <ScrollView style={styles.previewScroll}>
-              <Text style={styles.previewContent}>
-                {previewItem?.content || '暂无正文内容'}
-              </Text>
+
+            <ScrollView style={styles.detailScroll} contentContainerStyle={styles.detailScrollContent}>
+              {selectedNovel?.outline ? (
+                <View style={styles.outlineSection}>
+                  <Text style={styles.outlineLabel}>章纲</Text>
+                  <Text style={styles.outlineText}>{selectedNovel.outline}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.contentSection}>
+                <Text style={styles.contentLabel}>正文</Text>
+                <Text style={styles.contentText}>{selectedNovel?.content}</Text>
+              </View>
             </ScrollView>
           </View>
         </Modal>
@@ -157,153 +151,84 @@ export default function BookshelfScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
+  container: { flex: 1, backgroundColor: '#000' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 60,
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  headerSubtitle: {
-    color: '#888',
-    fontSize: 14,
-    marginTop: 4,
-  },
-  clearBtn: {
+  headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#fff' },
+  headerCount: { color: '#888', fontSize: 15 },
+
+  // 列表
+  listContent: { paddingHorizontal: 20, paddingBottom: 20 },
+  novelCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
     backgroundColor: '#1a1a1a',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#222',
+    gap: 12,
+  },
+  novelCover: {
+    width: 50,
+    height: 68,
+    backgroundColor: '#222',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#333',
   },
-  clearBtnText: {
-    color: '#888',
-    fontSize: 13,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 80,
-  },
-  emptyTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '600',
-    marginTop: 24,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    color: '#888',
-    fontSize: 14,
-  },
-  bookCard: {
+  novelInfo: { flex: 1 },
+  novelTitle: { color: '#fff', fontSize: 16, fontWeight: '600', marginBottom: 4 },
+  novelOutline: { color: '#888', fontSize: 13, lineHeight: 18, marginBottom: 4 },
+  novelDate: { color: '#555', fontSize: 12 },
+
+  // 空状态
+  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 100 },
+  emptyText: { color: '#888', fontSize: 16, marginTop: 16 },
+  emptySubText: { color: '#555', fontSize: 13, marginTop: 8, textAlign: 'center', paddingHorizontal: 40 },
+
+  // 详情全屏
+  detailContainer: { flex: 1, backgroundColor: '#000' },
+  detailHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 56,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+    gap: 12,
+  },
+  detailBackBtn: { padding: 4 },
+  detailTitle: { flex: 1, color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  detailScroll: { flex: 1 },
+  detailScrollContent: { padding: 20, paddingBottom: 60 },
+  outlineSection: {
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
-    overflow: 'hidden',
+    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#333',
   },
-  coverContainer: {
-    width: 80,
-    height: 120,
-  },
-  coverImage: {
-    width: 80,
-    height: 120,
-  },
-  bookInfo: {
-    flex: 1,
-    padding: 14,
-    justifyContent: 'space-between',
-  },
-  bookTitle: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  bookChapter: {
-    color: '#888',
-    fontSize: 12,
-    marginBottom: 6,
-  },
-  bookOutline: {
-    color: '#888',
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  bookActions: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  bookActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  bookActionText: {
-    color: '#888',
-    fontSize: 12,
-  },
-  previewContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-    paddingTop: 60,
-  },
-  previewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  previewTitle: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  previewMeta: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  previewMetaText: {
-    color: '#888',
-    fontSize: 14,
-  },
-  previewScroll: {
-    flex: 1,
+  outlineLabel: { color: '#888', fontSize: 12, fontWeight: '600', marginBottom: 8 },
+  outlineText: { color: '#aaa', fontSize: 14, lineHeight: 22 },
+  contentSection: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
     padding: 20,
+    borderWidth: 1,
+    borderColor: '#222',
   },
-  previewContent: {
-    color: '#fff',
-    fontSize: 15,
-    lineHeight: 26,
-  },
+  contentLabel: { color: '#888', fontSize: 12, fontWeight: '600', marginBottom: 12 },
+  contentText: { color: '#fff', fontSize: 16, lineHeight: 30 },
 });

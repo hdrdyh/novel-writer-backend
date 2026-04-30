@@ -16,7 +16,7 @@ import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen } from '@/components/Screen';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import RNSSE from 'react-native-sse';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
@@ -31,10 +31,11 @@ interface QueueItem {
 
 export default function WritingScreen() {
   const router = useSafeRouter();
+  const params = useSafeSearchParams<{ chapterNumber: string; outline: string }>();
 
   // 单章模式
-  const [chapterNumber, setChapterNumber] = useState(1);
-  const [outlineInput, setOutlineInput] = useState('');
+  const [chapterNumber, setChapterNumber] = useState(parseInt(params.chapterNumber || '1') || 1);
+  const [outlineInput, setOutlineInput] = useState(params.outline || '');
   const [content, setContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
@@ -172,7 +173,7 @@ export default function WritingScreen() {
     const newQueue: QueueItem[] = [];
     for (let i = 0; i < count; i++) {
       newQueue.push({
-        id: `ch_${Date.now()}_${i}`,
+        id: `ch_${new Date().getTime()}_${i}`,
         chapterNumber: chapterNumber + i,
         outline: '',
         content: '',
@@ -226,13 +227,13 @@ export default function WritingScreen() {
 
   const confirmSaveToLibrary = async () => {
     const newItem = {
-      id: Date.now().toString(),
+      id: new Date().getTime().toString(),
       title: novelName || `第${chapterNumber}章`,
       chapterNumber,
       outline: outlineInput,
       content,
       createdAt: new Date().toISOString(),
-      cover: `https://picsum.photos/seed/${Date.now()}/200/300`,
+      cover: `https://picsum.photos/seed/${new Date().getTime()}/200/300`,
     };
 
     const updated = [newItem, ...savedItems];

@@ -327,7 +327,7 @@ export default function AgentConfigScreen() {
       saveApiConfigs(next);
     } else {
       // 新增
-      const newCfg: ApiConfig = { ...data, id: Date.now().toString() };
+      const newCfg: ApiConfig = { ...data, id: new Date().getTime().toString() };
       saveApiConfigs([...apiConfigs, newCfg]);
     }
   };

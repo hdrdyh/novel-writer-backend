@@ -9,6 +9,7 @@ import {
   Modal,
   Alert,
 } from 'react-native';
+import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { Feather } from '@expo/vector-icons';
 
@@ -21,6 +22,7 @@ interface ChapterOutline {
 }
 
 export default function OutlineScreen() {
+  const router = useSafeRouter();
   const [chapters, setChapters] = useState<ChapterOutline[]>([
     { id: '1', chapterNumber: 1, outline: '主角张远穿越到异世界，在废墟中醒来...', createdAt: '2024-01-01', updatedAt: '2024-01-01' },
   ]);
@@ -61,7 +63,7 @@ export default function OutlineScreen() {
       );
     } else {
       const newChapter: ChapterOutline = {
-        id: Date.now().toString(),
+        id: new Date().getTime().toString(),
         chapterNumber: parseInt(chapterNumber),
         outline,
         createdAt: new Date().toISOString(),
@@ -182,9 +184,17 @@ export default function OutlineScreen() {
               <Pressable style={styles.cancelBtn} onPress={() => setConfirmModalVisible(false)}>
                 <Text style={styles.cancelBtnText}>取消</Text>
               </Pressable>
-              <Pressable style={styles.saveBtn} onPress={() => setConfirmModalVisible(false)}>
-                <Text style={styles.saveBtnText}>确认</Text>
-              </Pressable>
+              <Pressable style={styles.saveBtn} onPress={() => {
+                  setConfirmModalVisible(false);
+                  if (selectedChapter) {
+                    router.push('/writing', {
+                      chapterNumber: String(selectedChapter.chapterNumber),
+                      outline: selectedChapter.outline,
+                    });
+                  }
+                }}>
+                  <Text style={styles.saveBtnText}>确认</Text>
+                </Pressable>
             </View>
           </View>
         </View>
