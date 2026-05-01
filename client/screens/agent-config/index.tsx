@@ -928,13 +928,10 @@ export default function AgentConfigScreen() {
     return (
       <View key={preset.id} style={[s.agentCard, !config.enabled && s.agentCardDisabled]}>
         <TouchableOpacity style={s.agentInfo} onPress={() => handleEditCollabAgent(preset)} activeOpacity={0.7}>
-          <View style={s.agentNameRow}>
-            <Text style={s.agentIcon}>{preset.icon}</Text>
-            <View style={s.agentNameCol}>
-              <Text style={[s.agentName, !config.enabled && s.textDisabled]}>{config.name}</Text>
-              <Text style={s.agentDesc} numberOfLines={2}>{preset.description}</Text>
-              <Text style={s.agentApi}>API: {getApiName(config.apiId)}</Text>
-            </View>
+          <View style={s.agentNameCol}>
+            <Text style={[s.agentName, !config.enabled && s.textDisabled]}>{config.name}</Text>
+            <Text style={s.agentDesc} numberOfLines={2}>{preset.description}</Text>
+            <Text style={s.agentApi}>API: {getApiName(config.apiId)}</Text>
           </View>
         </TouchableOpacity>
         <View style={s.agentRightActions}>
@@ -1442,20 +1439,18 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: GC.bgElevated,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: GC.border,
   },
   agentCardDisabled: { opacity: 0.5 },
   agentInfo: { flex: 1 },
-  agentNameRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  agentIcon: { fontSize: 20 },
-  agentNameCol: { flex: 1 },
-  agentName: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
-  agentDesc: { color: GC.textSecondary, fontSize: 12, marginTop: 2, lineHeight: 16 },
-  agentApi: { color: GC.textMuted, fontSize: 11, marginTop: 4 },
+  agentNameCol: { flex: 1, gap: 4 },
+  agentName: { color: GC.textPrimary, fontSize: 16, fontWeight: '600' },
+  agentDesc: { color: GC.textSecondary, fontSize: 13, marginTop: 2, lineHeight: 18 },
+  agentApi: { color: GC.textMuted, fontSize: 12, marginTop: 4 },
   textDisabled: { color: GC.textMuted },
   agentRightActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 
