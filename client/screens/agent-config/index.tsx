@@ -368,6 +368,11 @@ export default function AgentConfigScreen() {
   const [testLlmResult, setTestLlmResult] = useState('');
   const [testLoading, setTestLoading] = useState(false);
 
+  // 导入模板
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState('');
+
   // ============== 加载数据 ==============
   const loadApiConfigs = useCallback(async () => {
     try {
@@ -632,6 +637,173 @@ export default function AgentConfigScreen() {
     }
   }, [agentConfigs]);
 
+  // ============== 模板导入导出 ==============
+  /**
+   * 模板格式：
+   * === 写手 ===
+   * 启用
+   * 你是一位经验丰富的小说写手。你的唯一职责是创作小说正文...
+   *
+   * === 统筹 ===
+   * 禁用
+   * 你是一位小说创作统筹...
+   */
+  const parseTemplate = (text: string): { presetId: string; name: string; prompt: string; enabled: boolean }[] => {
+    const results: { presetId: string; name: string; prompt: string; enabled: boolean }[] = [];
+    const blocks = text.split(/===\s*/).filter(b => b.trim());
+
+    for (const block of blocks) {
+      const lines = block.split('\n');
+      // 第一行是助手名（可能带尾部 ===）
+      const agentName = lines[0].replace(/\s*===\s*$/, '').trim();
+      if (!agentName) continue;
+
+      // 匹配预置Agent（支持中文名和英文id）
+      const preset = PRESET_AGENTS.find(p => p.name === agentName || p.id === agentName);
+      if (!preset) continue;
+
+      // 第二行是启用/禁用
+      const statusLine = (lines[1] || '').trim();
+      const enabled = statusLine === '启用' || statusLine === '开启' || statusLine === 'true' || statusLine === '1';
+
+      // 剩余行是规则
+      const promptLines = lines.slice(2).join('\n').trim();
+
+      results.push({
+        presetId: preset.id,
+        name: preset.name,
+        prompt: promptLines || preset.prompt,
+        enabled,
+      });
+    }
+
+    return results;
+  };
+
+  const exportTemplate = (): string => {
+    const lines: string[] = [];
+    for (const preset of PRESET_AGENTS) {
+      const config = agentConfigs.find(c => c.presetId === preset.id);
+      const name = config?.name || preset.name;
+      const enabled = config?.enabled ?? preset.enabled;
+      const prompt = config?.prompt || preset.prompt;
+      lines.push(`=== ${name} ===`);
+      lines.push(enabled ? '启用' : '禁用');
+      lines.push(prompt);
+      lines.push('');
+    }
+    return lines.join('\n');
+  };
+
+  const handleImportTemplate = () => {
+    setImportError('');
+    if (!importText.trim()) {
+      setImportError('请粘贴模板内容');
+      return;
+    }
+
+    const parsed = parseTemplate(importText);
+    if (parsed.length === 0) {
+      setImportError('未识别到有效的助手配置。格式：=== 助手名 === 后跟启用/禁用和规则');
+      return;
+    }
+
+    // 合并到现有配置
+    const next = agentConfigs.map(a => {
+      const match = parsed.find(p => p.presetId === a.presetId);
+      if (match) {
+        return {
+          ...a,
+          name: match.name,
+          prompt: match.prompt,
+          enabled: match.enabled,
+        };
+      }
+      return a;
+    });
+
+    saveAgentConfigs(next);
+    setImportModalVisible(false);
+    setImportText('');
+    Alert.alert('导入成功', `已更新 ${parsed.length} 个助手的配置`);
+  };
+
+  const handleExportTemplate = () => {
+    const template = exportTemplate();
+    setImportText(template);
+    setImportModalVisible(true);
+    setImportError('');
+  };
+
+  const BUILTIN_TEMPLATES: { name: string; desc: string; text: string }[] = [
+    {
+      name: '默认配置',
+      desc: '核心+推荐启用，可选关闭，默认规则',
+      text: PRESET_AGENTS.map(p => `=== ${p.name} ===\n${p.category === 'core' || p.category === 'recommended' ? '启用' : '禁用'}\n${p.prompt}`).join('\n\n'),
+    },
+    {
+      name: '全量协作',
+      desc: '所有助手全部启用',
+      text: PRESET_AGENTS.map(p => `=== ${p.name} ===\n启用\n${p.prompt}`).join('\n\n'),
+    },
+    {
+      name: '极简写作',
+      desc: '只保留写手+统筹+润色师',
+      text: PRESET_AGENTS
+        .filter(p => ['writer', 'coordinator', 'style_polisher'].includes(p.id))
+        .map(p => `=== ${p.name} ===\n启用\n${p.prompt}`)
+        .join('\n\n'),
+    },
+    {
+      name: '悬疑推理',
+      desc: '强化剧情/伏笔/节奏，弱化世界观/对话',
+      text: PRESET_AGENTS.map(p => {
+        let enabled = p.category === 'core';
+        let prompt = p.prompt;
+        if (['plot_designer', 'foreshadow_designer', 'pacing_controller', 'character_designer', 'detail_designer', 'memory_compressor'].includes(p.id)) {
+          enabled = true;
+        }
+        if (p.id === 'plot_designer') {
+          prompt = '你是一位悬疑推理剧情设计专家。你的唯一职责是设计小说的情节线，特别注重：1.案件线索的布局和递进揭示；2.嫌疑人设置的误导与反转；3.悬念的层层升级；4.逻辑推理链的严密性；5.真相揭晓时的震撼感。你必须确保每个线索都有交代，每个反转都有伏笔支撑。你只输出剧情设计文档，绝不写正文。';
+        }
+        if (p.id === 'foreshadow_designer') {
+          prompt = '你是一位悬疑伏笔设计专家。你的职责是精心设计案件中的伏笔布局，包括：1.关键线索的隐蔽埋设；2.误导性信息的巧妙穿插；3.真相反转的层层铺垫；4.伏笔回收时的意外与合理并存。你必须确保伏笔自然不刻意，回收时有恍然大悟的满足感。你只输出伏笔设计文档，绝不写正文。';
+        }
+        if (p.id === 'pacing_controller') {
+          prompt = '你是一位悬疑节奏把控专家。你的职责是确保章节节奏紧凑、悬念感持续，包括：1.每章结尾设置钩子让读者欲罢不能；2.信息揭示的节奏把控——不能太快也不能太慢；3.紧张与舒缓的交替；4.高潮戏的节奏加速。你必须确保读者始终处于"想知道真相"的紧迫感中。你只输出节奏调整建议，绝不写正文。';
+        }
+        if (p.id === 'character_designer') {
+          prompt = '你是一位悬疑小说人物塑造专家。你的职责是设计嫌疑人、侦探、受害者等角色，特别注重：1.每个嫌疑人都有作案动机和不在场证明的矛盾；2.角色表面与内心的反差；3.人物关系的暗流涌动；4.关键人物的信息差设计。你必须确保人物立体不脸谱化，每个人都有秘密。你只输出人物设定文档，绝不写正文。';
+        }
+        return `=== ${p.name} ===\n${enabled ? '启用' : '禁用'}\n${prompt}`;
+      }).join('\n\n'),
+    },
+    {
+      name: '玄幻修仙',
+      desc: '强化世界观/人物/伏笔，适合长篇',
+      text: PRESET_AGENTS.map(p => {
+        let enabled = p.category === 'core';
+        let prompt = p.prompt;
+        if (['world_architect', 'character_designer', 'foreshadow_designer', 'plot_designer', 'detail_designer', 'memory_compressor', 'style_polisher'].includes(p.id)) {
+          enabled = true;
+        }
+        if (p.id === 'world_architect') {
+          prompt = '你是一位玄幻修仙世界观架构专家。你的职责是设计完整的修仙世界观体系，包括：1.修炼体系（境界划分、突破条件、天劫设定）；2.势力格局（宗门、世家、散修、魔道）；3.地理体系（凡界、修仙界、秘境、禁地）；4.资源体系（灵石、丹药、法宝、功法的品级划分）；5.天道法则与因果循环。你必须确保体系完整、等级分明、有成长空间。你只输出世界观设定文档，绝不写正文。';
+        }
+        if (p.id === 'character_designer') {
+          prompt = '你是一位玄幻修仙人物塑造专家。你的职责是设计修仙者角色体系，特别注重：1.修炼资质与心性成长的对应；2.师承关系与门派立场；3.道侣/兄弟/宿敌的情感纽带；4.性格在修炼路上的变化轨迹；5.功法与性格的相互影响。你必须确保每个角色都有独特的修炼道路和性格魅力。你只输出人物设定文档，绝不写正文。';
+        }
+        if (p.id === 'foreshadow_designer') {
+          prompt = '你是一位玄幻修仙伏笔设计专家。你的职责是设计长篇伏笔布局，包括：1.前世因果的层层揭示；2.宝物/功法的隐藏来历；3.势力暗棋和卧底；4.天道预言与宿命；5.跨越数十章的大伏笔回收。你必须确保伏笔有远有近、有明有暗，让读者始终有期待感。你只输出伏笔设计文档，绝不写正文。';
+        }
+        if (p.id === 'style_polisher') {
+          prompt = '你是一位玄幻修仙文字润色专家。你的职责是对写手的初稿进行润色，特别注重：1.修炼术语的一致性和准确性；2.战斗场面的画面感和节奏感；3.境界突破时的气势渲染；4.古风文辞的韵味和节奏；5.避免现代化用语破坏仙侠氛围。你必须保持原有情节不变，只优化表达。你只输出润色后的正文。';
+        }
+        return `=== ${p.name} ===\n${enabled ? '启用' : '禁用'}\n${prompt}`;
+      }).join('\n\n'),
+    },
+  ];
+
   // ============== 评审团Agent操作 ==============
   const handleAddReviewAgent = () => {
     setIsAddingReviewAgent(true);
@@ -820,11 +992,21 @@ export default function AgentConfigScreen() {
           {/* ====== 协作Agent Tab ====== */}
           {activeTab === 'collab' && (
             <>
-              {/* 智能搭配按钮 */}
-              <TouchableOpacity style={s.smartMatchBtn} onPress={handleSmartMatch}>
-                <Ionicons name="sparkles" size={18} color="#7C5CFF" />
-                <Text style={s.smartMatchBtnText}>智能搭配</Text>
-              </TouchableOpacity>
+              {/* 模板操作按钮 */}
+              <View style={s.templateBtnRow}>
+                <TouchableOpacity style={s.smartMatchBtn} onPress={handleSmartMatch}>
+                  <Ionicons name="sparkles" size={18} color="#7C5CFF" />
+                  <Text style={s.smartMatchBtnText}>智能搭配</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.importBtn} onPress={() => { setImportText(''); setImportError(''); setImportModalVisible(true); }}>
+                  <Ionicons name="download-outline" size={18} color={GC.accent} />
+                  <Text style={s.importBtnText}>导入模板</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.exportBtn} onPress={handleExportTemplate}>
+                  <Ionicons name="share-outline" size={18} color={GC.textSecondary} />
+                  <Text style={s.exportBtnText}>导出</Text>
+                </TouchableOpacity>
+              </View>
 
               {/* 核心Agent */}
               <View style={s.categoryHeader}>
@@ -1100,6 +1282,81 @@ export default function AgentConfigScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* ====== 导入模板弹窗 ====== */}
+        <Modal visible={importModalVisible} transparent animationType="slide">
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} disabled={Platform.OS === 'web'}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <View style={m.modalContainer}>
+                <View style={m.modalContent}>
+                  <View style={m.modalHeader}>
+                    <Text style={m.modalTitle}>导入/导出模板</Text>
+                    <TouchableOpacity onPress={() => setImportModalVisible(false)}><Ionicons name="close" size={24} color="#8888AA" /></TouchableOpacity>
+                  </View>
+
+                  <ScrollView style={m.modalBody}>
+                    {/* 内置预设模板 */}
+                    <Text style={m.fieldLabel}>快速选择预设模板</Text>
+                    <View style={s.presetTemplateList}>
+                      {BUILTIN_TEMPLATES.map((tpl) => (
+                        <TouchableOpacity
+                          key={tpl.name}
+                          style={s.presetTemplateBtn}
+                          onPress={() => { setImportText(tpl.text); setImportError(''); }}
+                        >
+                          <Text style={s.presetTemplateName}>{tpl.name}</Text>
+                          <Text style={s.presetTemplateDesc}>{tpl.desc}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <View style={s.templateDivider} />
+
+                    {/* 模板文本输入区 */}
+                    <Text style={m.fieldLabel}>模板内容（粘贴或选择预设后可编辑）</Text>
+                    <Text style={s.templateFormatHint}>格式：=== 助手名 === 换行 启用/禁用 换行 规则内容</Text>
+                    <TextInput
+                      style={[m.fieldInput, s.templateInput]}
+                      multiline
+                      placeholder="=== 写手 ===&#10;启用&#10;你是一位经验丰富的小说写手..."
+                      placeholderTextColor="#6B6B8D"
+                      value={importText}
+                      onChangeText={(t) => { setImportText(t); setImportError(''); }}
+                      textAlignVertical="top"
+                    />
+
+                    {importError ? (
+                      <Text style={s.importError}>{importError}</Text>
+                    ) : null}
+
+                    {/* 解析预览 */}
+                    {importText.trim() ? (
+                      <View style={s.importPreview}>
+                        <Text style={s.importPreviewTitle}>识别到 {parseTemplate(importText).length} 个助手</Text>
+                        {parseTemplate(importText).map((p) => (
+                          <View key={p.presetId} style={s.importPreviewItem}>
+                            <Text style={s.importPreviewStatus}>{p.enabled ? 'ON' : 'OFF'}</Text>
+                            <Text style={s.importPreviewName}>{p.name}</Text>
+                            <Text style={s.importPreviewPrompt} numberOfLines={1}>{p.prompt.slice(0, 40)}...</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </ScrollView>
+
+                  <View style={m.modalFooter}>
+                    <TouchableOpacity style={[m.modalBtn, m.cancelBtn]} onPress={() => setImportModalVisible(false)}>
+                      <Text style={m.cancelBtnText}>取消</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[m.modalBtn, m.submitBtn]} onPress={handleImportTemplate}>
+                      <Text style={m.submitBtnText}>导入</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          </TouchableWithoutFeedback>
+        </Modal>
       </View>
     </Screen>
   );
@@ -1323,4 +1580,63 @@ const s = StyleSheet.create({
   testRunBtnText: { color: GC.textPrimary, fontSize: 16, fontWeight: '600' },
   testCancelBtn: { flex: 1, backgroundColor: GC.border, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   testCancelBtnText: { color: GC.textSecondary, fontSize: 16, fontWeight: '600' },
+
+  // 模板按钮行
+  templateBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  importBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: GC.bgElevated,
+    borderRadius: 12,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: GC.accent + '33',
+  },
+  importBtnText: { color: GC.accent, fontSize: 14, fontWeight: '600' },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: GC.bgElevated,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: GC.border,
+  },
+  exportBtnText: { color: GC.textSecondary, fontSize: 14, fontWeight: '600' },
+
+  // 预设模板列表
+  presetTemplateList: { gap: 8 },
+  presetTemplateBtn: {
+    backgroundColor: GC.bgBase,
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: GC.border,
+  },
+  presetTemplateName: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
+  presetTemplateDesc: { color: GC.textMuted, fontSize: 12, marginTop: 2 },
+
+  templateDivider: { height: 1, backgroundColor: GC.border, marginVertical: 16 },
+  templateFormatHint: { color: GC.textMuted, fontSize: 11, marginBottom: 8, fontStyle: 'italic' },
+  templateInput: { minHeight: 160, textAlignVertical: 'top' },
+
+  importError: { color: '#FF6B6B', fontSize: 13, marginTop: 8 },
+
+  // 导入预览
+  importPreview: { marginTop: 12 },
+  importPreviewTitle: { color: GC.accent, fontSize: 14, fontWeight: '600', marginBottom: 8 },
+  importPreviewItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  importPreviewStatus: { fontSize: 11, fontWeight: '700', color: GC.textPrimary, backgroundColor: GC.border, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
+  importPreviewName: { color: GC.textPrimary, fontSize: 14, fontWeight: '500', width: 70 },
+  importPreviewPrompt: { flex: 1, color: GC.textMuted, fontSize: 12 },
 });
