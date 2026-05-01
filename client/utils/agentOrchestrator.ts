@@ -4,7 +4,7 @@
  */
 
 import RNSSE from 'react-native-sse';
-import { PresetAgent, PRESET_AGENTS, STAGE_AGENT_ORDER, getActiveAgentsForStage } from './presetAgents';
+import { PresetAgent, PRESET_AGENTS, STAGE_AGENT_ORDER, getActiveAgentsForStage, AgentConfig } from './presetAgents';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ===== 类型定义 =====
@@ -55,18 +55,20 @@ async function getApiConfigs(): Promise<ApiConfig[]> {
   }
 }
 
-async function getUserAgentOverrides(): Promise<Record<string, Partial<PresetAgent>>> {
+async function getUserAgentOverrides(): Promise<Record<string, { enabled?: boolean; prompt?: string; apiId?: string }>> {
   try {
     const raw = await AsyncStorage.getItem('agentConfigs');
     if (!raw) return {};
-    const overrides = JSON.parse(raw);
-    const map: Record<string, Partial<PresetAgent>> = {};
+    const overrides = JSON.parse(raw); // AgentConfig[] 格式: [{ presetId, name, prompt, enabled, apiId, order }]
+    const map: Record<string, { enabled?: boolean; prompt?: string; apiId?: string }> = {};
     for (const a of overrides) {
-      map[a.id] = {
-        enabled: a.enabled,
-        prompt: a.prompt,
-        apiId: a.apiId,
-      };
+      if (a.presetId) {
+        map[a.presetId] = {
+          enabled: a.enabled,
+          prompt: a.prompt,
+          apiId: a.apiId,
+        };
+      }
     }
     return map;
   } catch {
@@ -74,10 +76,10 @@ async function getUserAgentOverrides(): Promise<Record<string, Partial<PresetAge
   }
 }
 
-/** 获取Agent的API配置 */
-function resolveApiConfig(agent: PresetAgent, apiConfigs: ApiConfig[], defaultApi: ApiConfig | null): ApiConfig | null {
-  if (agent.apiId) {
-    const cfg = apiConfigs.find(c => c.id === agent.apiId);
+/** 获取Agent的API配置 — overrideApiId 来自用户覆盖配置 */
+function resolveApiConfig(overrideApiId: string | undefined, apiConfigs: ApiConfig[], defaultApi: ApiConfig | null): ApiConfig | null {
+  if (overrideApiId) {
+    const cfg = apiConfigs.find(c => c.id === overrideApiId);
     if (cfg) return cfg;
   }
   return defaultApi;
@@ -387,8 +389,10 @@ export async function orchestrateAgents(params: OrchestrationParams): Promise<vo
   for (let i = 0; i < agents.length; i++) {
     const agent = agents[i];
 
-    // 解析API配置
-    const apiConfig = resolveApiConfig(agent, apiConfigs, defaultApi);
+    // 解析API配置：用户覆盖的apiId优先，否则用默认
+    const override = userAgentOverrides[agent.id];
+    const overrideApiId = override?.apiId;
+    const apiConfig = resolveApiConfig(overrideApiId, apiConfigs, defaultApi);
     if (!apiConfig || !apiConfig.apiKey || !apiConfig.baseUrl || !apiConfig.model) {
       onError(`助手 "${agent.name}" 的API配置不完整，请检查`);
       return;
@@ -435,7 +439,8 @@ export async function orchestrateAgents(params: OrchestrationParams): Promise<vo
   let coordinatorReportOutput = '';
   if (hasCoordinator) {
     const coordinatorAgent = agents.find(a => a.id === 'coordinator')!;
-    const apiConfig = resolveApiConfig(coordinatorAgent, apiConfigs, defaultApi);
+    const coordinatorOverride = userAgentOverrides['coordinator'];
+    const apiConfig = resolveApiConfig(coordinatorOverride?.apiId, apiConfigs, defaultApi);
     if (apiConfig && apiConfig.apiKey && apiConfig.baseUrl && apiConfig.model) {
       onAgentStart('统筹(报告)', agents.length, totalSteps);
       const { system, user, maxTokens } = buildAgentPrompts(coordinatorAgent, stage, context, allOutputs, params);

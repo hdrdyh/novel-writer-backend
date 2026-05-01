@@ -7,6 +7,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type AgentCategory = 'core' | 'recommended' | 'optional';
 
+/** 用户在agent-config页面保存的Agent配置 */
+export interface AgentConfig {
+  presetId: string;
+  name: string;
+  prompt: string;
+  enabled: boolean;
+  apiId: string;
+}
+
 export type AgentDefinition = PresetAgent;
 
 export interface PresetAgent {
@@ -226,10 +235,18 @@ export function getAgentsForStage(stage: string): PresetAgent[] {
 /** 获取所有已启用的Agent */
 export async function getEnabledAgents(): Promise<PresetAgent[]> {
   const overridesStr = await AsyncStorage.getItem('agentConfigs');
-  const overrides: Record<string, Partial<PresetAgent>> = overridesStr ? JSON.parse(overridesStr) : {};
+  const configList: AgentConfig[] = overridesStr ? JSON.parse(overridesStr) : [];
+  // 将数组转为以 presetId 为 key 的映射
+  const overridesMap: Record<string, AgentConfig> = {};
+  for (const c of configList) {
+    overridesMap[c.presetId] = c;
+  }
   return PRESET_AGENTS.filter(a => {
-    const override = overrides[a.id] || {};
-    const enabled = override.enabled !== undefined ? override.enabled : a.enabled;
+    const override = overridesMap[a.id];
+    const enabled = override ? override.enabled : a.enabled;
     return a.category === 'core' || enabled;
-  }).map(a => ({ ...a, ...overrides[a.id] }));
+  }).map(a => {
+    const override = overridesMap[a.id];
+    return override ? { ...a, prompt: override.prompt || a.prompt, enabled: override.enabled } : a;
+  });
 }
