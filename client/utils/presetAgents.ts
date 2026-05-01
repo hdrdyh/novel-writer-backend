@@ -178,11 +178,11 @@ export const PRESET_AGENTS: PresetAgent[] = [
  * 统筹始终首尾，中间按顺序串行
  */
 export const STAGE_AGENT_ORDER: Record<string, string[]> = {
-  outline: ['coordinator', 'world_architect', 'plot_designer', 'coordinator'],
-  rough: ['coordinator', 'world_architect', 'plot_designer', 'rough_designer', 'coordinator'],
-  detail: ['coordinator', 'plot_designer', 'character_designer', 'foreshadow_designer', 'detail_designer', 'coordinator'],
-  writing: ['coordinator', 'memory_compressor', 'world_architect', 'character_designer', 'dialogue_designer', 'scene_describer', 'foreshadow_designer', 'writer', 'pacing_controller', 'style_polisher', 'coordinator'],
-  review: ['coordinator', 'coordinator'], // 评审阶段由reviewTeamConfigs决定中间的Agent
+  outline: ['coordinator', 'world_architect', 'plot_designer'],
+  rough: ['coordinator', 'world_architect', 'plot_designer', 'rough_designer'],
+  detail: ['coordinator', 'plot_designer', 'character_designer', 'foreshadow_designer', 'detail_designer'],
+  writing: ['coordinator', 'memory_compressor', 'world_architect', 'character_designer', 'dialogue_designer', 'scene_describer', 'foreshadow_designer', 'writer', 'pacing_controller', 'style_polisher'],
+  review: ['coordinator'], // 评审阶段由reviewTeamConfigs决定中间的Agent
 };
 
 /** 获取预置Agent by id */
@@ -200,7 +200,7 @@ export function getActiveAgentsForStage(
   const seen = new Set<string>();
 
   for (const agentId of order) {
-    if (seen.has(agentId) && agentId !== 'coordinator') continue; // 去重但允许统筹出现两次
+    if (seen.has(agentId)) continue; // 去重
     seen.add(agentId);
 
     const preset = PRESET_AGENTS.find(a => a.id === agentId);

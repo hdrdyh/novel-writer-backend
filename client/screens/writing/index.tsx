@@ -254,8 +254,10 @@ export default function WritingScreen() {
       await orchestrateAgents({
         stage: 'writing',
         context: targetOutline || '无细纲',
+        secondaryContext: outlineContext ? `【大纲】\n${outlineContext.slice(0, 2000)}\n\n【粗纲】\n${roughContext.slice(0, 2000)}` : '',
         previousContent: memoryText,
         chapterNumber: targetChNum,
+        targetChapters: parsedDetail.length || undefined,
         novelName: novelName || '',
         onAgentStart: (name: string, idx: number, total: number) => {
           setCurrentAgentIdx(idx);

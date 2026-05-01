@@ -38,6 +38,113 @@ interface OutlineData {
 
 const STORAGE_KEY = 'outline_data';
 
+// ===== 粗纲解析 =====
+// 支持格式：第X章：xxx / 第X章 xxx / 1. xxx / 一、xxx / 纯文本每行一章
+function parseRoughOutline(text: string, targetChapters: number): string[] {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const chapters: string[] = [];
+
+  for (const line of lines) {
+    // 跳过纯标题行（只有"第X章"没有内容的）
+    if (/^第[零一二三四五六七八九十百千\d]+章$/.test(line)) continue;
+    // 跳过字数标记
+    if (/^[\d约]+字$/.test(line)) continue;
+    // 跳过Markdown标题标记
+    if (/^#{1,3}\s/.test(line) && line.length < 10) continue;
+
+    // 移除章节编号前缀，保留内容
+    const cleaned = line
+      .replace(/^第[零一二三四五六七八九十百千\d]+章[：:，,、]?\s*/, '')  // "第1章：xxx" → "xxx"
+      .replace(/^\d+[、.．)\]]\s*/, '')                                      // "1. xxx" → "xxx"
+      .replace(/^[零一二三四五六七八九十百千]+[、.．)\]]\s*/, '')              // "一、xxx" → "xxx"
+      .replace(/^[-*]\s*/, '')                                                // "- xxx" → "xxx"
+      .trim();
+
+    if (cleaned.length > 0) {
+      chapters.push(cleaned);
+    }
+  }
+
+  // 如果解析出来的章数远超目标，截取
+  if (targetChapters > 0 && chapters.length > targetChapters * 1.5) {
+    return chapters.slice(0, targetChapters);
+  }
+
+  return chapters;
+}
+
+// ===== 细纲解析 =====
+// 支持格式：===第X章=== / 第X章(分隔符) / Markdown ## 等
+function parseDetailOutline(text: string, targetChapters: number): string[] {
+  // 尝试按章节分隔符拆分
+  const chapterPatterns = [
+    /===第[零一二三四五六七八九十百千\d]+章===/g,
+    /---第[零一二三四五六七八九十百千\d]+章---/g,
+    /#{2,3}\s*第[零一二三四五六七八九十百千\d]+章/g,
+  ];
+
+  let bestSplit: string[] | null = null;
+
+  for (const pattern of chapterPatterns) {
+    const matches = [...text.matchAll(pattern)];
+    if (matches.length >= 2) {
+      // 按分隔符拆分
+      const parts: string[] = [];
+      for (let i = 0; i < matches.length; i++) {
+        const start = matches[i].index! + matches[i][0].length;
+        const end = i + 1 < matches.length ? matches[i + 1].index! : text.length;
+        const content = text.slice(start, end).trim();
+        if (content) parts.push(content);
+      }
+      if (parts.length >= 2) {
+        bestSplit = parts;
+        break;
+      }
+    }
+  }
+
+  if (bestSplit) {
+    if (targetChapters > 0 && bestSplit.length > targetChapters * 1.5) {
+      return bestSplit.slice(0, targetChapters);
+    }
+    return bestSplit;
+  }
+
+  // 没有明确的分隔符，尝试按"第X章"行拆分
+  const lines = text.split('\n');
+  const chapters: string[] = [];
+  let currentChapter = '';
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // 遇到"第X章"开头的行，且当前已有内容，开始新章节
+    if (/^第[零一二三四五六七八九十百千\d]+章[：:，,、\s]/.test(trimmed) && currentChapter.trim()) {
+      chapters.push(currentChapter.trim());
+      currentChapter = trimmed.replace(/^第[零一二三四五六七八九十百千\d]+章[：:，,、]?\s*/, '') + '\n';
+    } else if (/^第[零一二三四五六七八九十百千\d]+章[：:，,、\s]/.test(trimmed)) {
+      currentChapter = trimmed.replace(/^第[零一二三四五六七八九十百千\d]+章[：:，,、]?\s*/, '') + '\n';
+    } else {
+      // 跳过纯标题行和字数标记
+      if (/^第[零一二三四五六七八九十百千\d]+章$/.test(trimmed)) continue;
+      if (/^[\d约]+字$/.test(trimmed)) continue;
+      currentChapter += line + '\n';
+    }
+  }
+  if (currentChapter.trim()) {
+    chapters.push(currentChapter.trim());
+  }
+
+  if (chapters.length >= 2) {
+    if (targetChapters > 0 && chapters.length > targetChapters * 1.5) {
+      return chapters.slice(0, targetChapters);
+    }
+    return chapters;
+  }
+
+  // 最后兜底：按行分割（每行一条）
+  return parseRoughOutline(text, targetChapters);
+}
+
 export default function OutlineScreen() {
   const router = useSafeRouter();
   const [data, setData] = useState<OutlineData>({
@@ -101,17 +208,32 @@ export default function OutlineScreen() {
     setCurrentAgentIdx(0);
     abortRef.current = false;
 
-    // 构建上下文
-    const targetOutline = stage === 'outline' ? data.outline :
-      stage === 'rough' ? data.outline :
-        data.rough.join('\n');
+    // 构建上下文：粗纲阶段传大纲，细纲阶段传粗纲(主)+大纲(辅)
+    let context = '';
+    let secondaryContext = '';
+    if (stage === 'outline') {
+      // 大纲阶段：用小说名+目标章节数作为种子
+      const novelInfo = data.title ? `小说名：《${data.title}》` : '';
+      const targetInfo = data.targetChapters ? `目标章节数：${data.targetChapters}章` : '';
+      const existingOutline = data.outline ? `\n已有大纲内容：\n${data.outline}` : '';
+      context = `${novelInfo}\n${targetInfo}${existingOutline}`;
+    } else if (stage === 'rough') {
+      context = data.outline;
+    } else {
+      // detail: 主内容=粗纲，辅助=大纲
+      context = data.rough.join('\n');
+      secondaryContext = data.outline;
+    }
 
     let finalContent = '';
 
     try {
       await orchestrateAgents({
         stage: stage === 'outline' ? 'outline' : stage === 'rough' ? 'rough' : 'detail',
-        context: targetOutline,
+        context,
+        secondaryContext,
+        targetChapters: data.targetChapters,
+        novelName: data.title,
         previousContent: '',
         onAgentStart: (name: string, idx: number, _total: number) => {
           setCurrentAgentIdx(idx);
@@ -126,10 +248,34 @@ export default function OutlineScreen() {
         },
         onAgentComplete: (_agentName: string) => { /* 大纲扩写不需要逐Agent回调 */ },
         onAllComplete: (_report: CoordinatorReport, allOutputs: AgentStepResult[]) => {
-          // 取最后一个非统筹Agent的输出作为最终内容
-          const contentAgent = allOutputs.filter(o => o.agentId !== 'coordinator').pop();
-          if (contentAgent) {
-            finalContent = contentAgent.output;
+          if (stage === 'outline') {
+            // 大纲阶段：合并世界架构师+剧情设计师的输出
+            const worldOut = allOutputs.find(o => o.agentId === 'world_architect');
+            const plotOut = allOutputs.find(o => o.agentId === 'plot_designer');
+            const parts: string[] = [];
+            if (worldOut && worldOut.output.trim()) {
+              parts.push('【世界观设定】\n' + worldOut.output.trim());
+            }
+            if (plotOut && plotOut.output.trim()) {
+              parts.push('【剧情设计】\n' + plotOut.output.trim());
+            }
+            finalContent = parts.join('\n\n');
+            // 兜底：如果合并后为空，取最后一个非统筹Agent输出
+            if (!finalContent.trim()) {
+              const contentAgent = allOutputs.filter(o => o.agentId !== 'coordinator').pop();
+              if (contentAgent) finalContent = contentAgent.output;
+            }
+          } else {
+            // 粗纲/细纲阶段：取对应设计师的输出
+            const designerId = stage === 'rough' ? 'rough_designer' : 'detail_designer';
+            const designer = allOutputs.find(o => o.agentId === designerId);
+            if (designer && designer.output.trim()) {
+              finalContent = designer.output;
+            } else {
+              // 兜底：取最后一个非统筹Agent输出
+              const contentAgent = allOutputs.filter(o => o.agentId !== 'coordinator').pop();
+              if (contentAgent) finalContent = contentAgent.output;
+            }
           }
         },
         onError: (error: string) => {
@@ -145,18 +291,19 @@ export default function OutlineScreen() {
       if (stage === 'outline') {
         saveData({ ...data, outline: finalContent });
       } else if (stage === 'rough') {
-        const lines = finalContent.split('\n').filter((l: string) => l.trim()).filter((l: string) => !/^[\d零一二三四五六七八九十百千]+[、.．]/.test(l.trim()) || l.length > 10);
-        saveData({ ...data, rough: lines });
-      } else {
-        const rawLines = finalContent.split('\n').filter((l: string) => l.trim());
-        const filtered: string[] = [];
-        for (const line of rawLines) {
-          const trimmed = line.trim();
-          if (/^[\d约]+字$/.test(trimmed)) continue;
-          if (/^第[零一二三四五六七八九十百千\d]+章$/.test(trimmed)) continue;
-          filtered.push(trimmed);
+        const chapters = parseRoughOutline(finalContent, data.targetChapters);
+        if (chapters.length === 0) {
+          Alert.alert('提示', 'AI扩写未能解析出章节粗纲，请重试或手动输入');
+          return;
         }
-        saveData({ ...data, detail: filtered });
+        saveData({ ...data, rough: chapters });
+      } else {
+        const details = parseDetailOutline(finalContent, data.targetChapters);
+        if (details.length === 0) {
+          Alert.alert('提示', 'AI扩写未能解析出章节细纲，请重试或手动输入');
+          return;
+        }
+        saveData({ ...data, detail: details });
       }
     } catch (e: any) {
       Alert.alert('AI扩写失败', e.message || '请检查API配置');

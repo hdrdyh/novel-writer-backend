@@ -24,8 +24,10 @@ export interface CoordinatorReport {
 export interface OrchestrationParams {
   stage: 'outline' | 'rough' | 'detail' | 'writing' | 'review';
   context: string;             // 当前内容（大纲/粗纲/细纲/章纲）
+  secondaryContext?: string;   // 辅助内容（细纲阶段传大纲，写作阶段传粗纲等）
   previousContent?: string;    // 前文（写作阶段用）
   chapterNumber?: number;      // 章节号（写作阶段用）
+  targetChapters?: number;     // 目标章节数（粗纲/细纲阶段用）
   novelName?: string;          // 小说名
   onAgentStart: (name: string, idx: number, total: number) => void;
   onAgentChunk: (chunk: string) => void;
@@ -169,9 +171,11 @@ function buildAgentPrompts(
   // 统筹Agent：首次规划 / 末次出报告
   if (isCoordinator) {
     if (isFirstCoordinator) {
+      const targetInfo = params.targetChapters ? `目标章节数：${params.targetChapters}章。` : '';
+      const novelInfo = params.novelName ? `小说名：《${params.novelName}》。` : '';
       return {
         system: '你是小说创作统筹。',
-        user: `当前阶段：${stage}\n任务内容：${context.slice(0, 2000)}\n请简要分析当前任务，说明接下来各Agent需要完成的工作（限200字）。`,
+        user: `当前阶段：${stage}\n${novelInfo}${targetInfo}任务内容：${context.slice(0, 2000)}\n请简要分析当前任务，说明接下来各Agent需要完成的工作（限200字）。`,
         maxTokens: 1024,
       };
     } else {
@@ -196,17 +200,20 @@ function buildAgentPrompts(
   let taskInstruction = '';
   let maxTokens = 4096;
 
+  const novelNameStr = params.novelName ? `《${params.novelName}》` : '';
+  const targetChaptersStr = params.targetChapters ? `目标章节数：${params.targetChapters}章` : '';
+
   switch (stage) {
     case 'outline':
-      taskInstruction = '请根据以下大纲内容，完成你的专业工作。';
+      taskInstruction = `请根据以下核心概念，完成你的专业工作，为小说${novelNameStr}设计完整大纲。${targetChaptersStr}`;
       break;
     case 'rough':
-      taskInstruction = '请根据以下大纲内容，设计章节粗纲。';
+      taskInstruction = `请根据以下大纲内容，设计章节粗纲。${targetChaptersStr ? `必须设计${params.targetChapters}章的粗纲` : ''}。每章粗纲一行，格式："第X章：章节核心事件概括"。确保章节数量与目标一致。`;
       if (agent.id === 'rough_designer') maxTokens = 8192;
       break;
     case 'detail':
-      taskInstruction = '请根据以下大纲和粗纲内容，设计章节细纲。';
-      if (agent.id === 'detail_designer') maxTokens = 8192;
+      taskInstruction = `请根据以下大纲和粗纲内容，逐章设计细纲。${targetChaptersStr ? `共${params.targetChapters}章` : ''}。每章细纲用"===第X章==="开头，然后写详细场景、关键对话方向、情绪线、本章目标。各章细纲之间用"===第X章==="分隔。`;
+      if (agent.id === 'detail_designer') maxTokens = 16384;
       break;
     case 'writing':
       if (agent.id === 'writer') {
@@ -238,6 +245,14 @@ function buildAgentPrompts(
   }
   if (params.previousContent && stage === 'writing' && agent.id !== 'memory_compressor') {
     userPrompt += `【前文摘要】\n${params.previousContent.slice(0, 2000)}\n\n`;
+  }
+  // 细纲阶段：辅助内容传大纲，主内容传粗纲
+  if (params.secondaryContext && stage === 'detail') {
+    userPrompt += `【大纲】\n${params.secondaryContext.slice(0, 3000)}\n\n`;
+  }
+  // 写作阶段：辅助内容传大纲+粗纲
+  if (params.secondaryContext && stage === 'writing') {
+    userPrompt += `${params.secondaryContext.slice(0, 3000)}\n\n`;
   }
   userPrompt += `${taskInstruction}\n\n【当前内容】\n${context.slice(0, 4000)}`;
 
