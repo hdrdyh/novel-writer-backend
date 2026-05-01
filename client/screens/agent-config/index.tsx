@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  StyleSheet,
   Alert,
   Modal,
   TextInput,
@@ -22,311 +21,12 @@ import { FontAwesome6 } from '@expo/vector-icons';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useFocusEffect } from 'expo-router';
 import { GC } from '@/utils/glassColors';
-import { PRESET_AGENTS, PresetAgent, AgentCategory } from '@/utils/presetAgents';
+import { PRESET_AGENTS, PresetAgent } from '@/utils/presetAgents';
+import { ApiConfig, AgentConfig, ReviewAgent, ReviewConfig, DEFAULT_REVIEW_AGENTS } from './types';
+import { BUILTIN_TEMPLATES, parseTemplate, exportTemplate } from './agentTemplates';
+import { s, m } from './agentConfigStyles';
+import { ApiConfigModal, CollabAgentEditModal, ReviewAgentEditModal } from './AgentEditModals';
 
-// ============== 类型 ==============
-interface ApiConfig {
-  id: string;
-  name: string;
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-}
-
-interface AgentConfig {
-  presetId: string;       // 对应 PRESET_AGENTS 的 id
-  name: string;           // 可被用户修改
-  prompt: string;         // 可被用户修改
-  enabled: boolean;
-  apiId?: string;         // 绑定的API配置ID
-  order: number;          // 执行顺序
-}
-
-interface ReviewAgent {
-  id: string;
-  name: string;
-  role: string;
-  prompt: string;
-  enabled: boolean;
-  order: number;
-  apiId?: string;
-}
-
-interface ReviewConfig {
-  focusDirection: string;
-  rounds: number;
-  maxWords: number;
-}
-
-// ============== 子组件：API配置编辑弹窗 ==============
-function ApiConfigModal({
-  visible,
-  data,
-  onClose,
-  onSave,
-}: {
-  visible: boolean;
-  data: ApiConfig | null;
-  onClose: () => void;
-  onSave: (config: Omit<ApiConfig, 'id'> & { id?: string }) => void;
-}) {
-  const initName = data?.name || '';
-  const initApiKey = data?.apiKey || '';
-  const initBaseUrl = data?.baseUrl || 'https://api.deepseek.com';
-  const initModel = data?.model || 'deepseek-chat';
-
-  const [name, setName] = useState(initName);
-  const [apiKey, setApiKey] = useState(initApiKey);
-  const [baseUrl, setBaseUrl] = useState(initBaseUrl);
-  const [model, setModel] = useState(initModel);
-
-  const [prevDataId, setPrevDataId] = useState<string | null>(data?.id ?? null);
-  if ((data?.id ?? null) !== prevDataId) {
-    setPrevDataId(data?.id ?? null);
-    setName(initName);
-    setApiKey(initApiKey);
-    setBaseUrl(initBaseUrl);
-    setModel(initModel);
-  }
-
-  const handleSave = () => {
-    if (!name.trim() || !apiKey.trim() || !baseUrl.trim() || !model.trim()) {
-      Alert.alert('提示', '请填写所有字段');
-      return;
-    }
-    onSave({ id: data?.id, name: name.trim(), apiKey: apiKey.trim(), baseUrl: baseUrl.trim(), model: model.trim() });
-    onClose();
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} disabled={Platform.OS === 'web'}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={m.modalContainer}>
-            <View style={m.modalContent}>
-              <View style={m.modalHeader}>
-                <Text style={m.modalTitle}>{data ? '编辑API' : '添加API'}</Text>
-                <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#8888AA" /></TouchableOpacity>
-              </View>
-              <ScrollView style={m.modalBody}>
-                <Text style={m.fieldLabel}>名称</Text>
-                <TextInput style={m.fieldInput} placeholder="如：DeepSeek" placeholderTextColor="#6B6B8D" value={name} onChangeText={setName} />
-                <Text style={m.fieldLabel}>API Key</Text>
-                <TextInput style={m.fieldInput} placeholder="sk-xxxx" placeholderTextColor="#6B6B8D" value={apiKey} onChangeText={setApiKey} autoCapitalize="none" />
-                <Text style={m.fieldLabel}>Base URL</Text>
-                <TextInput style={m.fieldInput} placeholder="https://api.deepseek.com" placeholderTextColor="#6B6B8D" value={baseUrl} onChangeText={setBaseUrl} autoCapitalize="none" />
-                <Text style={m.fieldLabel}>模型名称</Text>
-                <TextInput style={m.fieldInput} placeholder="deepseek-chat" placeholderTextColor="#6B6B8D" value={model} onChangeText={setModel} autoCapitalize="none" />
-              </ScrollView>
-              <View style={m.modalFooter}>
-                <TouchableOpacity style={[m.modalBtn, m.cancelBtn]} onPress={onClose}><Text style={m.cancelBtnText}>取消</Text></TouchableOpacity>
-                <TouchableOpacity style={[m.modalBtn, m.submitBtn]} onPress={handleSave}><Text style={m.submitBtnText}>保存</Text></TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </TouchableWithoutFeedback>
-    </Modal>
-  );
-}
-
-// ============== 子组件：协作Agent编辑弹窗 ==============
-function CollabAgentEditModal({
-  visible,
-  agent,
-  preset,
-  apiConfigs,
-  onClose,
-  onSave,
-}: {
-  visible: boolean;
-  agent: AgentConfig | null;
-  preset: PresetAgent | null;
-  apiConfigs: ApiConfig[];
-  onClose: () => void;
-  onSave: (data: { name: string; prompt: string; apiId: string }) => void;
-}) {
-  const initName = agent?.name || preset?.name || '';
-  const initPrompt = agent?.prompt || preset?.prompt || '';
-  const initApiId = agent?.apiId || '';
-
-  const [name, setName] = useState(initName);
-  const [prompt, setPrompt] = useState(initPrompt);
-  const [apiId, setApiId] = useState(initApiId);
-
-  const [prevPresetId, setPrevPresetId] = useState<string | null>(preset?.id ?? null);
-  if ((preset?.id ?? null) !== prevPresetId) {
-    setPrevPresetId(preset?.id ?? null);
-    setName(initName);
-    setPrompt(initPrompt);
-    setApiId(initApiId);
-  }
-
-  const handleSave = () => {
-    if (!name.trim()) {
-      Alert.alert('提示', '请填写助手名称');
-      return;
-    }
-    onSave({ name: name.trim(), prompt: prompt.trim(), apiId });
-    onClose();
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} disabled={Platform.OS === 'web'}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={m.modalContainer}>
-            <View style={[m.modalContent, { maxHeight: '90%' }]}>
-              <View style={m.modalHeader}>
-                <Text style={m.modalTitle}>编辑 {preset?.name || '助手'}</Text>
-                <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#8888AA" /></TouchableOpacity>
-              </View>
-              <ScrollView style={m.modalBody}>
-                <Text style={m.fieldLabel}>名称</Text>
-                <TextInput style={m.fieldInput} placeholder="助手名称" placeholderTextColor="#6B6B8D" value={name} onChangeText={setName} />
-
-                <Text style={m.fieldLabel}>规则 Prompt</Text>
-                <TextInput
-                  style={[m.fieldInput, m.promptInput]}
-                  placeholder="编写助手的执行规则和prompt..."
-                  placeholderTextColor="#6B6B8D"
-                  value={prompt}
-                  onChangeText={setPrompt}
-                  multiline
-                  textAlignVertical="top"
-                />
-
-                <Text style={m.fieldLabel}>绑定API</Text>
-                <View style={m.pickerWrap}>
-                  <ScrollView style={m.pickerScroll} nestedScrollEnabled>
-                    <TouchableOpacity
-                      style={[m.pickerItem, apiId === '' && m.pickerItemActive]}
-                      onPress={() => setApiId('')}
-                    >
-                      <Text style={[m.pickerItemText, apiId === '' && m.pickerItemTextActive]}>默认API</Text>
-                    </TouchableOpacity>
-                    {apiConfigs.map((cfg) => (
-                      <TouchableOpacity
-                        key={cfg.id}
-                        style={[m.pickerItem, apiId === cfg.id && m.pickerItemActive]}
-                        onPress={() => setApiId(cfg.id)}
-                      >
-                        <Text style={[m.pickerItemText, apiId === cfg.id && m.pickerItemTextActive]}>
-                          {cfg.name} ({cfg.model})
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              </ScrollView>
-              <View style={m.modalFooter}>
-                <TouchableOpacity style={[m.modalBtn, m.cancelBtn]} onPress={onClose}><Text style={m.cancelBtnText}>取消</Text></TouchableOpacity>
-                <TouchableOpacity style={[m.modalBtn, m.submitBtn]} onPress={handleSave}><Text style={m.submitBtnText}>保存</Text></TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </TouchableWithoutFeedback>
-    </Modal>
-  );
-}
-
-// ============== 子组件：评审Agent编辑弹窗 ==============
-function ReviewAgentEditModal({
-  visible,
-  agent,
-  apiConfigs,
-  onClose,
-  onSave,
-}: {
-  visible: boolean;
-  agent: ReviewAgent | null;
-  apiConfigs: ApiConfig[];
-  onClose: () => void;
-  onSave: (data: { name: string; prompt: string; apiId: string }) => void;
-}) {
-  const initName = agent?.name || '';
-  const initPrompt = agent?.prompt || '';
-  const initApiId = agent?.apiId || '';
-
-  const [name, setName] = useState(initName);
-  const [prompt, setPrompt] = useState(initPrompt);
-  const [apiId, setApiId] = useState(initApiId);
-
-  const [prevAgentId, setPrevAgentId] = useState<string | null>(agent?.id ?? null);
-  if ((agent?.id ?? null) !== prevAgentId) {
-    setPrevAgentId(agent?.id ?? null);
-    setName(initName);
-    setPrompt(initPrompt);
-    setApiId(initApiId);
-  }
-
-  const handleSave = () => {
-    if (!name.trim()) {
-      Alert.alert('提示', '请填写助手名称');
-      return;
-    }
-    onSave({ name: name.trim(), prompt: prompt.trim(), apiId });
-    onClose();
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} disabled={Platform.OS === 'web'}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={m.modalContainer}>
-            <View style={[m.modalContent, { maxHeight: '90%' }]}>
-              <View style={m.modalHeader}>
-                <Text style={m.modalTitle}>{agent ? '编辑评审助手' : '添加评审助手'}</Text>
-                <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#8888AA" /></TouchableOpacity>
-              </View>
-              <ScrollView style={m.modalBody}>
-                <Text style={m.fieldLabel}>名称</Text>
-                <TextInput style={m.fieldInput} placeholder="助手名称" placeholderTextColor="#6B6B8D" value={name} onChangeText={setName} />
-                <Text style={m.fieldLabel}>规则 Prompt</Text>
-                <TextInput
-                  style={[m.fieldInput, m.promptInput]}
-                  placeholder="编写评审规则..."
-                  placeholderTextColor="#6B6B8D"
-                  value={prompt}
-                  onChangeText={setPrompt}
-                  multiline
-                  textAlignVertical="top"
-                />
-                <Text style={m.fieldLabel}>绑定API</Text>
-                <View style={m.pickerWrap}>
-                  <ScrollView style={m.pickerScroll} nestedScrollEnabled>
-                    <TouchableOpacity style={[m.pickerItem, apiId === '' && m.pickerItemActive]} onPress={() => setApiId('')}>
-                      <Text style={[m.pickerItemText, apiId === '' && m.pickerItemTextActive]}>默认API</Text>
-                    </TouchableOpacity>
-                    {apiConfigs.map((cfg) => (
-                      <TouchableOpacity key={cfg.id} style={[m.pickerItem, apiId === cfg.id && m.pickerItemActive]} onPress={() => setApiId(cfg.id)}>
-                        <Text style={[m.pickerItemText, apiId === cfg.id && m.pickerItemTextActive]}>{cfg.name} ({cfg.model})</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              </ScrollView>
-              <View style={m.modalFooter}>
-                <TouchableOpacity style={[m.modalBtn, m.cancelBtn]} onPress={onClose}><Text style={m.cancelBtnText}>取消</Text></TouchableOpacity>
-                <TouchableOpacity style={[m.modalBtn, m.submitBtn]} onPress={handleSave}><Text style={m.submitBtnText}>保存</Text></TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </TouchableWithoutFeedback>
-    </Modal>
-  );
-}
-
-// ============== 默认评审团Agent ==============
-const DEFAULT_REVIEW_AGENTS: Omit<ReviewAgent, 'id'>[] = [
-  { name: '逻辑审查员', role: 'logic', prompt: '你是逻辑审查员，负责检查内容的逻辑一致性，找出前后矛盾、因果不通、设定冲突等问题。用简短直接的语言指出问题所在。', enabled: true, order: 1 },
-  { name: '节奏分析师', role: 'pacing', prompt: '你是节奏分析师，负责分析叙事节奏是否合理，是否存在拖沓、跳跃、冗余等问题。给出具体的调整建议。', enabled: true, order: 2 },
-  { name: '读者视角', role: 'reader', prompt: '你站在读者视角，评价这段内容的吸引力、可读性和代入感。告诉作者读者最关心的点和最可能弃读的地方。', enabled: true, order: 3 },
-];
-
-// ============== 主页面 ==============
 export default function AgentConfigScreen() {
   const router = useSafeRouter();
 
@@ -387,7 +87,6 @@ export default function AgentConfigScreen() {
       if (data) {
         setAgentConfigs(JSON.parse(data));
       } else {
-        // 初始化默认配置：核心和推荐启用，可选关闭
         const defaultConfigs: AgentConfig[] = PRESET_AGENTS.map((p, i) => ({
           presetId: p.id,
           name: p.name,
@@ -471,7 +170,7 @@ export default function AgentConfigScreen() {
 
   const handleToggleCollabAgent = (presetId: string) => {
     const preset = PRESET_AGENTS.find((p) => p.id === presetId);
-    if (preset?.category === 'core') return; // 核心Agent不可禁用
+    if (preset?.category === 'core') return;
     const next = agentConfigs.map((a) =>
       a.presetId === presetId ? { ...a, enabled: !a.enabled } : a
     );
@@ -505,7 +204,6 @@ export default function AgentConfigScreen() {
     setSmartMatchVisible(true);
 
     try {
-      // 读取第一个API配置
       const firstApi = apiConfigs[0];
       if (!firstApi) {
         setSmartMatchSuggestion('请先配置至少一个API，才能使用智能搭配功能。');
@@ -546,11 +244,10 @@ export default function AgentConfigScreen() {
   };
 
   const handleApplySmartMatch = () => {
-    // 简单解析：如果建议中包含"启用"某Agent名，则启用；包含"关闭"则关闭
     const next = agentConfigs.map((a) => {
       const preset = PRESET_AGENTS.find((p) => p.id === a.presetId);
       if (!preset) return a;
-      if (preset.category === 'core') return { ...a, enabled: true }; // 核心始终启用
+      if (preset.category === 'core') return { ...a, enabled: true };
       const nameInSuggestion = smartMatchSuggestion.includes(preset.name);
       const shouldEnable = nameInSuggestion && (
         smartMatchSuggestion.includes(`启用${preset.name}`) ||
@@ -574,7 +271,6 @@ export default function AgentConfigScreen() {
 
   // ============== 测试规则 ==============
   const handleTestAgent = useCallback(async (preset: PresetAgent) => {
-    // 第一步：从AsyncStorage读取规则，验证数据链路
     const savedConfig = agentConfigs.find(c => c.presetId === preset.id);
     const ruleText = savedConfig?.prompt?.trim() || preset.prompt?.trim() || '（未设置自定义规则）';
 
@@ -584,10 +280,8 @@ export default function AgentConfigScreen() {
     setTestLoading(false);
     setTestModalVisible(true);
 
-    // 第二步：调用LLM让助手复述规则，验证传递链路
     try {
       setTestLoading(true);
-      // 读取API配置
       const apiData = await AsyncStorage.getItem('apiConfigs');
       const apis: ApiConfig[] = apiData ? JSON.parse(apiData) : [];
       const boundApiId = savedConfig?.apiId || '';
@@ -599,12 +293,10 @@ export default function AgentConfigScreen() {
         return;
       }
 
-      // 构建和agentOrchestrator一致的prompt
       const userRule = ruleText !== '（未设置自定义规则）' ? `【你必须严格遵守以下规则】\n${ruleText}\n\n` : '';
       const systemMsg = `你是"${preset.name}"，你的职责是：${preset.role}`;
       const userMsg = `${userRule}请用你自己的话简述你当前的工作规则和风格要求，不要重复原文，用自己的理解表达。限100字以内。`;
 
-      // 调用LLM
       let baseUrl = api.baseUrl.trim();
       if (!baseUrl.includes('/v1') && !baseUrl.includes('/v2')) {
         baseUrl = baseUrl.replace(/\/+$/, '') + '/v1';
@@ -638,61 +330,8 @@ export default function AgentConfigScreen() {
   }, [agentConfigs]);
 
   // ============== 模板导入导出 ==============
-  /**
-   * 模板格式：
-   * === 写手 ===
-   * 启用
-   * 你是一位经验丰富的小说写手。你的唯一职责是创作小说正文...
-   *
-   * === 统筹 ===
-   * 禁用
-   * 你是一位小说创作统筹...
-   */
-  const parseTemplate = (text: string): { presetId: string; name: string; prompt: string; enabled: boolean }[] => {
-    const results: { presetId: string; name: string; prompt: string; enabled: boolean }[] = [];
-    const blocks = text.split(/===\s*/).filter(b => b.trim());
-
-    for (const block of blocks) {
-      const lines = block.split('\n');
-      // 第一行是助手名（可能带尾部 ===）
-      const agentName = lines[0].replace(/\s*===\s*$/, '').trim();
-      if (!agentName) continue;
-
-      // 匹配预置Agent（支持中文名和英文id）
-      const preset = PRESET_AGENTS.find(p => p.name === agentName || p.id === agentName);
-      if (!preset) continue;
-
-      // 第二行是启用/禁用
-      const statusLine = (lines[1] || '').trim();
-      const enabled = statusLine === '启用' || statusLine === '开启' || statusLine === 'true' || statusLine === '1';
-
-      // 剩余行是规则
-      const promptLines = lines.slice(2).join('\n').trim();
-
-      results.push({
-        presetId: preset.id,
-        name: preset.name,
-        prompt: promptLines || preset.prompt,
-        enabled,
-      });
-    }
-
-    return results;
-  };
-
-  const exportTemplate = (): string => {
-    const lines: string[] = [];
-    for (const preset of PRESET_AGENTS) {
-      const config = agentConfigs.find(c => c.presetId === preset.id);
-      const name = config?.name || preset.name;
-      const enabled = config?.enabled ?? preset.enabled;
-      const prompt = config?.prompt || preset.prompt;
-      lines.push(`=== ${name} ===`);
-      lines.push(enabled ? '启用' : '禁用');
-      lines.push(prompt);
-      lines.push('');
-    }
-    return lines.join('\n');
+  const handleExportTemplate = (): string => {
+    return exportTemplate(agentConfigs);
   };
 
   const handleImportTemplate = () => {
@@ -708,16 +347,10 @@ export default function AgentConfigScreen() {
       return;
     }
 
-    // 合并到现有配置
     const next = agentConfigs.map(a => {
       const match = parsed.find(p => p.presetId === a.presetId);
       if (match) {
-        return {
-          ...a,
-          name: match.name,
-          prompt: match.prompt,
-          enabled: match.enabled,
-        };
+        return { ...a, name: match.name, prompt: match.prompt, enabled: match.enabled };
       }
       return a;
     });
@@ -728,81 +361,12 @@ export default function AgentConfigScreen() {
     Alert.alert('导入成功', `已更新 ${parsed.length} 个助手的配置`);
   };
 
-  const handleExportTemplate = () => {
-    const template = exportTemplate();
+  const doExportTemplate = () => {
+    const template = handleExportTemplate();
     setImportText(template);
     setImportModalVisible(true);
     setImportError('');
   };
-
-  const BUILTIN_TEMPLATES: { name: string; desc: string; text: string }[] = [
-    {
-      name: '默认配置',
-      desc: '核心+推荐启用，可选关闭，默认规则',
-      text: PRESET_AGENTS.map(p => `=== ${p.name} ===\n${p.category === 'core' || p.category === 'recommended' ? '启用' : '禁用'}\n${p.prompt}`).join('\n\n'),
-    },
-    {
-      name: '全量协作',
-      desc: '所有助手全部启用',
-      text: PRESET_AGENTS.map(p => `=== ${p.name} ===\n启用\n${p.prompt}`).join('\n\n'),
-    },
-    {
-      name: '极简写作',
-      desc: '只保留写手+统筹+润色师',
-      text: PRESET_AGENTS
-        .filter(p => ['writer', 'coordinator', 'style_polisher'].includes(p.id))
-        .map(p => `=== ${p.name} ===\n启用\n${p.prompt}`)
-        .join('\n\n'),
-    },
-    {
-      name: '悬疑推理',
-      desc: '强化剧情/伏笔/节奏，弱化世界观/对话',
-      text: PRESET_AGENTS.map(p => {
-        let enabled = p.category === 'core';
-        let prompt = p.prompt;
-        if (['plot_designer', 'foreshadow_designer', 'pacing_controller', 'character_designer', 'detail_designer', 'memory_compressor'].includes(p.id)) {
-          enabled = true;
-        }
-        if (p.id === 'plot_designer') {
-          prompt = '你是一位悬疑推理剧情设计专家。你的唯一职责是设计小说的情节线，特别注重：1.案件线索的布局和递进揭示；2.嫌疑人设置的误导与反转；3.悬念的层层升级；4.逻辑推理链的严密性；5.真相揭晓时的震撼感。你必须确保每个线索都有交代，每个反转都有伏笔支撑。你只输出剧情设计文档，绝不写正文。';
-        }
-        if (p.id === 'foreshadow_designer') {
-          prompt = '你是一位悬疑伏笔设计专家。你的职责是精心设计案件中的伏笔布局，包括：1.关键线索的隐蔽埋设；2.误导性信息的巧妙穿插；3.真相反转的层层铺垫；4.伏笔回收时的意外与合理并存。你必须确保伏笔自然不刻意，回收时有恍然大悟的满足感。你只输出伏笔设计文档，绝不写正文。';
-        }
-        if (p.id === 'pacing_controller') {
-          prompt = '你是一位悬疑节奏把控专家。你的职责是确保章节节奏紧凑、悬念感持续，包括：1.每章结尾设置钩子让读者欲罢不能；2.信息揭示的节奏把控——不能太快也不能太慢；3.紧张与舒缓的交替；4.高潮戏的节奏加速。你必须确保读者始终处于"想知道真相"的紧迫感中。你只输出节奏调整建议，绝不写正文。';
-        }
-        if (p.id === 'character_designer') {
-          prompt = '你是一位悬疑小说人物塑造专家。你的职责是设计嫌疑人、侦探、受害者等角色，特别注重：1.每个嫌疑人都有作案动机和不在场证明的矛盾；2.角色表面与内心的反差；3.人物关系的暗流涌动；4.关键人物的信息差设计。你必须确保人物立体不脸谱化，每个人都有秘密。你只输出人物设定文档，绝不写正文。';
-        }
-        return `=== ${p.name} ===\n${enabled ? '启用' : '禁用'}\n${prompt}`;
-      }).join('\n\n'),
-    },
-    {
-      name: '玄幻修仙',
-      desc: '强化世界观/人物/伏笔，适合长篇',
-      text: PRESET_AGENTS.map(p => {
-        let enabled = p.category === 'core';
-        let prompt = p.prompt;
-        if (['world_architect', 'character_designer', 'foreshadow_designer', 'plot_designer', 'detail_designer', 'memory_compressor', 'style_polisher'].includes(p.id)) {
-          enabled = true;
-        }
-        if (p.id === 'world_architect') {
-          prompt = '你是一位玄幻修仙世界观架构专家。你的职责是设计完整的修仙世界观体系，包括：1.修炼体系（境界划分、突破条件、天劫设定）；2.势力格局（宗门、世家、散修、魔道）；3.地理体系（凡界、修仙界、秘境、禁地）；4.资源体系（灵石、丹药、法宝、功法的品级划分）；5.天道法则与因果循环。你必须确保体系完整、等级分明、有成长空间。你只输出世界观设定文档，绝不写正文。';
-        }
-        if (p.id === 'character_designer') {
-          prompt = '你是一位玄幻修仙人物塑造专家。你的职责是设计修仙者角色体系，特别注重：1.修炼资质与心性成长的对应；2.师承关系与门派立场；3.道侣/兄弟/宿敌的情感纽带；4.性格在修炼路上的变化轨迹；5.功法与性格的相互影响。你必须确保每个角色都有独特的修炼道路和性格魅力。你只输出人物设定文档，绝不写正文。';
-        }
-        if (p.id === 'foreshadow_designer') {
-          prompt = '你是一位玄幻修仙伏笔设计专家。你的职责是设计长篇伏笔布局，包括：1.前世因果的层层揭示；2.宝物/功法的隐藏来历；3.势力暗棋和卧底；4.天道预言与宿命；5.跨越数十章的大伏笔回收。你必须确保伏笔有远有近、有明有暗，让读者始终有期待感。你只输出伏笔设计文档，绝不写正文。';
-        }
-        if (p.id === 'style_polisher') {
-          prompt = '你是一位玄幻修仙文字润色专家。你的职责是对写手的初稿进行润色，特别注重：1.修炼术语的一致性和准确性；2.战斗场面的画面感和节奏感；3.境界突破时的气势渲染；4.古风文辞的韵味和节奏；5.避免现代化用语破坏仙侠氛围。你必须保持原有情节不变，只优化表达。你只输出润色后的正文。';
-        }
-        return `=== ${p.name} ===\n${enabled ? '启用' : '禁用'}\n${prompt}`;
-      }).join('\n\n'),
-    },
-  ];
 
   // ============== 评审团Agent操作 ==============
   const handleAddReviewAgent = () => {
@@ -914,7 +478,6 @@ export default function AgentConfigScreen() {
     return agentConfigs.find((a) => a.presetId === presetId);
   };
 
-  // 按分类分组
   const coreAgents = PRESET_AGENTS.filter((p) => p.category === 'core');
   const recommendedAgents = PRESET_AGENTS.filter((p) => p.category === 'recommended');
   const optionalAgents = PRESET_AGENTS.filter((p) => p.category === 'optional');
@@ -989,7 +552,6 @@ export default function AgentConfigScreen() {
           {/* ====== 协作Agent Tab ====== */}
           {activeTab === 'collab' && (
             <>
-              {/* 模板操作按钮 */}
               <View style={s.templateBtnRow}>
                 <TouchableOpacity style={s.smartMatchBtn} onPress={handleSmartMatch}>
                   <Ionicons name="sparkles" size={18} color="#7C5CFF" />
@@ -999,31 +561,27 @@ export default function AgentConfigScreen() {
                   <Ionicons name="download-outline" size={18} color={GC.accent} />
                   <Text style={s.importBtnText}>导入模板</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={s.exportBtn} onPress={handleExportTemplate}>
+                <TouchableOpacity style={s.exportBtn} onPress={doExportTemplate}>
                   <Ionicons name="share-outline" size={18} color={GC.textSecondary} />
                   <Text style={s.exportBtnText}>导出</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* 核心Agent */}
               <View style={s.categoryHeader}>
                 <Text style={s.categoryTitle}>核心（不可禁用）</Text>
               </View>
               {coreAgents.map(renderAgentCard)}
 
-              {/* 推荐Agent */}
               <View style={s.categoryHeader}>
                 <Text style={s.categoryTitle}>推荐（默认启用）</Text>
               </View>
               {recommendedAgents.map(renderAgentCard)}
 
-              {/* 可选Agent */}
               <View style={s.categoryHeader}>
                 <Text style={s.categoryTitle}>可选（默认关闭）</Text>
               </View>
               {optionalAgents.map(renderAgentCard)}
 
-              {/* 重置按钮 */}
               <TouchableOpacity style={s.resetBtn} onPress={handleResetAgentConfigs}>
                 <Text style={s.resetBtnText}>重置为默认</Text>
               </TouchableOpacity>
@@ -1069,7 +627,6 @@ export default function AgentConfigScreen() {
                 <Text style={s.resetBtnText}>重置为默认</Text>
               </TouchableOpacity>
 
-              {/* 评审参数 */}
               <View style={s.divider} />
               <Text style={s.sectionTitle}>评审参数</Text>
 
@@ -1202,26 +759,25 @@ export default function AgentConfigScreen() {
           </View>
         </Modal>
 
-        {/* ========== 测试规则弹窗 ========== */}
+        {/* 测试规则弹窗 */}
         <Modal visible={testModalVisible} transparent animationType="fade">
           <View style={s.testOverlay}>
             <View style={s.testModal}>
               <View style={s.testHeader}>
                 <Text style={s.testTitle}>测试规则 — {testAgent?.name}</Text>
                 <TouchableOpacity onPress={() => setTestModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Text style={s.testClose}>✕</Text>
+                  <Text style={s.testClose}>X</Text>
                 </TouchableOpacity>
               </View>
 
               <ScrollView style={s.testBody} showsVerticalScrollIndicator={false}>
-                {/* 第一步：读取到的规则 */}
                 <View style={s.testStepBox}>
                   <View style={s.testStepHeader}>
                     <View style={[s.testStepBadge, { backgroundColor: testRuleRead && testRuleRead !== '（未设置自定义规则）' ? GC.success : GC.disabled }]}>
                       <Text style={s.testStepBadgeText}>1</Text>
                     </View>
                     <Text style={s.testStepTitleText}>读取到的规则</Text>
-                    {testRuleRead && testRuleRead !== '（未设置自定义规则）' && <Text style={s.testStepOk}>✓ 已读取</Text>}
+                    {testRuleRead && testRuleRead !== '（未设置自定义规则）' && <Text style={s.testStepOk}>已读取</Text>}
                   </View>
                   {testRuleRead ? (
                     <View style={s.testRuleBox}>
@@ -1232,11 +788,10 @@ export default function AgentConfigScreen() {
                   )}
                 </View>
 
-                {/* 第二步：LLM复述 */}
                 <View style={s.testStepBox}>
                   <View style={s.testStepHeader}>
                     <View style={[s.testStepBadge, { backgroundColor: testLlmResult && !testLlmResult.startsWith('[X]') && !testLlmResult.startsWith('[!]') ? GC.success : testLoading ? GC.warning : GC.disabled }]}>
-                      <Text style={s.testStepBadgeText}>{testLlmResult && !testLlmResult.startsWith('[X]') && !testLlmResult.startsWith('[!]') ? '✓' : '2'}</Text>
+                      <Text style={s.testStepBadgeText}>{testLlmResult && !testLlmResult.startsWith('[X]') && !testLlmResult.startsWith('[!]') ? 'V' : '2'}</Text>
                     </View>
                     <Text style={s.testStepTitleText}>助手复述</Text>
                     {testLoading && <ActivityIndicator size="small" color={GC.primary} />}
@@ -1251,7 +806,6 @@ export default function AgentConfigScreen() {
                   ) : null}
                 </View>
 
-                {/* 对比结果 */}
                 {testRuleRead && testRuleRead !== '（未设置自定义规则）' && testLlmResult && !testLlmResult.startsWith('[X]') && !testLlmResult.startsWith('[!]') && testLlmResult.length > 10 && (
                   <View style={s.testResultBox}>
                     <Text style={s.testResultTitle}>验证结论</Text>
@@ -1280,7 +834,7 @@ export default function AgentConfigScreen() {
           </View>
         </Modal>
 
-        {/* ====== 导入模板弹窗 ====== */}
+        {/* 导入模板弹窗 */}
         <Modal visible={importModalVisible} transparent animationType="slide">
           <TouchableWithoutFeedback onPress={Keyboard.dismiss} disabled={Platform.OS === 'web'}>
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -1292,7 +846,6 @@ export default function AgentConfigScreen() {
                   </View>
 
                   <ScrollView style={m.modalBody}>
-                    {/* 内置预设模板 */}
                     <Text style={m.fieldLabel}>快速选择预设模板</Text>
                     <View style={s.presetTemplateList}>
                       {BUILTIN_TEMPLATES.map((tpl) => (
@@ -1309,13 +862,12 @@ export default function AgentConfigScreen() {
 
                     <View style={s.templateDivider} />
 
-                    {/* 模板文本输入区 */}
                     <Text style={m.fieldLabel}>模板内容（粘贴或选择预设后可编辑）</Text>
                     <Text style={s.templateFormatHint}>格式：=== 助手名 === 换行 启用/禁用 换行 规则内容</Text>
                     <TextInput
                       style={[m.fieldInput, s.templateInput]}
                       multiline
-                      placeholder="=== 写手 ===&#10;启用&#10;你是一位经验丰富的小说写手..."
+                      placeholder={"=== 写手 ===\n启用\n你是一位经验丰富的小说写手..."}
                       placeholderTextColor="#6B6B8D"
                       value={importText}
                       onChangeText={(t) => { setImportText(t); setImportError(''); }}
@@ -1326,7 +878,6 @@ export default function AgentConfigScreen() {
                       <Text style={s.importError}>{importError}</Text>
                     ) : null}
 
-                    {/* 解析预览 */}
                     {importText.trim() ? (
                       <View style={s.importPreview}>
                         <Text style={s.importPreviewTitle}>识别到 {parseTemplate(importText).length} 个助手</Text>
@@ -1358,280 +909,3 @@ export default function AgentConfigScreen() {
     </Screen>
   );
 }
-
-// ============== 弹窗样式 ==============
-const m = StyleSheet.create({
-  modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
-  modalContent: { backgroundColor: GC.bgElevated, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%', borderWidth: 1, borderColor: GC.border },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: GC.border },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: GC.textPrimary },
-  modalBody: { padding: 20 },
-  modalFooter: { flexDirection: 'row', gap: 12, padding: 20, borderTopWidth: 1, borderTopColor: GC.border },
-  modalBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  cancelBtn: { backgroundColor: GC.border },
-  cancelBtnText: { color: GC.textSecondary, fontSize: 16, fontWeight: '600' },
-  submitBtn: { backgroundColor: GC.primary },
-  submitBtnText: { color: GC.textPrimary, fontSize: 16, fontWeight: '600' },
-  fieldLabel: { color: GC.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 12 },
-  fieldInput: { backgroundColor: GC.inputBg, borderRadius: 10, padding: 14, color: GC.textPrimary, fontSize: 15, borderWidth: 1, borderColor: GC.border },
-  promptInput: { minHeight: 120 },
-  pickerWrap: { backgroundColor: GC.inputBg, borderRadius: 10, borderWidth: 1, borderColor: GC.border, maxHeight: 150 },
-  pickerScroll: { padding: 8 },
-  pickerItem: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8 },
-  pickerItemActive: { backgroundColor: GC.primary },
-  pickerItemText: { color: GC.textSecondary, fontSize: 14 },
-  pickerItemTextActive: { color: GC.textPrimary, fontWeight: '600' },
-});
-
-// ============== 页面样式 ==============
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: GC.bgBase },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 60,
-    paddingBottom: 16,
-  },
-  backBtn: { padding: 8 },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: GC.textPrimary },
-
-  tabBar: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: GC.bgElevated,
-    borderRadius: 12,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: GC.border,
-  },
-  tabItem: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
-  tabItemActive: { backgroundColor: GC.primary },
-  tabItemText: { color: GC.textSecondary, fontSize: 14, fontWeight: '600' },
-  tabItemTextActive: { color: GC.textPrimary },
-
-  scrollView: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 100 },
-
-  // 智能搭配
-  smartMatchBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: GC.bgElevated,
-    borderRadius: 12,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#7C5CFF33',
-    marginBottom: 20,
-  },
-  smartMatchBtnText: { color: GC.primary, fontSize: 15, fontWeight: '600' },
-
-  // 分类标题
-  categoryHeader: { marginTop: 16, marginBottom: 8, paddingLeft: 4 },
-  categoryTitle: { color: GC.primary, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5 },
-
-  // Agent卡片
-  agentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: GC.bgElevated,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: GC.border,
-  },
-  agentCardDisabled: { opacity: 0.5 },
-  agentInfo: { flex: 1 },
-  agentNameCol: { flex: 1, gap: 4 },
-  agentName: { color: GC.textPrimary, fontSize: 16, fontWeight: '600' },
-  agentDesc: { color: GC.textSecondary, fontSize: 13, marginTop: 2, lineHeight: 18 },
-  agentApi: { color: GC.textMuted, fontSize: 12, marginTop: 4 },
-  textDisabled: { color: GC.textMuted },
-  agentRightActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-
-  // 评审团
-  sectionHeader: { marginTop: 16 },
-  sectionTitle: { color: GC.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 },
-  sectionDesc: { color: GC.textMuted, fontSize: 12, marginBottom: 12 },
-
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: GC.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    marginTop: 12,
-  },
-  addBtnText: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
-
-  resetBtn: { marginTop: 16, alignItems: 'center' },
-  resetBtnText: { color: GC.textMuted, fontSize: 13 },
-
-  iconBtn: { padding: 6 },
-
-  // 评审参数
-  divider: { height: 1, backgroundColor: GC.inputBg, marginTop: 24, marginBottom: 8 },
-  fieldTitle: { color: GC.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 16 },
-  reviewInput: {
-    backgroundColor: GC.bgElevated,
-    borderRadius: 10,
-    padding: 14,
-    color: GC.textPrimary,
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: GC.border,
-    minHeight: 60,
-    textAlignVertical: 'top',
-  },
-  roundsRow: { flexDirection: 'row', gap: 10 },
-  roundBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 10,
-    backgroundColor: GC.bgElevated,
-    borderWidth: 1,
-    borderColor: GC.border,
-  },
-  roundBtnActive: { backgroundColor: GC.primary, borderColor: GC.primary },
-  roundBtnText: { color: GC.textSecondary, fontSize: 14, fontWeight: '600' },
-  roundBtnTextActive: { color: GC.textPrimary },
-
-  // API卡片
-  apiCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: GC.bgElevated,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: GC.border,
-  },
-  apiInfo: { flex: 1 },
-  apiName: { color: GC.textPrimary, fontSize: 16, fontWeight: '500' },
-  apiDetail: { color: GC.textSecondary, fontSize: 12, marginTop: 2 },
-  apiActions: { flexDirection: 'row', gap: 8 },
-
-  // 测试规则按钮（卡片内）
-  testBtn: {
-    backgroundColor: GC.bgElevated,
-    borderWidth: 1,
-    borderColor: GC.accent,
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  testBtnText: { color: GC.accent, fontSize: 12, fontWeight: '600' },
-
-  // 测试规则弹窗
-  testOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  testModal: { backgroundColor: GC.bgElevated, borderRadius: 20, width: '90%', maxHeight: '80%', borderWidth: 1, borderColor: GC.border, overflow: 'hidden' },
-  testHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: GC.border },
-  testTitle: { fontSize: 18, fontWeight: 'bold', color: GC.textPrimary },
-  testClose: { fontSize: 20, color: GC.textMuted },
-  testBody: { padding: 20 },
-  testStepBox: { marginBottom: 20 },
-  testStepHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  testStepBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  testStepBadgeText: { color: GC.textPrimary, fontSize: 13, fontWeight: '700' },
-  testStepTitleText: { color: GC.textPrimary, fontSize: 16, fontWeight: '600', flex: 1 },
-  testStepOk: { color: GC.success, fontSize: 13, fontWeight: '600' },
-  testNoRule: { color: GC.textMuted, fontSize: 14, fontStyle: 'italic' },
-  testLoadingText: { color: GC.textMuted, fontSize: 14, fontStyle: 'italic' },
-  testRuleBox: {
-    backgroundColor: GC.bgBase,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: GC.border,
-    marginBottom: 16,
-  },
-  testRuleText: { color: GC.accent, fontSize: 15, lineHeight: 22 },
-  testResultText: { color: GC.textPrimary, fontSize: 14, lineHeight: 22 },
-  testResultTitle: { color: GC.textPrimary, fontSize: 15, fontWeight: '700', marginBottom: 8 },
-  testResultPass: { color: GC.success, fontSize: 14, lineHeight: 22 },
-  testResultBox: {
-    backgroundColor: GC.bgBase,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: GC.border,
-    minHeight: 80,
-  },
-  testFooter: { flexDirection: 'row', gap: 12, padding: 20, borderTopWidth: 1, borderTopColor: GC.border },
-  testRunBtn: { flex: 1, backgroundColor: GC.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  testRunBtnText: { color: GC.textPrimary, fontSize: 16, fontWeight: '600' },
-  testCancelBtn: { flex: 1, backgroundColor: GC.border, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  testCancelBtnText: { color: GC.textSecondary, fontSize: 16, fontWeight: '600' },
-
-  // 模板按钮行
-  templateBtnRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
-  },
-  importBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: GC.bgElevated,
-    borderRadius: 12,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: GC.accent + '33',
-  },
-  importBtnText: { color: GC.accent, fontSize: 14, fontWeight: '600' },
-  exportBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: GC.bgElevated,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: GC.border,
-  },
-  exportBtnText: { color: GC.textSecondary, fontSize: 14, fontWeight: '600' },
-
-  // 预设模板列表
-  presetTemplateList: { gap: 8 },
-  presetTemplateBtn: {
-    backgroundColor: GC.bgBase,
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: GC.border,
-  },
-  presetTemplateName: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
-  presetTemplateDesc: { color: GC.textMuted, fontSize: 12, marginTop: 2 },
-
-  templateDivider: { height: 1, backgroundColor: GC.border, marginVertical: 16 },
-  templateFormatHint: { color: GC.textMuted, fontSize: 11, marginBottom: 8, fontStyle: 'italic' },
-  templateInput: { minHeight: 160, textAlignVertical: 'top' },
-
-  importError: { color: '#FF6B6B', fontSize: 13, marginTop: 8 },
-
-  // 导入预览
-  importPreview: { marginTop: 12 },
-  importPreviewTitle: { color: GC.accent, fontSize: 14, fontWeight: '600', marginBottom: 8 },
-  importPreviewItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
-  importPreviewStatus: { fontSize: 11, fontWeight: '700', color: GC.textPrimary, backgroundColor: GC.border, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
-  importPreviewName: { color: GC.textPrimary, fontSize: 14, fontWeight: '500', width: 70 },
-  importPreviewPrompt: { flex: 1, color: GC.textMuted, fontSize: 12 },
-});
