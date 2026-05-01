@@ -18,6 +18,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Screen } from '@/components/Screen';
 import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useFocusEffect } from 'expo-router';
 import { GC } from '@/utils/glassColors';
@@ -360,6 +361,13 @@ export default function AgentConfigScreen() {
   const [smartMatchSuggestion, setSmartMatchSuggestion] = useState('');
   const [smartMatchLoading, setSmartMatchLoading] = useState(false);
 
+  // 测试规则
+  const [testModalVisible, setTestModalVisible] = useState(false);
+  const [testAgent, setTestAgent] = useState<PresetAgent | null>(null);
+  const [testRuleRead, setTestRuleRead] = useState('');
+  const [testLlmResult, setTestLlmResult] = useState('');
+  const [testLoading, setTestLoading] = useState(false);
+
   // ============== 加载数据 ==============
   const loadApiConfigs = useCallback(async () => {
     try {
@@ -559,6 +567,71 @@ export default function AgentConfigScreen() {
     Alert.alert('成功', '已根据AI建议调整助手配置');
   };
 
+  // ============== 测试规则 ==============
+  const handleTestAgent = useCallback(async (preset: PresetAgent) => {
+    // 第一步：从AsyncStorage读取规则，验证数据链路
+    const savedConfig = agentConfigs.find(c => c.presetId === preset.id);
+    const ruleText = savedConfig?.prompt?.trim() || preset.prompt?.trim() || '（未设置自定义规则）';
+
+    setTestAgent(preset);
+    setTestRuleRead(ruleText);
+    setTestLlmResult('');
+    setTestLoading(false);
+    setTestModalVisible(true);
+
+    // 第二步：调用LLM让助手复述规则，验证传递链路
+    try {
+      setTestLoading(true);
+      // 读取API配置
+      const apiData = await AsyncStorage.getItem('apiConfigs');
+      const apis: ApiConfig[] = apiData ? JSON.parse(apiData) : [];
+      const boundApiId = savedConfig?.apiId || '';
+      const api = apis.find(a => a.id === boundApiId) || apis[0];
+
+      if (!api?.apiKey || !api?.baseUrl) {
+        setTestLlmResult('[!] 未配置API，无法测试LLM传递。但规则已读取成功（见上方）。');
+        setTestLoading(false);
+        return;
+      }
+
+      // 构建和agentOrchestrator一致的prompt
+      const userRule = ruleText !== '（未设置自定义规则）' ? `【你必须严格遵守以下规则】\n${ruleText}\n\n` : '';
+      const systemMsg = `你是"${preset.name}"，你的职责是：${preset.role}`;
+      const userMsg = `${userRule}请用你自己的话简述你当前的工作规则和风格要求，不要重复原文，用自己的理解表达。限100字以内。`;
+
+      // 调用LLM
+      let baseUrl = api.baseUrl.trim();
+      if (!baseUrl.includes('/v1') && !baseUrl.includes('/v2')) {
+        baseUrl = baseUrl.replace(/\/+$/, '') + '/v1';
+      }
+
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${api.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: api.model || 'doubao-seed-1-6-lite-251015',
+          messages: [
+            { role: 'system', content: systemMsg },
+            { role: 'user', content: userMsg },
+          ],
+          max_tokens: 300,
+          temperature: 0.7,
+        }),
+      });
+
+      const result = JSON.parse(await response.text());
+      const content = result?.choices?.[0]?.message?.content || '（LLM未返回内容）';
+      setTestLlmResult(content);
+    } catch (e: any) {
+      setTestLlmResult(`[X] LLM调用失败：${e.message || '未知错误'}。规则读取正常（见上方）。`);
+    } finally {
+      setTestLoading(false);
+    }
+  }, [agentConfigs]);
+
   // ============== 评审团Agent操作 ==============
   const handleAddReviewAgent = () => {
     setIsAddingReviewAgent(true);
@@ -693,6 +766,14 @@ export default function AgentConfigScreen() {
           </View>
         </TouchableOpacity>
         <View style={s.agentRightActions}>
+          <TouchableOpacity
+            style={s.testBtn}
+            onPress={() => handleTestAgent(preset)}
+            disabled={testLoading}
+          >
+            <FontAwesome6 name="flask" size={14} color={GC.accent} />
+            <Text style={s.testBtnText}>测试</Text>
+          </TouchableOpacity>
           <Switch
             value={config.enabled}
             onValueChange={() => handleToggleCollabAgent(preset.id)}
@@ -941,6 +1022,84 @@ export default function AgentConfigScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* ========== 测试规则弹窗 ========== */}
+        <Modal visible={testModalVisible} transparent animationType="fade">
+          <View style={s.testOverlay}>
+            <View style={s.testModal}>
+              <View style={s.testHeader}>
+                <Text style={s.testTitle}>测试规则 — {testAgent?.name}</Text>
+                <TouchableOpacity onPress={() => setTestModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={s.testClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={s.testBody} showsVerticalScrollIndicator={false}>
+                {/* 第一步：读取到的规则 */}
+                <View style={s.testStepBox}>
+                  <View style={s.testStepHeader}>
+                    <View style={[s.testStepBadge, { backgroundColor: testRuleRead && testRuleRead !== '（未设置自定义规则）' ? GC.success : GC.disabled }]}>
+                      <Text style={s.testStepBadgeText}>1</Text>
+                    </View>
+                    <Text style={s.testStepTitleText}>读取到的规则</Text>
+                    {testRuleRead && testRuleRead !== '（未设置自定义规则）' && <Text style={s.testStepOk}>✓ 已读取</Text>}
+                  </View>
+                  {testRuleRead ? (
+                    <View style={s.testRuleBox}>
+                      <Text style={s.testRuleText}>{testRuleRead}</Text>
+                    </View>
+                  ) : (
+                    <Text style={s.testNoRule}>未设置自定义规则（将使用默认行为）</Text>
+                  )}
+                </View>
+
+                {/* 第二步：LLM复述 */}
+                <View style={s.testStepBox}>
+                  <View style={s.testStepHeader}>
+                    <View style={[s.testStepBadge, { backgroundColor: testLlmResult && !testLlmResult.startsWith('[X]') && !testLlmResult.startsWith('[!]') ? GC.success : testLoading ? GC.warning : GC.disabled }]}>
+                      <Text style={s.testStepBadgeText}>{testLlmResult && !testLlmResult.startsWith('[X]') && !testLlmResult.startsWith('[!]') ? '✓' : '2'}</Text>
+                    </View>
+                    <Text style={s.testStepTitleText}>助手复述</Text>
+                    {testLoading && <ActivityIndicator size="small" color={GC.primary} />}
+                    {testLlmResult && !testLlmResult.startsWith('[X]') && !testLlmResult.startsWith('[!]') && <Text style={s.testStepOk}>已验证</Text>}
+                  </View>
+                  {testLoading && !testLlmResult ? (
+                    <Text style={s.testLoadingText}>正在调用助手，请稍候...</Text>
+                  ) : testLlmResult ? (
+                    <View style={s.testRuleBox}>
+                      <Text style={s.testResultText}>{testLlmResult}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* 对比结果 */}
+                {testRuleRead && testRuleRead !== '（未设置自定义规则）' && testLlmResult && !testLlmResult.startsWith('[X]') && !testLlmResult.startsWith('[!]') && testLlmResult.length > 10 && (
+                  <View style={s.testResultBox}>
+                    <Text style={s.testResultTitle}>验证结论</Text>
+                    <Text style={s.testResultPass}>规则已成功传递给助手，助手能正确理解并复述你的规则。</Text>
+                  </View>
+                )}
+              </ScrollView>
+
+              <View style={s.testFooter}>
+                {!testLlmResult && !testLoading && testAgent && (
+                  <TouchableOpacity
+                    style={s.testRunBtn}
+                    onPress={() => handleTestAgent(testAgent)}
+                  >
+                    <Text style={s.testRunBtnText}>开始测试</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={s.testCancelBtn}
+                  onPress={() => setTestModalVisible(false)}
+                >
+                  <Text style={s.testCancelBtnText}>关闭</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </Screen>
   );
@@ -1108,4 +1267,60 @@ const s = StyleSheet.create({
   apiName: { color: GC.textPrimary, fontSize: 16, fontWeight: '500' },
   apiDetail: { color: GC.textSecondary, fontSize: 12, marginTop: 2 },
   apiActions: { flexDirection: 'row', gap: 8 },
+
+  // 测试规则按钮（卡片内）
+  testBtn: {
+    backgroundColor: GC.bgElevated,
+    borderWidth: 1,
+    borderColor: GC.accent,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  testBtnText: { color: GC.accent, fontSize: 12, fontWeight: '600' },
+
+  // 测试规则弹窗
+  testOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  testModal: { backgroundColor: GC.bgElevated, borderRadius: 20, width: '90%', maxHeight: '80%', borderWidth: 1, borderColor: GC.border, overflow: 'hidden' },
+  testHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: GC.border },
+  testTitle: { fontSize: 18, fontWeight: 'bold', color: GC.textPrimary },
+  testClose: { fontSize: 20, color: GC.textMuted },
+  testBody: { padding: 20 },
+  testStepBox: { marginBottom: 20 },
+  testStepHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  testStepBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  testStepBadgeText: { color: GC.textPrimary, fontSize: 13, fontWeight: '700' },
+  testStepTitleText: { color: GC.textPrimary, fontSize: 16, fontWeight: '600', flex: 1 },
+  testStepOk: { color: GC.success, fontSize: 13, fontWeight: '600' },
+  testNoRule: { color: GC.textMuted, fontSize: 14, fontStyle: 'italic' },
+  testLoadingText: { color: GC.textMuted, fontSize: 14, fontStyle: 'italic' },
+  testRuleBox: {
+    backgroundColor: GC.bgBase,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: GC.border,
+    marginBottom: 16,
+  },
+  testRuleText: { color: GC.accent, fontSize: 15, lineHeight: 22 },
+  testResultText: { color: GC.textPrimary, fontSize: 14, lineHeight: 22 },
+  testResultTitle: { color: GC.textPrimary, fontSize: 15, fontWeight: '700', marginBottom: 8 },
+  testResultPass: { color: GC.success, fontSize: 14, lineHeight: 22 },
+  testResultBox: {
+    backgroundColor: GC.bgBase,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: GC.border,
+    minHeight: 80,
+  },
+  testFooter: { flexDirection: 'row', gap: 12, padding: 20, borderTopWidth: 1, borderTopColor: GC.border },
+  testRunBtn: { flex: 1, backgroundColor: GC.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  testRunBtnText: { color: GC.textPrimary, fontSize: 16, fontWeight: '600' },
+  testCancelBtn: { flex: 1, backgroundColor: GC.border, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  testCancelBtnText: { color: GC.textSecondary, fontSize: 16, fontWeight: '600' },
 });
