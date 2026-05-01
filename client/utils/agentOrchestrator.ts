@@ -203,38 +203,128 @@ function buildAgentPrompts(
   const novelNameStr = params.novelName ? `《${params.novelName}》` : '';
   const targetChaptersStr = params.targetChapters ? `目标章节数：${params.targetChapters}章` : '';
 
-  switch (stage) {
-    case 'outline':
-      taskInstruction = `请根据以下核心概念，完成你的专业工作，为小说${novelNameStr}设计完整大纲。${targetChaptersStr}`;
+  // 每个Agent根据角色获得不同的任务指令，而非统一按阶段分配
+  switch (agent.id) {
+    // ===== 核心助手 =====
+    case 'coordinator':
+      // 已在上面处理
       break;
-    case 'rough':
-      taskInstruction = `请根据以下大纲内容，设计章节粗纲。${targetChaptersStr ? `必须设计${params.targetChapters}章的粗纲` : ''}。每章粗纲一行，格式："第X章：章节核心事件概括"。确保章节数量与目标一致。`;
-      if (agent.id === 'rough_designer') maxTokens = 8192;
+    case 'writer':
+      taskInstruction = `请严格按照你的规则，根据细纲和参考材料，创作第${params.chapterNumber || 1}章的完整正文。只输出正文，不要任何说明或注释。`;
+      maxTokens = 16000;
       break;
-    case 'detail':
-      taskInstruction = `请根据以下大纲和粗纲内容，逐章设计细纲。${targetChaptersStr ? `共${params.targetChapters}章` : ''}。每章细纲用"===第X章==="开头，然后写详细场景、关键对话方向、情绪线、本章目标。各章细纲之间用"===第X章==="分隔。`;
-      if (agent.id === 'detail_designer') maxTokens = 16384;
-      break;
-    case 'writing':
-      if (agent.id === 'writer') {
-        taskInstruction = `请严格按照你的规则，根据细纲和参考材料，创作第${params.chapterNumber || 1}章的完整正文。只输出正文，不要任何说明或注释。`;
-        maxTokens = 16000;
-      } else if (agent.id === 'style_polisher') {
-        taskInstruction = '请严格按照你的规则，对以下正文进行润色，输出润色后的完整正文。只输出正文，不要任何说明。';
-        maxTokens = 16000;
-      } else if (agent.id === 'pacing_controller') {
-        taskInstruction = '请严格按照你的规则，分析以下正文的节奏，给出调整建议。只输出建议，不要改写正文。';
-        maxTokens = 2048;
-      } else if (agent.id === 'memory_compressor') {
-        taskInstruction = `请将以下前文压缩为简短摘要，保留关键情节、人物状态、伏笔（限500字）。`;
-        maxTokens = 1024;
-      } else {
-        taskInstruction = `请严格按照你的规则，为第${params.chapterNumber || 1}章的创作提供你的专业参考。`;
+
+    // ===== 世界架构师 =====
+    case 'world_architect':
+      if (stage === 'outline') {
+        taskInstruction = `请根据以下核心概念，为小说${novelNameStr}设计完整的世界观设定，包括：时代背景、地理环境、社会结构、力量体系/科技水平、重要势力。${targetChaptersStr}`;
+      } else if (stage === 'rough') {
+        taskInstruction = `请根据以下大纲内容，为小说${novelNameStr}补充各章节需要的世界观细节（如场景中涉及的城市、势力、规则等），以供粗纲设计参考。${targetChaptersStr}`;
+      } else if (stage === 'detail') {
+        taskInstruction = `请根据大纲和粗纲，为各章节细纲补充场景相关的世界观细节（建筑风格、风俗习惯、力量规则等）。`;
+      } else if (stage === 'writing') {
+        taskInstruction = `请为第${params.chapterNumber || 1}章的场景描写提供世界观细节参考（如环境描写要点、文化习俗等）。`;
       }
       break;
-    case 'review':
-      taskInstruction = '请严格按照你的规则，评审以下内容，给出你的专业意见。只输出评审意见，不修改原文。';
-      maxTokens = 2048;
+
+    // ===== 剧情设计师 =====
+    case 'plot_designer':
+      if (stage === 'outline') {
+        taskInstruction = `请根据以下核心概念，为小说${novelNameStr}设计完整的剧情框架，包括：主线剧情走向、核心冲突、高潮设计、结局方向。${targetChaptersStr}`;
+      } else if (stage === 'rough') {
+        taskInstruction = `请根据以下大纲内容，为小说${novelNameStr}设计各章节的核心剧情事件和转折点，以供粗纲设计参考。${targetChaptersStr}。每章一行，格式："第X章：核心事件"。`;
+      } else if (stage === 'detail') {
+        taskInstruction = `请根据大纲和粗纲，为各章节设计具体的剧情走向和冲突设计，包括：场景冲突、人物动机、情节转折。`;
+      } else if (stage === 'writing') {
+        taskInstruction = `请为第${params.chapterNumber || 1}章的剧情设计提供参考（冲突设计、情节节奏、悬念设置等）。`;
+      }
+      break;
+
+    // ===== 人物设计师 =====
+    case 'character_designer':
+      if (stage === 'outline' || stage === 'rough') {
+        taskInstruction = `请根据以下内容，为小说${novelNameStr}设计核心人物设定，包括：性格特点、外貌描写、背景故事、人物关系、成长弧线。`;
+      } else if (stage === 'detail') {
+        taskInstruction = `请根据大纲和粗纲，为各章节补充涉及人物的行为细节、情感变化、对话风格参考。`;
+      } else if (stage === 'writing') {
+        taskInstruction = `请为第${params.chapterNumber || 1}章的人物描写提供参考（行为特征、口头禅、情感表达方式等）。`;
+      }
+      break;
+
+    // ===== 粗纲设计师 =====
+    case 'rough_designer':
+      taskInstruction = `请根据以下大纲内容和参考材料，设计章节粗纲。${targetChaptersStr ? `必须设计${params.targetChapters}章的粗纲` : ''}。每章粗纲一行，格式："第X章：章节核心事件概括"。确保章节数量与目标一致。`;
+      maxTokens = 8192;
+      break;
+
+    // ===== 细纲设计师 =====
+    case 'detail_designer':
+      taskInstruction = `请根据以下大纲和粗纲内容，逐章设计细纲。${targetChaptersStr ? `共${params.targetChapters}章` : ''}。每章细纲用"===第X章==="开头，然后写详细场景、关键对话方向、情绪线、本章目标。各章细纲之间用"===第X章==="分隔。`;
+      maxTokens = 16384;
+      break;
+
+    // ===== 记忆压缩 =====
+    case 'memory_compressor':
+      taskInstruction = `请将以下前文压缩为简短摘要，保留关键情节、人物状态、伏笔（限500字）。`;
+      maxTokens = 1024;
+      break;
+
+    // ===== 对话设计师 =====
+    case 'dialogue_designer':
+      if (stage === 'detail') {
+        taskInstruction = `请根据大纲和粗纲，为各章节设计关键对话的方向和语气参考。`;
+      } else if (stage === 'writing') {
+        taskInstruction = `请为第${params.chapterNumber || 1}章的关键对话设计参考（对话风格、语气、潜台词等）。`;
+      } else {
+        taskInstruction = `请根据以下内容，为小说${novelNameStr}设计核心对话风格和语言特色。`;
+      }
+      break;
+
+    // ===== 场景描写师 =====
+    case 'scene_designer':
+      if (stage === 'detail') {
+        taskInstruction = `请根据大纲和粗纲，为各章节设计场景描写的氛围和感官细节参考。`;
+      } else if (stage === 'writing') {
+        taskInstruction = `请为第${params.chapterNumber || 1}章的场景描写提供参考（五感描写、氛围营造、空间布局等）。`;
+      } else {
+        taskInstruction = `请根据以下内容，为小说${novelNameStr}设计关键场景的氛围和描写方向。`;
+      }
+      break;
+
+    // ===== 节奏把控师 =====
+    case 'pacing_controller':
+      if (stage === 'writing') {
+        taskInstruction = '请分析以下正文的节奏，给出调整建议。只输出建议，不要改写正文。';
+        maxTokens = 2048;
+      } else {
+        taskInstruction = `请根据以下内容，分析各章节的节奏设计是否合理，给出节奏调整建议。`;
+      }
+      break;
+
+    // ===== 伏笔设计师 =====
+    case 'foreshadow_designer':
+      if (stage === 'detail') {
+        taskInstruction = `请根据大纲和粗纲，为各章节设计伏笔和呼应关系参考。`;
+      } else if (stage === 'writing') {
+        taskInstruction = `请为第${params.chapterNumber || 1}章提供伏笔设计和呼应参考。`;
+      } else {
+        taskInstruction = `请根据以下内容，为小说${novelNameStr}设计整体的伏笔网络和呼应关系。`;
+      }
+      break;
+
+    // ===== 风格润色师 =====
+    case 'style_polisher':
+      if (stage === 'writing') {
+        taskInstruction = '请严格按照你的规则，对以下正文进行润色，输出润色后的完整正文。只输出正文，不要任何说明。';
+        maxTokens = 16000;
+      } else {
+        taskInstruction = `请根据以下内容，为小说${novelNameStr}设定整体文风和语言特色参考。`;
+      }
+      break;
+
+    default:
+      // 通用兜底
+      taskInstruction = `请根据以下内容，完成你的专业工作。${targetChaptersStr}`;
       break;
   }
 

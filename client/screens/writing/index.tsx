@@ -235,12 +235,20 @@ export default function WritingScreen() {
       memoryText = memoryItems.map((m: any) => `- ${m.name || m.title || ''}: ${m.description || m.content || ''}`).join('\n');
     }
 
-    // 读取大纲上下文
-    const outlineContext = params.outline || '';
-    let roughContext = '';
-    if (parsedRough.length > 0) {
-      roughContext = parsedRough.map((r: any, i: number) => `第${i + 1}章: ${typeof r === 'string' ? r : r.title || r.content || ''}`).join('\n');
+    // 读取前文：已完成的章节内容（最近3章，每章最多1500字）
+    let previousChapters = '';
+    if (isMultiModeRef.current && queueRef.current.length > 0) {
+      const completedChapters = queueRef.current
+        .filter(q => (q.status === 'done' || q.status === 'reviewed') && q.content)
+        .slice(-3);
+      if (completedChapters.length > 0) {
+        previousChapters = completedChapters.map(q =>
+          `--- 第${q.chapterNumber}章 ---\n${q.content.slice(0, 1500)}`
+        ).join('\n\n');
+      }
     }
+    // 合并记忆和前文
+    const previousContent = [memoryText, previousChapters].filter(Boolean).join('\n\n');
 
     setIsGenerating(true);
     isGeneratingRef.current = true;
@@ -250,12 +258,19 @@ export default function WritingScreen() {
     abortRef.current = false;
     wasGeneratingRef.current = true;
 
+    // 读取大纲和粗纲作为辅助上下文
+    const outlineText = params.outline || '';
+    const roughText = parsedRough.length > 0
+      ? parsedRough.map((r: any, i: number) => `第${i + 1}章: ${typeof r === 'string' ? r : r.title || r.content || ''}`).join('\n')
+      : '';
+    const secondaryContext = outlineText ? `【大纲】\n${outlineText.slice(0, 2000)}\n\n【粗纲】\n${roughText.slice(0, 2000)}` : '';
+
     try {
       await orchestrateAgents({
         stage: 'writing',
         context: targetOutline || '无细纲',
-        secondaryContext: outlineContext ? `【大纲】\n${outlineContext.slice(0, 2000)}\n\n【粗纲】\n${roughContext.slice(0, 2000)}` : '',
-        previousContent: memoryText,
+        secondaryContext,
+        previousContent,
         chapterNumber: targetChNum,
         targetChapters: parsedDetail.length || undefined,
         novelName: novelName || '',
@@ -322,10 +337,8 @@ export default function WritingScreen() {
           setIsGenerating(false);
           isGeneratingRef.current = false;
           setCurrentAgentIdx(-1);
-          if (!content.trim()) {
-            wasGeneratingRef.current = false;
-            Alert.alert('错误', error);
-          }
+          wasGeneratingRef.current = false;
+          Alert.alert('错误', error);
         },
       });
     } catch (error: any) {
@@ -333,10 +346,8 @@ export default function WritingScreen() {
       setIsGenerating(false);
       isGeneratingRef.current = false;
       setCurrentAgentIdx(-1);
-      if (!content.trim()) {
-        wasGeneratingRef.current = false;
-        Alert.alert('错误', '生成失败，请检查API配置和网络连接');
-      }
+      wasGeneratingRef.current = false;
+      Alert.alert('错误', '生成失败，请检查API配置和网络连接');
     }
   };
 

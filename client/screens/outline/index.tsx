@@ -87,7 +87,7 @@ function parseDetailOutline(text: string, targetChapters: number): string[] {
 
   for (const pattern of chapterPatterns) {
     const matches = [...text.matchAll(pattern)];
-    if (matches.length >= 2) {
+    if (matches.length >= 1) {
       // 按分隔符拆分
       const parts: string[] = [];
       for (let i = 0; i < matches.length; i++) {
@@ -96,7 +96,7 @@ function parseDetailOutline(text: string, targetChapters: number): string[] {
         const content = text.slice(start, end).trim();
         if (content) parts.push(content);
       }
-      if (parts.length >= 2) {
+      if (parts.length >= 1) {
         bestSplit = parts;
         break;
       }
@@ -134,7 +134,7 @@ function parseDetailOutline(text: string, targetChapters: number): string[] {
     chapters.push(currentChapter.trim());
   }
 
-  if (chapters.length >= 2) {
+  if (chapters.length >= 1) {
     if (targetChapters > 0 && chapters.length > targetChapters * 1.5) {
       return chapters.slice(0, targetChapters);
     }
@@ -219,13 +219,22 @@ export default function OutlineScreen() {
       context = `${novelInfo}\n${targetInfo}${existingOutline}`;
     } else if (stage === 'rough') {
       context = data.outline;
+      // 如果用户已有粗纲草稿，也传入供参考
+      if (data.rough.length > 0) {
+        context += '\n\n【已有粗纲草稿】\n' + data.rough.join('\n');
+      }
     } else {
       // detail: 主内容=粗纲，辅助=大纲
       context = data.rough.join('\n');
       secondaryContext = data.outline;
+      // 如果用户已有细纲草稿，也传入供参考
+      if (data.detail.length > 0) {
+        context += '\n\n【已有细纲草稿】\n' + data.detail.join('\n');
+      }
     }
 
     let finalContent = '';
+    let hasError = false;
 
     try {
       await orchestrateAgents({
@@ -279,9 +288,12 @@ export default function OutlineScreen() {
           }
         },
         onError: (error: string) => {
+          hasError = true;
           Alert.alert('AI扩写失败', error);
         },
       });
+
+      if (hasError) return;
 
       if (!finalContent.trim()) {
         Alert.alert('提示', 'AI扩写返回内容为空');
