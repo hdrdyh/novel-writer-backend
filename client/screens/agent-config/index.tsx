@@ -334,7 +334,7 @@ export default function AgentConfigScreen() {
     return exportTemplate(agentConfigs);
   };
 
-  const handleImportTemplate = () => {
+  const handleImportTemplate = async () => {
     setImportError('');
     if (!importText.trim()) {
       setImportError('请粘贴模板内容');
@@ -355,10 +355,10 @@ export default function AgentConfigScreen() {
       return a;
     });
 
-    saveAgentConfigs(next);
+    await saveAgentConfigs(next);
     setImportModalVisible(false);
     setImportText('');
-    Alert.alert('导入成功', `已更新 ${parsed.length} 个助手的配置`);
+    Alert.alert('导入成功', `已更新 ${parsed.length} 个助手的配置，共 ${next.length} 个助手`);
   };
 
   const doExportTemplate = () => {
