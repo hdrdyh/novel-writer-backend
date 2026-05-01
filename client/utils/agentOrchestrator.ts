@@ -30,7 +30,7 @@ export interface OrchestrationParams {
   targetChapters?: number;     // 目标章节数（粗纲/细纲阶段用）
   novelName?: string;          // 小说名
   onAgentStart: (name: string, idx: number, total: number) => void;
-  onAgentChunk: (chunk: string) => void;
+  onAgentChunk: (chunk: string, agentId: string) => void;
   onAgentComplete: (name: string, output: string) => void;
   onAllComplete: (report: CoordinatorReport, allOutputs: AgentStepResult[]) => void;
   onError: (error: string) => void;
@@ -407,7 +407,7 @@ export async function orchestrateAgents(params: OrchestrationParams): Promise<vo
         apiConfig,
         system,
         user,
-        (chunk) => onAgentChunk(chunk),
+        (chunk) => onAgentChunk(chunk, agent.id),
         maxTokens
       );
     } catch (e: any) {

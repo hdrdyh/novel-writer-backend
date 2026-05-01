@@ -252,7 +252,7 @@ export default function OutlineScreen() {
             return next;
           });
         },
-        onAgentChunk: () => {
+        onAgentChunk: (_chunk: string, _agentId: string) => {
           // 大纲扩写不需要实时显示
         },
         onAgentComplete: (_agentName: string) => { /* 大纲扩写不需要逐Agent回调 */ },
@@ -874,7 +874,7 @@ const styles = StyleSheet.create({
   aiBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: GC.bgBase,
+    backgroundColor: GC.primary,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -979,7 +979,7 @@ const styles = StyleSheet.create({
   listItemText: {
     flex: 1,
     fontSize: 14,
-    color: GC.border,
+    color: GC.textSecondary,
     lineHeight: 20,
   },
   listItemIcon: {
@@ -1036,7 +1036,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: GC.bgBase,
+    backgroundColor: GC.primary,
     borderRadius: 14,
     paddingVertical: 18,
     gap: 10,
@@ -1104,7 +1104,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     flex: 1,
-    backgroundColor: GC.bgBase,
+    backgroundColor: GC.primary,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',

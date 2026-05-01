@@ -282,9 +282,11 @@ export default function WritingScreen() {
             return next;
           });
         },
-        onAgentChunk: (chunk: string) => {
-          // 实时追加内容
-          setContent(prev => prev + chunk);
+        onAgentChunk: (chunk: string, agentId: string) => {
+          // 只有写手和润色师的输出才实时显示为正文
+          if (agentId === 'writer' || agentId === 'style_polisher') {
+            setContent(prev => prev + chunk);
+          }
         },
         onAgentComplete: (name: string, output: string) => {
           setAgentOutputs(prev => ({ ...prev, [name]: output }));
@@ -681,7 +683,7 @@ export default function WritingScreen() {
                           }}
                         >
                           <Ionicons name="play" size={16} color="#fff" />
-                          <Text style={{ color: GC.bgBase, fontSize: 12, fontWeight: '600' }}>创作</Text>
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>创作</Text>
                         </TouchableOpacity>
                       )}
                       {item.status === 'pending' && !item.outline.trim() && (
@@ -1004,7 +1006,7 @@ const styles = StyleSheet.create({
     maxHeight: 120,
   },
   outlineDisplayText: {
-    color: GC.border,
+    color: GC.textSecondary,
     fontSize: 14,
     lineHeight: 22,
   },
@@ -1025,7 +1027,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   generateBtn: {
-    backgroundColor: GC.bgBase,
+    backgroundColor: GC.primary,
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1035,7 +1037,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   generateBtnDisabled: { opacity: 0.5 },
-  generateBtnText: { color: GC.bgBase, fontSize: 17, fontWeight: '600' },
+  generateBtnText: { color: '#fff', fontSize: 17, fontWeight: '600' },
   agentStatus: {
     backgroundColor: GC.bgElevated,
     borderRadius: 8,
@@ -1066,7 +1068,7 @@ const styles = StyleSheet.create({
     minHeight: 200,
   },
   contentScroll: { maxHeight: 400 },
-  contentText: { color: GC.textMuted, fontSize: 15, lineHeight: 26 },
+  contentText: { color: GC.textSecondary, fontSize: 15, lineHeight: 26 },
   actionButtons: {
     flexDirection: 'row',
     gap: 10,
@@ -1088,12 +1090,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: GC.bgBase,
+    backgroundColor: GC.primary,
     borderRadius: 10,
     paddingVertical: 12,
     gap: 6,
   },
-  saveBtnText: { color: GC.bgBase, fontSize: 15, fontWeight: '600' },
+  saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   reviewBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -1157,7 +1159,7 @@ const styles = StyleSheet.create({
   statusBadgeGenerating: { backgroundColor: '#fbbf2433' },
   statusBadgeDone: { backgroundColor: '#4ade8033' },
   statusBadgeReviewed: { backgroundColor: '#7C5CFF33' },
-  statusBadgeText: { fontSize: 11, color: GC.border },
+  statusBadgeText: { fontSize: 11, color: GC.textSecondary },
   queueOutlineText: {
     color: GC.textSecondary,
     fontSize: 12,
@@ -1197,7 +1199,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: { color: GC.textPrimary, fontSize: 20, fontWeight: 'bold', marginBottom: 8 },
   modalDesc: { color: GC.textSecondary, fontSize: 14, marginBottom: 20 },
-  modalLabel: { color: GC.border, fontSize: 14, marginBottom: 8 },
+  modalLabel: { color: GC.textSecondary, fontSize: 14, marginBottom: 8 },
   modalInfo: { color: GC.textSecondary, fontSize: 14, marginBottom: 12 },
   modalInput: {
     backgroundColor: GC.bgBase,
@@ -1241,7 +1243,7 @@ const styles = StyleSheet.create({
   modalConfirmText: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
   reportTitle: { color: GC.primary, fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
   reportScroll: { maxHeight: 200, marginBottom: 12 },
-  reportText: { color: GC.border, fontSize: 14, lineHeight: 22 },
+  reportText: { color: GC.textSecondary, fontSize: 14, lineHeight: 22 },
   reportFeedbackLabel: { color: GC.textSecondary, fontSize: 12, marginBottom: 6 },
   reportFeedbackInput: {
     backgroundColor: GC.bgBase,
@@ -1265,5 +1267,5 @@ const styles = StyleSheet.create({
   },
   previewTitle: { color: GC.textPrimary, fontSize: 22, fontWeight: 'bold' },
   previewScroll: { flex: 1, padding: 20 },
-  previewText: { color: GC.textMuted, fontSize: 16, lineHeight: 28 },
+  previewText: { color: GC.textSecondary, fontSize: 16, lineHeight: 28 },
 });
