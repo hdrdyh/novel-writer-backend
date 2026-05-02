@@ -1,4 +1,3 @@
-/* eslint-disable forbidEmoji/no-emoji */
 /**
  * 追责制审查系统 - 数据层测试脚本
  * 

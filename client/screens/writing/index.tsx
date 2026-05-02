@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setItemAsync, getItemAsync } from 'expo-secure-store';
 import { Screen } from '@/components/Screen';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
@@ -21,6 +22,7 @@ import { orchestrateAgents, type OrchestrationParams, type AgentStepResult, type
 import { PRESET_AGENTS, type PresetAgent } from '@/utils/presetAgents';
 import { ReviewOrchestrator, type ReviewCallbacks } from '@/utils/reviewOrchestrator';
 import ReviewChatView from '@/components/ReviewChatView';
+import AgentTestPanel from '@/components/AgentTestPanel';
 import type { ReviewSession, ReviewMessage, ChangeRecord, ReviewStep, OutlinePatch } from '@/utils/reviewTypes';
 import { addReviewMessage, addChangeRecord, getSessionChanges, updateChangeStatus, canWriteChapter } from '@/utils/reviewStorage';
 import { GC } from '@/utils/glassColors';
@@ -93,6 +95,8 @@ export default function WritingScreen() {
   const [reviewIsProcessing, setReviewIsProcessing] = useState(false);
   const [reviewChangeRecords, setReviewChangeRecords] = useState<ChangeRecord[]>([]);
   const [reviewOutlinePatch, setReviewOutlinePatch] = useState<OutlinePatch | null>(null);
+  const [showAgentTest, setShowAgentTest] = useState(false); // 显示Agent测试面板
+  const [reviewApiConfig, setReviewApiConfig] = useState<{ baseUrl: string; apiKey: string; model: string } | null>(null);
   const reviewMessagesRef = useRef<ReviewMessage[]>([]);
   const reviewStepRef = useRef<string>('idle');
   const orchestratorRef = useRef<ReviewOrchestrator | null>(null);
@@ -1205,7 +1209,23 @@ export default function WritingScreen() {
               {reviewMessages.length > 0 && (
                 <Text style={{ fontSize: 13, color: GC.textSecondary }}>{reviewMessages.length}条发言</Text>
               )}
+              <TouchableOpacity onPress={() => setShowAgentTest(!showAgentTest)} style={{ marginLeft: 12 }}>
+                <Ionicons name="settings-outline" size={24} color={showAgentTest ? GC.accent : GC.textSecondary} />
+              </TouchableOpacity>
             </View>
+
+            {/* Agent 测试面板 */}
+            {showAgentTest && (
+              <AgentTestPanel
+                visible={showAgentTest}
+                onClose={() => setShowAgentTest(false)}
+                initialConfig={reviewApiConfig ?? undefined}
+                onSave={(cfg) => {
+                  setReviewApiConfig(cfg);
+                }}
+              />
+            )}
+
             <ReviewChatView
               messages={reviewMessages}
               currentStep={reviewCurrentStep as ReviewStep | null}
@@ -1226,6 +1246,8 @@ export default function WritingScreen() {
             />
           </View>
         </Modal>
+
+        {/* Agent 测试面板 */}
       </KeyboardAvoidingView>
     </Screen>
   );
