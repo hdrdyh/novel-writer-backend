@@ -9,6 +9,7 @@
  */
 
 import RNSSE from 'react-native-sse';
+import Constants from 'expo-constants';
 import {
   ReviewStep,
   ReviewMessage,
@@ -79,12 +80,19 @@ export interface ReviewCallbacks {
 
 // ============== 辅助函数 ==============
 
+// 模块级计数器，用于生成唯一ID
+let _idCounter = 0;
+
 function generateId(): string {
-  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = Date.now();
+  _idCounter += 1;
+  return `msg_${now}_${_idCounter}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
 function generatePatchId(): string {
-  return `patch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = Date.now();
+  _idCounter += 1;
+  return `patch_${now}_${_idCounter}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
 /** 获取步骤索引 */
@@ -167,7 +175,11 @@ async function callLLM(
   onChunk: (chunk: string) => void,
   maxTokens: number = 2048,
 ): Promise<string> {
-  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
+  // 优先级：Constants.extra > process.env > localhost
+  const configUrl = (Constants.expoConfig?.extra as Record<string, string> | undefined)?.EXPO_PUBLIC_BACKEND_BASE_URL
+    || process.env.EXPO_PUBLIC_BACKEND_BASE_URL
+    || 'http://localhost:9091';
+  const backendUrl = configUrl;
   const url = `${backendUrl}/api/v1/review/agent-stream`;
 
   return new Promise((resolve, reject) => {
@@ -280,7 +292,11 @@ export class ReviewOrchestrator {
     const classic = CLASSIC_SLANG;
     let freshSlang = '';
     try {
-      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
+      // 优先级：Constants.extra > process.env > localhost
+  const configUrl = (Constants.expoConfig?.extra as Record<string, string> | undefined)?.EXPO_PUBLIC_BACKEND_BASE_URL
+    || process.env.EXPO_PUBLIC_BACKEND_BASE_URL
+    || 'http://localhost:9091';
+  const backendUrl = configUrl;
       const res = await fetch(`${backendUrl}/api/v1/slang/fresh?type=${encodeURIComponent(novelType)}`);
       const data = await res.json();
       freshSlang = data.slang || '';

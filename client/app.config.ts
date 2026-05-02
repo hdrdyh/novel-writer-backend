@@ -71,6 +71,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "EXPO_PUBLIC_BACKEND_BASE_URL": "http://vefaas-prrxc29p-evjxady09u-d7qpsi03rt8n0s8g8ga0-sandbox:9091"
     }
   }
 }
