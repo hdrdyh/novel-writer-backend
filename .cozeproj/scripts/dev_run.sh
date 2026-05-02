@@ -63,6 +63,12 @@ choose_next_free_port() {
 ensure_port() {
   local var_name=$1
   local port_val=$2
+  # ⚠️ 绝对禁止处理5000端口（Nginx）
+  if [ "$port_val" = "5000" ]; then
+    echo "⚠️ 跳过端口5000（Nginx，禁止杀掉）"
+    eval "$var_name=$port_val"
+    return 0
+  fi
   if is_port_free "$port_val"; then
     echo "端口未占用：$port_val"
     eval "$var_name=$port_val"
@@ -179,8 +185,17 @@ check_command "lsof"
 check_command "bash"
 
 # 端口占用预检查与处理
+# ⚠️ 绝对不处理5000端口！Nginx在5000端口，预览面板依赖它
 ensure_port SERVER_PORT "$SERVER_PORT"
 ensure_port EXPO_PORT "$EXPO_PORT"
+
+# 确保Nginx正在运行（沙箱预览面板需要）
+if ! pgrep nginx > /dev/null 2>&1; then
+  echo "⚠️ Nginx未运行，正在启动..."
+  nginx 2>/dev/null || echo "Nginx启动失败（可能未安装）"
+else
+  echo "✅ Nginx正在运行"
+fi
 
 echo "==================== 启动 server 服务 ===================="
 echo "正在执行：pnpm run dev (server)"
