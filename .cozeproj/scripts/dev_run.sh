@@ -137,10 +137,10 @@ start_expo() {
   # 前端 API 调用统一使用相对路径 /api/v1/xxx，由 Metro proxy 转发到后端
   if [ "$offline" = "1" ]; then
     ( unset EXPO_PUBLIC_BACKEND_BASE_URL; EXPO_OFFLINE=1 EXPO_NO_DEPENDENCY_VALIDATION=1 EXPO_PACKAGER_PROXY_URL="$EXPO_PACKAGER_PROXY_URL" EXPO_PUBLIC_COZE_PROJECT_ID="$EXPO_PUBLIC_COZE_PROJECT_ID" \
-      nohup npx expo start --clear --port "$EXPO_PORT" 2>&1 | pipe_to_log "CLIENT" "$LOG_CLIENT_FILE" ) &
+      nohup npx expo start --clear --port "$EXPO_PORT" --host lan 2>&1 | pipe_to_log "CLIENT" "$LOG_CLIENT_FILE" ) &
   else
     ( unset EXPO_PUBLIC_BACKEND_BASE_URL; EXPO_NO_DEPENDENCY_VALIDATION=1 EXPO_PACKAGER_PROXY_URL="$EXPO_PACKAGER_PROXY_URL" EXPO_PUBLIC_COZE_PROJECT_ID="$EXPO_PUBLIC_COZE_PROJECT_ID" \
-      nohup npx expo start --clear --port "$EXPO_PORT" 2>&1 | pipe_to_log "CLIENT" "$LOG_CLIENT_FILE" ) &
+      nohup npx expo start --clear --port "$EXPO_PORT" --host lan 2>&1 | pipe_to_log "CLIENT" "$LOG_CLIENT_FILE" ) &
   fi
   EXPO_PID=$!
   disown $EXPO_PID 2>/dev/null || true
