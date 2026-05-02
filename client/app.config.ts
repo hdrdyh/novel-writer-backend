@@ -70,9 +70,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ],
     "experiments": {
       "typedRoutes": true
-    },
-    "extra": {
-      "EXPO_PUBLIC_BACKEND_BASE_URL": process.env.EXPO_PUBLIC_BACKEND_BASE_URL || ""
     }
   }
 }

@@ -6,16 +6,10 @@ import {
 type ReviewApiConfig = { baseUrl: string; apiKey: string; model: string };
 import RNSSE from 'react-native-sse';
 import { GC } from '@/utils/glassColors';
-import Constants from 'expo-constants';
 
-// 获取后端地址
-const getBackendUrl = () => {
-  // 优先使用Constants.extra中的配置（移动端有效）
-  const extraUrl = Constants.extra?.EXPO_PUBLIC_BACKEND_BASE_URL;
-  if (extraUrl) return extraUrl;
-  // fallback到环境变量（Web开发时有效）
-  return process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
-};
+
+// API使用相对路径 /api/v1/xxx，Metro proxy自动转发到后端
+const getBackendUrl = () => '';
 
 // 专业Agent列表（对应PRESET_AGENTS中必须参与的类型）
 const PRO_AGENTS = [

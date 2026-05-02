@@ -15,7 +15,7 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL as string;
+const API_BASE_URL = '';
 
 type ReverseStep = 'idle' | 'analyzing' | 'done';
 

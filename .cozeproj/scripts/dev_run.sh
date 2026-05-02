@@ -14,14 +14,14 @@ EXPO_DIR="expo"
 EXPO_PORT="5000"
 WEB_URL="${COZE_PROJECT_DOMAIN_DEFAULT:-http://127.0.0.1:${SERVER_PORT}}"
 ASSUME_YES="1"
-# ⚠️ EXPO_PUBLIC_BACKEND_BASE_URL 必须指向后端API，通过Metro代理访问
-# 所以用 http://127.0.0.1:EXPO_PORT/api/v1 即可
-# 不要用 COZE_PROJECT_DOMAIN_DEFAULT（那是coze.site域名，HMR客户端无法连接）
-EXPO_PUBLIC_BACKEND_BASE_URL="http://127.0.0.1:${EXPO_PORT}"
+# ⚠️ 不要设置 EXPO_PUBLIC_BACKEND_BASE_URL！
+# 原因：Expo 会把 EXPO_PUBLIC_ 前缀的变量嵌入 JS bundle
+# HMR 客户端读到这个 URL 后会当作 packager 地址去检查连接
+# 导致 "Packager is not running" 错误
+# 前端 API 调用统一用相对路径 /api/v1/xxx，由 Metro proxy 转发到后端
 EXPO_PUBLIC_COZE_PROJECT_ID="${COZE_PROJECT_ID:-}"
-
 EXPO_PACKAGER_PROXY_URL="http://127.0.0.1:${EXPO_PORT}"
-export EXPO_PUBLIC_BACKEND_BASE_URL EXPO_PACKAGER_PROXY_URL EXPO_PUBLIC_COZE_PROJECT_ID
+export EXPO_PACKAGER_PROXY_URL EXPO_PUBLIC_COZE_PROJECT_ID
 # 运行时变量（为避免 set -u 的未绑定错误，预置为空）
 SERVER_PID=""
 EXPO_PID=""
@@ -120,11 +120,16 @@ start_expo() {
 
   pushd "$ROOT_DIR/client"
 
+  # ⚠️ 关键：必须 unset EXPO_PUBLIC_BACKEND_BASE_URL！
+  # 原因：Expo 会自动把所有 EXPO_PUBLIC_ 前缀的环境变量嵌入 JS bundle
+  # 如果此变量指向后端 9091 端口，HMR 客户端会误用它检查 packager 连接
+  # 导致 "Packager is not running" 错误
+  # 前端 API 调用统一使用相对路径 /api/v1/xxx，由 Metro proxy 转发到后端
   if [ "$offline" = "1" ]; then
-    ( EXPO_OFFLINE=1 EXPO_NO_DEPENDENCY_VALIDATION=1 EXPO_PUBLIC_BACKEND_BASE_URL="$EXPO_PUBLIC_BACKEND_BASE_URL" EXPO_PACKAGER_PROXY_URL="$EXPO_PACKAGER_PROXY_URL" EXPO_PUBLIC_COZE_PROJECT_ID="$EXPO_PUBLIC_COZE_PROJECT_ID" \
+    ( unset EXPO_PUBLIC_BACKEND_BASE_URL; EXPO_OFFLINE=1 EXPO_NO_DEPENDENCY_VALIDATION=1 EXPO_PACKAGER_PROXY_URL="$EXPO_PACKAGER_PROXY_URL" EXPO_PUBLIC_COZE_PROJECT_ID="$EXPO_PUBLIC_COZE_PROJECT_ID" \
       nohup npx expo start --clear --port "$EXPO_PORT" 2>&1 | pipe_to_log "CLIENT" "$LOG_CLIENT_FILE" ) &
   else
-    ( EXPO_NO_DEPENDENCY_VALIDATION=1 EXPO_PUBLIC_BACKEND_BASE_URL="$EXPO_PUBLIC_BACKEND_BASE_URL" EXPO_PACKAGER_PROXY_URL="$EXPO_PACKAGER_PROXY_URL" EXPO_PUBLIC_COZE_PROJECT_ID="$EXPO_PUBLIC_COZE_PROJECT_ID" \
+    ( unset EXPO_PUBLIC_BACKEND_BASE_URL; EXPO_NO_DEPENDENCY_VALIDATION=1 EXPO_PACKAGER_PROXY_URL="$EXPO_PACKAGER_PROXY_URL" EXPO_PUBLIC_COZE_PROJECT_ID="$EXPO_PUBLIC_COZE_PROJECT_ID" \
       nohup npx expo start --clear --port "$EXPO_PORT" 2>&1 | pipe_to_log "CLIENT" "$LOG_CLIENT_FILE" ) &
   fi
   EXPO_PID=$!
@@ -200,9 +205,9 @@ if detect_expo_fetch_failed 8; then
 fi
 # 输出以下环境变量，确保 Expo 项目能正确连接到 Server 服务
 echo "Expo 环境变量配置："
-echo "EXPO_PUBLIC_BACKEND_BASE_URL=${EXPO_PUBLIC_BACKEND_BASE_URL}"
 echo "EXPO_PACKAGER_PROXY_URL=${EXPO_PACKAGER_PROXY_URL}"
 echo "EXPO_PUBLIC_COZE_PROJECT_ID=${EXPO_PUBLIC_COZE_PROJECT_ID}"
+echo "注意：前端API调用使用相对路径 /api/v1/xxx，由Metro proxy转发到后端"
 if [ -z "${EXPO_PID}" ]; then
   echo "无法获取 Expo 后台进程 PID"
 fi

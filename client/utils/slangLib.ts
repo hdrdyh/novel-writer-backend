@@ -132,7 +132,7 @@ export function getFreshSlang(): string {
  */
 export async function fetchFreshSlang(novelType?: string): Promise<string> {
   try {
-    const baseUrl = process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
+    const baseUrl = '';
     const typeParam = novelType ? `?type=${encodeURIComponent(novelType)}` : '';
     const response = await fetch(`${baseUrl}/api/v1/slang/fresh${typeParam}`);
     const data = await response.json();

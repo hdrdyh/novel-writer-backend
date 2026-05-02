@@ -175,12 +175,8 @@ async function callLLM(
   onChunk: (chunk: string) => void,
   maxTokens: number = 2048,
 ): Promise<string> {
-  // 优先级：Constants.extra > process.env > localhost
-  const configUrl = (Constants.expoConfig?.extra as Record<string, string> | undefined)?.EXPO_PUBLIC_BACKEND_BASE_URL
-    || process.env.EXPO_PUBLIC_BACKEND_BASE_URL
-    || 'http://localhost:9091';
-  const backendUrl = configUrl;
-  const url = `${backendUrl}/api/v1/review/agent-stream`;
+  // API请求通过Metro proxy转发，使用相对路径
+  const url = `/api/v1/review/agent-stream`;
 
   return new Promise((resolve, reject) => {
     let fullContent = '';
@@ -292,12 +288,8 @@ export class ReviewOrchestrator {
     const classic = CLASSIC_SLANG;
     let freshSlang = '';
     try {
-      // 优先级：Constants.extra > process.env > localhost
-  const configUrl = (Constants.expoConfig?.extra as Record<string, string> | undefined)?.EXPO_PUBLIC_BACKEND_BASE_URL
-    || process.env.EXPO_PUBLIC_BACKEND_BASE_URL
-    || 'http://localhost:9091';
-  const backendUrl = configUrl;
-      const res = await fetch(`${backendUrl}/api/v1/slang/fresh?type=${encodeURIComponent(novelType)}`);
+      // API请求通过Metro proxy转发，使用相对路径
+      const res = await fetch(`/api/v1/slang/fresh?type=${encodeURIComponent(novelType)}`);
       const data = await res.json();
       freshSlang = data.slang || '';
     } catch {
