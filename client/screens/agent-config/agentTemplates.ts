@@ -40,21 +40,19 @@ export const parseTemplate = (text: string): ParsedTemplate => {
     globalRules = (nextAgentIdx !== -1 ? afterMarker.substring(0, nextAgentIdx) : afterMarker).trim();
   }
 
-  // 解析助手段落
-  const blocks = text.split(/===\s*/).filter(b => b.trim());
+  // 解析助手段落：按行扫描，以 === 开头的行标记新段落
+  const allLines = text.split('\n');
+  let currentName = '';
+  let currentLines: string[] = [];
 
-  for (const block of blocks) {
-    const lines = block.split('\n');
-    const agentName = lines[0].replace(/\s*===\s*$/, '').trim();
-    if (!agentName) continue;
+  const flushBlock = () => {
+    if (!currentName) return;
+    const preset = PRESET_AGENTS.find(p => p.name === currentName || p.id === currentName);
+    if (!preset) { currentName = ''; currentLines = []; return; }
 
-    const preset = PRESET_AGENTS.find(p => p.name === agentName || p.id === agentName);
-    if (!preset) continue;
-
-    const statusLine = (lines[1] || '').trim();
+    const statusLine = (currentLines[0] || '').trim();
     const enabled = statusLine === '启用' || statusLine === '开启' || statusLine === 'true' || statusLine === '1';
-
-    const promptLines = lines.slice(2).join('\n').trim();
+    const promptLines = currentLines.slice(1).join('\n').trim();
 
     agents.push({
       presetId: preset.id,
@@ -62,7 +60,20 @@ export const parseTemplate = (text: string): ParsedTemplate => {
       prompt: promptLines || preset.prompt,
       enabled,
     });
+    currentName = '';
+    currentLines = [];
+  };
+
+  for (const line of allLines) {
+    const headingMatch = line.match(/^=== (.+) ===$/);
+    if (headingMatch) {
+      flushBlock();
+      currentName = headingMatch[1].trim();
+    } else if (currentName) {
+      currentLines.push(line);
+    }
   }
+  flushBlock();
 
   return { globalRules, agents };
 };

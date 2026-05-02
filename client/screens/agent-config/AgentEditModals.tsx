@@ -102,8 +102,10 @@ export function CollabAgentEditModal({
   const [apiId, setApiId] = useState(initApiId);
 
   const [prevPresetId, setPrevPresetId] = useState<string | null>(preset?.id ?? null);
-  if ((preset?.id ?? null) !== prevPresetId) {
+  const [prevPrompt, setPrevPrompt] = useState<string>(initPrompt);
+  if ((preset?.id ?? null) !== prevPresetId || initPrompt !== prevPrompt) {
     setPrevPresetId(preset?.id ?? null);
+    setPrevPrompt(initPrompt);
     setName(initName);
     setPrompt(initPrompt);
     setApiId(initApiId);
@@ -201,8 +203,10 @@ export function ReviewAgentEditModal({
   const [apiId, setApiId] = useState(initApiId);
 
   const [prevAgentId, setPrevAgentId] = useState<string | null>(agent?.id ?? null);
-  if ((agent?.id ?? null) !== prevAgentId) {
+  const [prevPrompt, setPrevPrompt] = useState<string>(initPrompt);
+  if ((agent?.id ?? null) !== prevAgentId || initPrompt !== prevPrompt) {
     setPrevAgentId(agent?.id ?? null);
+    setPrevPrompt(initPrompt);
     setName(initName);
     setPrompt(initPrompt);
     setApiId(initApiId);
