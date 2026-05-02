@@ -274,8 +274,8 @@ function buildAgentPrompts(
 
     // ===== 细纲设计师 =====
     case 'detail_designer':
-      taskInstruction = `请根据以下大纲和粗纲内容，逐章设计细纲。${targetChaptersStr ? `共${params.targetChapters}章` : ''}。每章细纲用"===第X章==="开头，然后写详细场景、关键对话方向、情绪线、本章目标。各章细纲之间用"===第X章==="分隔。`;
-      maxTokens = 16384;
+      taskInstruction = `请根据以下大纲和粗纲内容，逐章设计细纲。${targetChaptersStr ? `共${params.targetChapters}章` : ''}。每章细纲用"===第X章==="开头，然后写详细场景、关键对话方向、情绪线、本章目标。各章细纲之间用"===第X章==="分隔。必须生成全部${params.targetChapters || '目标'}章的细纲，禁止只生成1章。`;
+      maxTokens = 32768;
       break;
 
     // ===== 记忆压缩 =====

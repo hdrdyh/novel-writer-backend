@@ -25,6 +25,7 @@ export default [
       'eslint.config.*',
       'metro.config.*',
       './scripts/**',
+      '**/__tests__/**',  // 排除测试文件
     ],
   },
   regexp.configs["flat/recommended"],
