@@ -12,7 +12,7 @@ SERVER_PORT="9091"
 EXPO_HOST="lan"
 EXPO_DIR="expo"
 EXPO_PORT="5000"
-WEB_URL="${COZE_PROJECT_DOMAIN_DEFAULT:-http://127.0.0.1:${SERVER_PORT}}"
+WEB_URL="${COZE_PROJECT_DOMAIN_DEFAULT:-http://localhost:${SERVER_PORT}}"
 ASSUME_YES="1"
 # ⚠️ 不要设置 EXPO_PUBLIC_BACKEND_BASE_URL！
 # 原因：Expo 会把 EXPO_PUBLIC_ 前缀的变量嵌入 JS bundle
@@ -20,7 +20,7 @@ ASSUME_YES="1"
 # 导致 "Packager is not running" 错误
 # 前端 API 调用统一用相对路径 /api/v1/xxx，由 Metro proxy 转发到后端
 EXPO_PUBLIC_COZE_PROJECT_ID="${COZE_PROJECT_ID:-}"
-EXPO_PACKAGER_PROXY_URL="http://127.0.0.1:${EXPO_PORT}"
+EXPO_PACKAGER_PROXY_URL="http://localhost:${EXPO_PORT}"
 export EXPO_PACKAGER_PROXY_URL EXPO_PUBLIC_COZE_PROJECT_ID
 # 运行时变量（为避免 set -u 的未绑定错误，预置为空）
 SERVER_PID=""
