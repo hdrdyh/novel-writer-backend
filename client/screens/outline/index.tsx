@@ -568,9 +568,21 @@ export default function OutlineScreen() {
 
   return (
     <Screen style={styles.screen}>
+      {/* 顶部导航 */}
       <View style={styles.header}>
-        <Text style={styles.greeting}>创作空间</Text>
-        <Text style={styles.title}>大纲设计</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.greeting}>创作空间</Text>
+            <Text style={styles.title}>大纲设计</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.settingsBtn}
+            onPress={() => router.push('/agent-config')}
+          >
+            <Feather name="settings" size={20} color="#8888AA" />
+            <Text style={styles.settingsBtnText}>评审设置</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.subtitle}>大纲 → 粗纲 → 细纲，逐层打磨</Text>
       </View>
 
@@ -1325,5 +1337,24 @@ const styles = StyleSheet.create({
     color: GC.accent,
     fontSize: 12,
     marginTop: 6,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  settingsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: GC.bgElevated,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  settingsBtnText: {
+    color: GC.textSecondary,
+    fontSize: 13,
   },
 });
