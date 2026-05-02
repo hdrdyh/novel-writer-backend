@@ -98,6 +98,7 @@ const shouldProxyToBackend = (url) => {
 
 const isWebSocketRequest = (req) =>
   !!(req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket');
+
 const isSSERequest = (req) => {
   const accept = req.headers.accept || '';
   return accept.includes('text/event-stream');

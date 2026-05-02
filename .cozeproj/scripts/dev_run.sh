@@ -120,6 +120,16 @@ start_expo() {
 
   pushd "$ROOT_DIR/client"
 
+  # Patch Expo CLI HTML 模板：注入 "Packager is not running" 错误抑制脚本
+  # 原因：沙箱外部 HTTPS 代理不支持 WSS，导致 HMR 客户端连接失败
+  # 注入的脚本在 bundle 加载前运行，捕获致命错误防止应用白屏
+  for tpl in "$ROOT_DIR"/node_modules/.pnpm/@expo+cli@*/node_modules/@expo/cli/static/template/index.html; do
+    if [ -f "$tpl" ] && ! grep -q "Packager is not running" "$tpl"; then
+      sed -i 's|</head>|  <script>!function(){if(typeof ErrorUtils!=="undefined"){var o=ErrorUtils.getGlobalHandler();ErrorUtils.setGlobalHandler(function(e,f){var m=String(e\x26\x26(e.message||e));if(m.indexOf("Packager is not running")!==-1){console.warn("[Suppressed] Packager connection unavailable in sandbox");return}o\x26\x26o(e,f)})}if(typeof window!=="undefined"){var w=window.onerror;window.onerror=function(m){if(String(m).indexOf("Packager is not running")!==-1){console.warn("[Suppressed] Packager connection unavailable in sandbox");return true}return w?w.apply(this,arguments):false}}}();</script>\n  </head>|' "$tpl"
+      echo "[dev_run.sh] Patched Expo CLI HTML template: $tpl"
+    fi
+  done
+
   # ⚠️ 关键：必须 unset EXPO_PUBLIC_BACKEND_BASE_URL！
   # 原因：Expo 会自动把所有 EXPO_PUBLIC_ 前缀的环境变量嵌入 JS bundle
   # 如果此变量指向后端 9091 端口，HMR 客户端会误用它检查 packager 连接
