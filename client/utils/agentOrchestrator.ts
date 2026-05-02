@@ -76,6 +76,15 @@ async function getUserAgentOverrides(): Promise<Record<string, { enabled?: boole
   }
 }
 
+async function getGlobalIronRules(): Promise<string> {
+  try {
+    const raw = await AsyncStorage.getItem('global_iron_rules');
+    return raw || '';
+  } catch {
+    return '';
+  }
+}
+
 /** 获取Agent的API配置 — overrideApiId 来自用户覆盖配置 */
 function resolveApiConfig(overrideApiId: string | undefined, apiConfigs: ApiConfig[], defaultApi: ApiConfig | null): ApiConfig | null {
   if (overrideApiId) {
@@ -159,7 +168,8 @@ function buildAgentPrompts(
   stage: string,
   context: string,
   previousOutputs: AgentStepResult[],
-  params: OrchestrationParams
+  params: OrchestrationParams,
+  globalIronRules: string = ''
 ): { system: string; user: string; maxTokens: number } {
   // 前序Agent的输出汇总
   const prevSummary = previousOutputs
@@ -196,8 +206,11 @@ function buildAgentPrompts(
 
   // 非统筹Agent：严格按角色输出
   const roleBoundary = `你的职责边界：只做${agent.role}相关的工作，绝不越界。你绝不写小说正文（除非你是写手或风格润色师），绝不写其他Agent职责范围的内容。`;
+  // 全局铁律（所有助手共享）
+  const globalRules = globalIronRules ? `\n【全局铁律（所有助手必须遵守）】\n${globalIronRules}\n` : '';
   // 用户的自定义规则放在最前面，优先级最高
   const userRule = agent.prompt ? `\n【你必须严格遵守以下规则】\n${agent.prompt}\n` : '';
+  const rulesBlock = globalRules + userRule;
 
   let taskInstruction = '';
   let maxTokens = 4096;
@@ -331,7 +344,7 @@ function buildAgentPrompts(
   }
 
   let userPrompt = '';
-  userPrompt += userRule;
+  userPrompt += rulesBlock;
   if (prevSummary) {
     userPrompt += `【前序Agent提供的参考材料】\n${prevSummary}\n\n`;
   }
@@ -386,6 +399,9 @@ export async function orchestrateAgents(params: OrchestrationParams): Promise<vo
   const allOutputs: AgentStepResult[] = [];
   let lastWriterOutput = '';
 
+  // 加载全局铁律
+  const globalIronRules = await getGlobalIronRules();
+
   for (let i = 0; i < agents.length; i++) {
     const agent = agents[i];
 
@@ -402,7 +418,7 @@ export async function orchestrateAgents(params: OrchestrationParams): Promise<vo
     onAgentStart(agent.name, i, totalSteps);
 
     // 构建Prompt
-    const { system, user, maxTokens } = buildAgentPrompts(agent, stage, context, allOutputs, params);
+    const { system, user, maxTokens } = buildAgentPrompts(agent, stage, context, allOutputs, params, globalIronRules);
 
     // SSE调用
     let agentOutput = '';
@@ -443,7 +459,7 @@ export async function orchestrateAgents(params: OrchestrationParams): Promise<vo
     const apiConfig = resolveApiConfig(coordinatorOverride?.apiId, apiConfigs, defaultApi);
     if (apiConfig && apiConfig.apiKey && apiConfig.baseUrl && apiConfig.model) {
       onAgentStart('统筹(报告)', agents.length, totalSteps);
-      const { system, user, maxTokens } = buildAgentPrompts(coordinatorAgent, stage, context, allOutputs, params);
+      const { system, user, maxTokens } = buildAgentPrompts(coordinatorAgent, stage, context, allOutputs, params, globalIronRules);
       try {
         coordinatorReportOutput = await callAgentSSE(apiConfig, system, user, (_chunk: string) => { /* report generation */ }, maxTokens);
         onAgentComplete('统筹(报告)', coordinatorReportOutput);

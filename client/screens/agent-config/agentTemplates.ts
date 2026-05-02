@@ -9,18 +9,38 @@ export interface ParsedTemplateItem {
   enabled: boolean;
 }
 
+export interface ParsedTemplate {
+  globalRules: string;
+  agents: ParsedTemplateItem[];
+}
+
 /**
  * 模板格式：
+ * [全局铁律]
+ * 1.全程去除AI味
+ * 2.严禁破折号分号
+ *
  * === 写手 ===
  * 启用
- * 你是一位经验丰富的小说写手。你的唯一职责是创作小说正文...
+ * 你是一位经验丰富的小说写手...
  *
  * === 统筹 ===
  * 禁用
  * 你是一位小说创作统筹...
  */
-export const parseTemplate = (text: string): ParsedTemplateItem[] => {
-  const results: ParsedTemplateItem[] = [];
+export const parseTemplate = (text: string): ParsedTemplate => {
+  let globalRules = '';
+  const agents: ParsedTemplateItem[] = [];
+
+  // 提取[全局铁律]段落
+  const globalRulesIdx = text.indexOf('[全局铁律]');
+  if (globalRulesIdx !== -1) {
+    const afterMarker = text.substring(globalRulesIdx + '[全局铁律]'.length);
+    const nextAgentIdx = afterMarker.indexOf('\n===');
+    globalRules = (nextAgentIdx !== -1 ? afterMarker.substring(0, nextAgentIdx) : afterMarker).trim();
+  }
+
+  // 解析助手段落
   const blocks = text.split(/===\s*/).filter(b => b.trim());
 
   for (const block of blocks) {
@@ -36,7 +56,7 @@ export const parseTemplate = (text: string): ParsedTemplateItem[] => {
 
     const promptLines = lines.slice(2).join('\n').trim();
 
-    results.push({
+    agents.push({
       presetId: preset.id,
       name: preset.name,
       prompt: promptLines || preset.prompt,
@@ -44,13 +64,22 @@ export const parseTemplate = (text: string): ParsedTemplateItem[] => {
     });
   }
 
-  return results;
+  return { globalRules, agents };
 };
 
 export const exportTemplate = (
   agentConfigs: { presetId: string; name: string; prompt: string; enabled: boolean }[],
+  globalRules?: string,
 ): string => {
   const lines: string[] = [];
+
+  // 导出全局铁律
+  if (globalRules && globalRules.trim()) {
+    lines.push('[全局铁律]');
+    lines.push(globalRules.trim());
+    lines.push('');
+  }
+
   for (const preset of PRESET_AGENTS) {
     const config = agentConfigs.find(c => c.presetId === preset.id);
     const name = config?.name || preset.name;
@@ -118,25 +147,30 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
   {
     name: '玄幻修仙',
     desc: '强化世界观/人物/伏笔，适合长篇',
-    text: PRESET_AGENTS.map(p => {
-      let enabled = p.category === 'core';
-      let prompt = p.prompt;
-      if (['world_architect', 'character_designer', 'foreshadow_designer', 'plot_designer', 'detail_designer', 'memory_compressor', 'style_polisher'].includes(p.id)) {
-        enabled = true;
-      }
-      if (p.id === 'world_architect') {
-        prompt = '你是一位玄幻修仙世界观架构专家。你的职责是设计完整的修仙世界观体系，包括：1.修炼体系（境界划分、突破条件、天劫设定）；2.势力格局（宗门、世家、散修、魔道）；3.地理体系（凡界、修仙界、秘境、禁地）；4.资源体系（灵石、丹药、法宝、功法的品级划分）；5.天道法则与因果循环。你必须确保体系完整、等级分明、有成长空间。你只输出世界观设定文档，绝不写正文。';
-      }
-      if (p.id === 'character_designer') {
-        prompt = '你是一位玄幻修仙人物塑造专家。你的职责是设计修仙者角色体系，特别注重：1.修炼资质与心性成长的对应；2.师承关系与门派立场；3.道侣/兄弟/宿敌的情感纽带；4.性格在修炼路上的变化轨迹；5.功法与性格的相互影响。你必须确保每个角色都有独特的修炼道路和性格魅力。你只输出人物设定文档，绝不写正文。';
-      }
-      if (p.id === 'foreshadow_designer') {
-        prompt = '你是一位玄幻修仙伏笔设计专家。你的职责是设计长篇伏笔布局，包括：1.前世因果的层层揭示；2.宝物/功法的隐藏来历；3.势力暗棋和卧底；4.天道预言与宿命；5.跨越数十章的大伏笔回收。你必须确保伏笔有远有近、有明有暗，让读者始终有期待感。你只输出伏笔设计文档，绝不写正文。';
-      }
-      if (p.id === 'style_polisher') {
-        prompt = '你是一位玄幻修仙文字润色专家。你的职责是对写手的初稿进行润色，特别注重：1.修炼术语的一致性和准确性；2.战斗场面的画面感和节奏感；3.境界突破时的气势渲染；4.古风文辞的韵味和节奏；5.避免现代化用语破坏仙侠氛围。你必须保持原有情节不变，只优化表达。你只输出润色后的正文。';
-      }
-      return `=== ${p.name} ===\n${enabled ? '启用' : '禁用'}\n${prompt}`;
-    }).join('\n\n'),
+    text: (() => {
+      const globalRules = '1.全程去除AI味。只用通俗自然短句。禁止书面长句和空洞排比。\n2.严禁使用破折号。严禁使用分号。\n3.不直白旁白概括设定。全部靠动作细节对话体现。\n4.禁止强行升华。禁止生硬讲道理煽情。\n5.严格遵守固定人设。绝不私自篡改人物。';
+      let text = `[全局铁律]\n${globalRules}\n\n`;
+      text += PRESET_AGENTS.map(p => {
+        let enabled = p.category === 'core';
+        let prompt = p.prompt;
+        if (['world_architect', 'character_designer', 'foreshadow_designer', 'plot_designer', 'detail_designer', 'memory_compressor', 'style_polisher'].includes(p.id)) {
+          enabled = true;
+        }
+        if (p.id === 'world_architect') {
+          prompt = '你是一位玄幻修仙世界观架构专家。你的职责是设计完整的修仙世界观体系，包括：1.修炼体系（境界划分、突破条件、天劫设定）；2.势力格局（宗门、世家、散修、魔道）；3.地理体系（凡界、修仙界、秘境、禁地）；4.资源体系（灵石、丹药、法宝、功法的品级划分）；5.天道法则与因果循环。你必须确保体系完整、等级分明、有成长空间。你只输出世界观设定文档，绝不写正文。';
+        }
+        if (p.id === 'character_designer') {
+          prompt = '你是一位玄幻修仙人物塑造专家。你的职责是设计修仙者角色体系，特别注重：1.修炼资质与心性成长的对应；2.师承关系与门派立场；3.道侣/兄弟/宿敌的情感纽带；4.性格在修炼路上的变化轨迹；5.功法与性格的相互影响。你必须确保每个角色都有独特的修炼道路和性格魅力。你只输出人物设定文档，绝不写正文。';
+        }
+        if (p.id === 'foreshadow_designer') {
+          prompt = '你是一位玄幻修仙伏笔设计专家。你的职责是设计长篇伏笔布局，包括：1.前世因果的层层揭示；2.宝物/功法的隐藏来历；3.势力暗棋和卧底；4.天道预言与宿命；5.跨越数十章的大伏笔回收。你必须确保伏笔有远有近、有明有暗，让读者始终有期待感。你只输出伏笔设计文档，绝不写正文。';
+        }
+        if (p.id === 'style_polisher') {
+          prompt = '你是一位玄幻修仙文字润色专家。你的职责是对写手的初稿进行润色，特别注重：1.修炼术语的一致性和准确性；2.战斗场面的画面感和节奏感；3.境界突破时的气势渲染；4.古风文辞的韵味和节奏；5.避免现代化用语破坏仙侠氛围。你必须保持原有情节不变，只优化表达。你只输出润色后的正文。';
+        }
+        return `=== ${p.name} ===\n${enabled ? '启用' : '禁用'}\n${prompt}`;
+      }).join('\n\n');
+      return text;
+    })(),
   },
 ];

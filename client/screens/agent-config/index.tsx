@@ -68,6 +68,11 @@ export default function AgentConfigScreen() {
   const [testLlmResult, setTestLlmResult] = useState('');
   const [testLoading, setTestLoading] = useState(false);
 
+  // 全局铁律
+  const [globalIronRules, setGlobalIronRules] = useState('');
+  const [ironRulesEditing, setIronRulesEditing] = useState(false);
+  const [ironRulesDraft, setIronRulesDraft] = useState('');
+
   // 导入模板
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importText, setImportText] = useState('');
@@ -124,13 +129,21 @@ export default function AgentConfigScreen() {
     } catch (_e) {}
   }, []);
 
+  const loadGlobalIronRules = useCallback(async () => {
+    try {
+      const data = await AsyncStorage.getItem('globalIronRules');
+      if (data) setGlobalIronRules(data);
+    } catch (_e) {}
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadApiConfigs();
       loadAgentConfigs();
       loadReviewAgents();
       loadReviewConfig();
-    }, [loadApiConfigs, loadAgentConfigs, loadReviewAgents, loadReviewConfig])
+      loadGlobalIronRules();
+    }, [loadApiConfigs, loadAgentConfigs, loadReviewAgents, loadReviewConfig, loadGlobalIronRules])
   );
 
   // ============== 保存函数 ==============
@@ -142,6 +155,11 @@ export default function AgentConfigScreen() {
   const saveAgentConfigs = async (list: AgentConfig[]) => {
     setAgentConfigs(list);
     await AsyncStorage.setItem('agentConfigs', JSON.stringify(list));
+  };
+
+  const saveGlobalIronRules = async (text: string) => {
+    setGlobalIronRules(text);
+    await AsyncStorage.setItem('globalIronRules', text);
   };
 
   const saveReviewAgents = async (list: ReviewAgent[]) => {
@@ -342,13 +360,19 @@ export default function AgentConfigScreen() {
     }
 
     const parsed = parseTemplate(importText);
-    if (parsed.length === 0) {
+    if (parsed.agents.length === 0) {
       setImportError('未识别到有效的助手配置。格式：=== 助手名 === 后跟启用/禁用和规则');
       return;
     }
 
+    // 保存全局铁律
+    if (parsed.globalRules) {
+      await AsyncStorage.setItem('global_iron_rules', parsed.globalRules);
+      setGlobalIronRules(parsed.globalRules);
+    }
+
     const next = agentConfigs.map(a => {
-      const match = parsed.find(p => p.presetId === a.presetId);
+      const match = parsed.agents.find(p => p.presetId === a.presetId);
       if (match) {
         return { ...a, name: match.name, prompt: match.prompt, enabled: match.enabled };
       }
@@ -358,7 +382,8 @@ export default function AgentConfigScreen() {
     await saveAgentConfigs(next);
     setImportModalVisible(false);
     setImportText('');
-    Alert.alert('导入成功', `已更新 ${parsed.length} 个助手的配置，共 ${next.length} 个助手`);
+    const globalMsg = parsed.globalRules ? '，已同步全局铁律' : '';
+    Alert.alert('导入成功', `已更新 ${parsed.agents.length} 个助手的配置${globalMsg}`);
   };
 
   const doExportTemplate = () => {
@@ -565,6 +590,49 @@ export default function AgentConfigScreen() {
                   <Ionicons name="share-outline" size={18} color={GC.textSecondary} />
                   <Text style={s.exportBtnText}>导出</Text>
                 </TouchableOpacity>
+              </View>
+
+              {/* 全局铁律 */}
+              <View style={s.ironRulesWrap}>
+                <View style={s.ironRulesHeader}>
+                  <FontAwesome6 name="shield-halved" size={16} color="#E5A00D" />
+                  <Text style={s.ironRulesTitle}>全局铁律</Text>
+                  <Text style={s.ironRulesHint}>自动追加到每个助手的规则前</Text>
+                </View>
+                {ironRulesEditing ? (
+                  <View style={s.ironRulesEditWrap}>
+                    <TextInput
+                      style={s.ironRulesInput}
+                      value={ironRulesDraft}
+                      onChangeText={setIronRulesDraft}
+                      placeholder="输入全局铁律，如：1.禁止破折号分号 2.去除AI味..."
+                      placeholderTextColor={GC.textMuted}
+                      multiline
+                      numberOfLines={4}
+                      autoFocus
+                    />
+                    <View style={s.ironRulesBtnRow}>
+                      <TouchableOpacity style={s.ironRulesCancelBtn} onPress={() => setIronRulesEditing(false)}>
+                        <Text style={s.ironRulesCancelText}>取消</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={s.ironRulesSaveBtn} onPress={async () => {
+                        await saveGlobalIronRules(ironRulesDraft);
+                        setIronRulesEditing(false);
+                      }}>
+                        <Text style={s.ironRulesSaveText}>保存</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity style={s.ironRulesDisplay} onPress={() => { setIronRulesDraft(globalIronRules); setIronRulesEditing(true); }}>
+                    {globalIronRules ? (
+                      <Text style={s.ironRulesContent} numberOfLines={3}>{globalIronRules}</Text>
+                    ) : (
+                      <Text style={s.ironRulesEmpty}>点击设置全局铁律（所有助手共用）</Text>
+                    )}
+                    <FontAwesome6 name="pen" size={12} color={GC.textMuted} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={s.categoryHeader}>
@@ -878,18 +946,28 @@ export default function AgentConfigScreen() {
                       <Text style={s.importError}>{importError}</Text>
                     ) : null}
 
-                    {importText.trim() ? (
-                      <View style={s.importPreview}>
-                        <Text style={s.importPreviewTitle}>识别到 {parseTemplate(importText).length} 个助手</Text>
-                        {parseTemplate(importText).map((p) => (
-                          <View key={p.presetId} style={s.importPreviewItem}>
-                            <Text style={s.importPreviewStatus}>{p.enabled ? 'ON' : 'OFF'}</Text>
-                            <Text style={s.importPreviewName}>{p.name}</Text>
-                            <Text style={s.importPreviewPrompt} numberOfLines={1}>{p.prompt.slice(0, 40)}...</Text>
-                          </View>
-                        ))}
-                      </View>
-                    ) : null}
+                    {importText.trim() ? (() => {
+                      const parsed = parseTemplate(importText);
+                      return (
+                        <View style={s.importPreview}>
+                          <Text style={s.importPreviewTitle}>识别到 {parsed.agents.length} 个助手</Text>
+                          {parsed.globalRules ? (
+                            <View style={[s.importPreviewItem, { borderLeftWidth: 3, borderLeftColor: GC.accent }]}>
+                              <Text style={[s.importPreviewStatus, { color: GC.accent }]}>GL</Text>
+                              <Text style={s.importPreviewName}>全局铁律</Text>
+                              <Text style={s.importPreviewPrompt} numberOfLines={1}>{parsed.globalRules.slice(0, 40)}...</Text>
+                            </View>
+                          ) : null}
+                          {parsed.agents.map((p) => (
+                            <View key={p.presetId} style={s.importPreviewItem}>
+                              <Text style={s.importPreviewStatus}>{p.enabled ? 'ON' : 'OFF'}</Text>
+                              <Text style={s.importPreviewName}>{p.name}</Text>
+                              <Text style={s.importPreviewPrompt} numberOfLines={1}>{p.prompt.slice(0, 40)}...</Text>
+                            </View>
+                          ))}
+                        </View>
+                      );
+                    })() : null}
                   </ScrollView>
 
                   <View style={m.modalFooter}>

@@ -72,6 +72,22 @@ export const s = StyleSheet.create({
   },
   smartMatchBtnText: { color: GC.primary, fontSize: 15, fontWeight: '600' },
 
+  // 全局铁律
+  ironRulesWrap: { backgroundColor: GC.bgElevated, borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(229,160,13,0.25)' },
+  ironRulesHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 6 },
+  ironRulesTitle: { color: '#E5A00D', fontSize: 14, fontWeight: '700' },
+  ironRulesHint: { color: GC.textMuted, fontSize: 11, marginLeft: 4 },
+  ironRulesEditWrap: { gap: 8 },
+  ironRulesInput: { backgroundColor: GC.bgBase, borderRadius: 10, padding: 12, color: GC.textPrimary, fontSize: 13, minHeight: 100, textAlignVertical: 'top', lineHeight: 20 },
+  ironRulesBtnRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+  ironRulesCancelBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: GC.bgBase },
+  ironRulesCancelText: { color: GC.textSecondary, fontSize: 13 },
+  ironRulesSaveBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: '#E5A00D' },
+  ironRulesSaveText: { color: '#000', fontSize: 13, fontWeight: '600' },
+  ironRulesDisplay: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  ironRulesContent: { flex: 1, color: GC.textSecondary, fontSize: 13, lineHeight: 20 },
+  ironRulesEmpty: { flex: 1, color: GC.textMuted, fontSize: 13, fontStyle: 'italic' },
+
   // 分类标题
   categoryHeader: { marginTop: 16, marginBottom: 8, paddingLeft: 4 },
   categoryTitle: { color: GC.primary, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5 },
