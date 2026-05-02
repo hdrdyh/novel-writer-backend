@@ -30,6 +30,8 @@ interface NovelItem {
   cover: string;
 }
 
+const PAGE_SIZE = 20; // 每页显示20本小说
+
 export default function BookshelfScreen() {
   const [novels, setNovels] = useState<NovelItem[]>([]);
   const [selectedNovel, setSelectedNovel] = useState<NovelItem | null>(null);
@@ -37,12 +39,20 @@ export default function BookshelfScreen() {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importTitle, setImportTitle] = useState('');
   const [importContent, setImportContent] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const router = useSafeRouter();
 
+  const totalPages = Math.max(1, Math.ceil(novels.length / PAGE_SIZE));
+  const startIdx = (currentPage - 1) * PAGE_SIZE;
+  const endIdx = Math.min(startIdx + PAGE_SIZE, novels.length);
+  const pageNovels = novels.slice(startIdx, endIdx);
+
+  // 加载小说时重置页码
   const loadNovels = useCallback(async () => {
     try {
       const data = await AsyncStorage.getItem('novels');
       if (data) setNovels(JSON.parse(data));
+      setCurrentPage(1);
     } catch (e) {}
   }, []);
 
@@ -151,12 +161,36 @@ export default function BookshelfScreen() {
 
         {/* 列表 */}
         {novels.length > 0 ? (
-          <FlatList
-            data={novels}
-            keyExtractor={(item) => item.id}
-            renderItem={renderNovelItem}
-            contentContainerStyle={styles.listContent}
-          />
+          <View style={styles.listWrapper}>
+            <FlatList
+              data={pageNovels}
+              keyExtractor={(item) => item.id}
+              renderItem={renderNovelItem}
+              contentContainerStyle={styles.listContent}
+            />
+            {/* 分页控件 */}
+            {totalPages > 1 && (
+              <View style={styles.pagination}>
+                <TouchableOpacity
+                  style={[styles.pageBtn, currentPage <= 1 && styles.pageBtnDisabled]}
+                  onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                >
+                  <Ionicons name="chevron-back" size={18} color={currentPage <= 1 ? '#555' : '#6C63FF'} />
+                </TouchableOpacity>
+                <Text style={styles.pageText}>
+                  {startIdx + 1}-{endIdx} / {novels.length}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.pageBtn, currentPage >= totalPages && styles.pageBtnDisabled]}
+                  onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                >
+                  <Ionicons name="chevron-forward" size={18} color={currentPage >= totalPages ? '#555' : '#6C63FF'} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         ) : (
           <View style={styles.emptyState}>
             <Ionicons name="library-outline" size={48} color="#8888AA" />
@@ -276,6 +310,29 @@ export default function BookshelfScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: GC.bgBase },
+  listWrapper: { flex: 1 },
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: GC.border,
+    backgroundColor: GC.bgElevated,
+    gap: 16,
+  },
+  pageBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: GC.bgElevated,
+  },
+  pageBtnDisabled: {
+    opacity: 0.5,
+  },
+  pageText: {
+    fontSize: 14,
+    color: GC.textSecondary,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

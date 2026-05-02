@@ -33,10 +33,12 @@ interface OutlineData {
   roughLocked: boolean;
   detailLocked: boolean;
   targetChapters: number; // 目标章节数
+  batchSize: number; // 每批生成章数
   title: string; // 小说名
 }
 
 const STORAGE_KEY = 'outline_data';
+const PAGE_SIZE = 15; // 每页显示15条
 
 // ===== 粗纲解析 =====
 // 支持格式：第X章：xxx / 第X章 xxx / 1. xxx / 一、xxx / 纯文本每行一章
@@ -156,6 +158,7 @@ export default function OutlineScreen() {
     roughLocked: false,
     detailLocked: false,
     targetChapters: 300,
+    batchSize: 10, // 默认每批生成10章
     title: '',
   });
   const [loading, setLoading] = useState(false);
@@ -163,9 +166,18 @@ export default function OutlineScreen() {
   const [editStage, setEditStage] = useState<'rough' | 'detail'>('rough'); // 当前编辑的是粗纲还是细纲
   const [editText, setEditText] = useState('');
   const [targetInput, setTargetInput] = useState(String(data.targetChapters || 300));
+  const [batchInput, setBatchInput] = useState(String(data.batchSize || 10)); // 每批生成数
   useEffect(() => { setTargetInput(String(data.targetChapters || 300)); }, [data.targetChapters]);
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [importModalVisible, setImportModalVisible] = useState(false);
+  useEffect(() => { setBatchInput(String(data.batchSize || 10)); }, [data.batchSize]);
+  
+  // 分页状态
+  const [roughPage, setRoughPage] = useState(1);
+  const [detailPage, setDetailPage] = useState(1);
+  
+  const editModalVisible = useState(false)[0];
+  const setEditModalVisible = useState(false)[1];
+  const importModalVisible = useState(false)[0];
+  const setImportModalVisible = useState(false)[1];
   const [importStage, setImportStage] = useState<OutlineStage>('outline');
   const [importText, setImportText] = useState('');
 
@@ -202,7 +214,7 @@ export default function OutlineScreen() {
   const [currentAgentIdx, setCurrentAgentIdx] = useState(-1);
   const abortRef = useRef(false);
 
-  // AI扩写 - 使用 agentOrchestrator 编排
+  // AI扩写 - 使用 agentOrchestrator 编排（支持分批生成）
   const handleAIExpand = useCallback(async (stage: OutlineStage) => {
     setLoading(true);
     setCurrentAgentIdx(0);
@@ -211,6 +223,10 @@ export default function OutlineScreen() {
     // 构建上下文：粗纲阶段传大纲，细纲阶段传粗纲(主)+大纲(辅)
     let context = '';
     let secondaryContext = '';
+    // 计算本次要生成的起始章节
+    const existingCount = stage === 'rough' ? data.rough.length : data.detail.length;
+    const thisBatchCount = data.batchSize || 10;
+
     if (stage === 'outline') {
       // 大纲阶段：用小说名+目标章节数作为种子
       const novelInfo = data.title ? `小说名：《${data.title}》` : '';
@@ -223,6 +239,12 @@ export default function OutlineScreen() {
       if (data.rough.length > 0) {
         context += '\n\n【已有粗纲草稿】\n' + data.rough.join('\n');
       }
+      // 提示AI本次生成哪些章节
+      if (existingCount > 0) {
+        context += `\n\n【重要】本次请生成第${existingCount + 1}章到第${existingCount + thisBatchCount}章的粗纲，共${thisBatchCount}章，每章一行，格式："第X章：核心事件"。禁止修改已生成的章节。`;
+      } else {
+        context += `\n\n【重要】请生成${thisBatchCount}章粗纲，每章一行，格式："第X章：核心事件"。`;
+      }
     } else {
       // detail: 主内容=粗纲，辅助=大纲
       context = data.rough.join('\n');
@@ -230,6 +252,12 @@ export default function OutlineScreen() {
       // 如果用户已有细纲草稿，也传入供参考
       if (data.detail.length > 0) {
         context += '\n\n【已有细纲草稿】\n' + data.detail.join('\n');
+      }
+      // 提示AI本次生成哪些章节
+      if (existingCount > 0) {
+        context += `\n\n【重要】本次请生成第${existingCount + 1}章到第${existingCount + thisBatchCount}章的细纲，共${thisBatchCount}章。每章细纲用"===第X章==="开头，然后写详细场景、关键对话方向、情绪线、本章目标。禁止修改已生成的章节。`;
+      } else {
+        context += `\n\n【重要】请生成${thisBatchCount}章细纲。每章细纲用"===第X章==="开头，然后写详细场景、关键对话方向、情绪线、本章目标。各章细纲之间用"===第X章==="分隔。`;
       }
     }
 
@@ -241,7 +269,7 @@ export default function OutlineScreen() {
         stage: stage === 'outline' ? 'outline' : stage === 'rough' ? 'rough' : 'detail',
         context,
         secondaryContext,
-        targetChapters: data.targetChapters,
+        targetChapters: thisBatchCount, // 本次只生成batchSize章
         novelName: data.title,
         previousContent: '',
         onAgentStart: (name: string, idx: number, _total: number) => {
@@ -303,19 +331,47 @@ export default function OutlineScreen() {
       if (stage === 'outline') {
         saveData({ ...data, outline: finalContent });
       } else if (stage === 'rough') {
-        const chapters = parseRoughOutline(finalContent, data.targetChapters);
-        if (chapters.length === 0) {
+        const newChapters = parseRoughOutline(finalContent, thisBatchCount);
+        if (newChapters.length === 0) {
           Alert.alert('提示', 'AI扩写未能解析出章节粗纲，请重试或手动输入');
           return;
         }
-        saveData({ ...data, rough: chapters });
+        // 追加到现有列表
+        const allChapters = [...data.rough, ...newChapters];
+        const total = allChapters.length;
+        const remaining = (data.targetChapters || 300) - total;
+        saveData({ ...data, rough: allChapters });
+        setRoughPage(Math.ceil(total / PAGE_SIZE));
+        Alert.alert(
+          '粗纲生成完成',
+          `本次生成${newChapters.length}章，当前共${total}章。` +
+          (remaining > 0 ? `\n还差${remaining}章，继续生成？` : '\n已达标！'),
+          remaining > 0 ? [
+            { text: '完成', style: 'cancel' },
+            { text: '继续生成', onPress: () => handleAIExpand('rough') }
+          ] : [{ text: '好的' }]
+        );
       } else {
-        const details = parseDetailOutline(finalContent, data.targetChapters);
-        if (details.length === 0) {
+        const newDetails = parseDetailOutline(finalContent, thisBatchCount);
+        if (newDetails.length === 0) {
           Alert.alert('提示', 'AI扩写未能解析出章节细纲，请重试或手动输入');
           return;
         }
-        saveData({ ...data, detail: details });
+        // 追加到现有列表
+        const allDetails = [...data.detail, ...newDetails];
+        const total = allDetails.length;
+        const remaining = (data.targetChapters || 300) - total;
+        saveData({ ...data, detail: allDetails });
+        setDetailPage(Math.ceil(total / PAGE_SIZE));
+        Alert.alert(
+          '细纲生成完成',
+          `本次生成${newDetails.length}章，当前共${total}章。` +
+          (remaining > 0 ? `\n还差${remaining}章，继续生成？` : '\n已达标！'),
+          remaining > 0 ? [
+            { text: '完成', style: 'cancel' },
+            { text: '继续生成', onPress: () => handleAIExpand('detail') }
+          ] : [{ text: '好的' }]
+        );
       }
     } catch (e: any) {
       Alert.alert('AI扩写失败', e.message || '请检查API配置');
@@ -554,105 +610,187 @@ export default function OutlineScreen() {
         )}
 
         {/* 第二层：粗纲 */}
-        {renderStageCard(
-          'rough',
-          '粗纲',
-          `${data.rough.length}章 / 目标${data.targetChapters || 300}章`,
-          'list',
-          data.roughLocked,
-          data.outlineLocked,
-          <View style={styles.listArea}>
-            {/* 目标章节数输入 */}
-            {!data.roughLocked && (
-              <View style={styles.chapterCountRow}>
-                <Text style={styles.chapterCountLabel}>目标章节数</Text>
-                <TextInput
-                  style={styles.chapterCountInput}
-                  value={targetInput}
-                  onChangeText={(text) => {
-                    setTargetInput(text);
-                    const num = parseInt(text, 10);
-                    if (!isNaN(num) && num > 0) {
-                      saveData({ ...data, targetChapters: num });
-                    }
-                  }}
-                  keyboardType="numeric"
-                  placeholder="300"
-                  placeholderTextColor="#6B6B8D"
-                  maxLength={5}
-                />
-                <Text style={styles.chapterCountUnit}>章</Text>
-              </View>
-            )}
-            {data.rough.length === 0 ? (
-              <Text style={styles.hintText}>
-                {data.outlineLocked ? '大纲已定稿，点AI扩写生成粗纲' : '请先定稿大纲'}
-              </Text>
-            ) : (
-              data.rough.map((item, idx) => (
-                <Pressable
-                  key={idx}
-                  style={styles.listItem}
-                  onPress={() => !data.roughLocked && handleEditItem('rough', idx)}
-                  disabled={data.roughLocked}
-                >
-                  <View style={styles.listItemNum}>
-                    <Text style={styles.listItemNumText}>{idx + 1}</Text>
-                  </View>
-                  <Text style={styles.listItemText} numberOfLines={2}>{item}</Text>
-                  {!data.roughLocked && (
-                    <Feather name="edit-2" size={14} color="#8888AA" style={styles.listItemIcon} />
+        {(() => {
+          const roughTotalPages = Math.max(1, Math.ceil(data.rough.length / PAGE_SIZE));
+          const roughStart = (roughPage - 1) * PAGE_SIZE;
+          const roughEnd = Math.min(roughStart + PAGE_SIZE, data.rough.length);
+          const roughPageItems = data.rough.slice(roughStart, roughEnd);
+          
+          return renderStageCard(
+            'rough',
+            '粗纲',
+            `${data.rough.length}章 / 目标${data.targetChapters || 300}章`,
+            'list',
+            data.roughLocked,
+            data.outlineLocked,
+            <View style={styles.listArea}>
+              {/* 目标章节数 & 每批生成数 */}
+              {!data.roughLocked && (
+                <View style={styles.chapterCountRow}>
+                  <Text style={styles.chapterCountLabel}>目标</Text>
+                  <TextInput
+                    style={styles.chapterCountInput}
+                    value={targetInput}
+                    onChangeText={(text) => {
+                      setTargetInput(text);
+                      const num = parseInt(text, 10);
+                      if (!isNaN(num) && num > 0) {
+                        saveData({ ...data, targetChapters: num });
+                      }
+                    }}
+                    keyboardType="numeric"
+                    placeholder="300"
+                    placeholderTextColor="#6B6B8D"
+                    maxLength={5}
+                  />
+                  <Text style={styles.chapterCountUnit}>章</Text>
+                  <View style={{ width: 1, height: 20, backgroundColor: GC.border, marginHorizontal: 12 }} />
+                  <Text style={styles.chapterCountLabel}>每批</Text>
+                  <TextInput
+                    style={styles.chapterCountInput}
+                    value={batchInput}
+                    onChangeText={(text) => {
+                      setBatchInput(text);
+                      const num = parseInt(text, 10);
+                      if (!isNaN(num) && num > 0) {
+                        saveData({ ...data, batchSize: num });
+                      }
+                    }}
+                    keyboardType="numeric"
+                    placeholder="10"
+                    placeholderTextColor="#6B6B8D"
+                    maxLength={3}
+                  />
+                  <Text style={styles.chapterCountUnit}>章</Text>
+                </View>
+              )}
+              {data.rough.length === 0 ? (
+                <Text style={styles.hintText}>
+                  {data.outlineLocked ? '大纲已定稿，点AI扩写生成粗纲' : '请先定稿大纲'}
+                </Text>
+              ) : (
+                <>
+                  {roughPageItems.map((item, idx) => {
+                    const actualIdx = roughStart + idx;
+                    return (
+                      <Pressable
+                        key={actualIdx}
+                        style={styles.listItem}
+                        onPress={() => !data.roughLocked && handleEditItem('rough', actualIdx)}
+                        disabled={data.roughLocked}
+                      >
+                        <View style={styles.listItemNum}>
+                          <Text style={styles.listItemNumText}>{actualIdx + 1}</Text>
+                        </View>
+                        <Text style={styles.listItemText} numberOfLines={2}>{item}</Text>
+                        {!data.roughLocked && (
+                          <Feather name="edit-2" size={14} color="#8888AA" style={styles.listItemIcon} />
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                  {/* 分页控件 */}
+                  {roughTotalPages > 1 && (
+                    <View style={styles.paginationRow}>
+                      <Pressable
+                        style={[styles.pageBtn, roughPage <= 1 && styles.pageBtnDisabled]}
+                        onPress={() => setRoughPage(p => Math.max(1, p - 1))}
+                        disabled={roughPage <= 1}
+                      >
+                        <Feather name="chevron-left" size={18} color={roughPage <= 1 ? GC.textTertiary : GC.textPrimary} />
+                      </Pressable>
+                      <Text style={styles.pageText}>{roughPage} / {roughTotalPages}</Text>
+                      <Pressable
+                        style={[styles.pageBtn, roughPage >= roughTotalPages && styles.pageBtnDisabled]}
+                        onPress={() => setRoughPage(p => Math.min(roughTotalPages, p + 1))}
+                        disabled={roughPage >= roughTotalPages}
+                      >
+                        <Feather name="chevron-right" size={18} color={roughPage >= roughTotalPages ? GC.textTertiary : GC.textPrimary} />
+                      </Pressable>
+                    </View>
                   )}
+                </>
+              )}
+              {!data.roughLocked && (
+                <Pressable style={styles.addItemBtn} onPress={() => {
+                  saveData({ ...data, rough: [...data.rough, ''] });
+                  setEditIndex(data.rough.length);
+                  setEditText('');
+                  setEditModalVisible(true);
+                }}>
+                  <Feather name="plus" size={16} color="#8888AA" />
+                  <Text style={styles.addItemText}>添加章节</Text>
                 </Pressable>
-              ))
-            )}
-            {!data.roughLocked && data.rough.length > 0 && (
-              <Pressable style={styles.addItemBtn} onPress={() => {
-                saveData({ ...data, rough: [...data.rough, ''] });
-                setEditIndex(data.rough.length);
-                setEditText('');
-                setEditModalVisible(true);
-              }}>
-                <Feather name="plus" size={16} color="#8888AA" />
-                <Text style={styles.addItemText}>添加章节</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
+              )}
+            </View>
+          );
+        })()}
 
         {/* 第三层：细纲 */}
-        {renderStageCard(
-          'detail',
-          '细纲',
-          `${data.detail.length}章`,
-          'file-text',
-          data.detailLocked,
-          data.roughLocked,
-          <View style={styles.listArea}>
-            {data.detail.length === 0 ? (
-              <Text style={styles.hintText}>
-                {data.roughLocked ? '粗纲已定稿，点AI扩写生成细纲' : '请先定稿粗纲'}
-              </Text>
-            ) : (
-              data.detail.map((item, idx) => (
-                <Pressable
-                  key={idx}
-                  style={styles.listItem}
-                  onPress={() => !data.detailLocked && handleEditItem('detail', idx)}
-                  disabled={data.detailLocked}
-                >
-                  <View style={styles.listItemNum}>
-                    <Text style={styles.listItemNumText}>{idx + 1}</Text>
-                  </View>
-                  <Text style={styles.listItemText} numberOfLines={3}>{item}</Text>
-                  {!data.detailLocked && (
-                    <Feather name="edit-2" size={14} color="#8888AA" style={styles.listItemIcon} />
+        {(() => {
+          const detailTotalPages = Math.max(1, Math.ceil(data.detail.length / PAGE_SIZE));
+          const detailStart = (detailPage - 1) * PAGE_SIZE;
+          const detailEnd = Math.min(detailStart + PAGE_SIZE, data.detail.length);
+          const detailPageItems = data.detail.slice(detailStart, detailEnd);
+          
+          return renderStageCard(
+            'detail',
+            '细纲',
+            `${data.detail.length}章`,
+            'file-text',
+            data.detailLocked,
+            data.roughLocked,
+            <View style={styles.listArea}>
+              {data.detail.length === 0 ? (
+                <Text style={styles.hintText}>
+                  {data.roughLocked ? '粗纲已定稿，点AI扩写生成细纲' : '请先定稿粗纲'}
+                </Text>
+              ) : (
+                <>
+                  {detailPageItems.map((item, idx) => {
+                    const actualIdx = detailStart + idx;
+                    return (
+                      <Pressable
+                        key={actualIdx}
+                        style={styles.listItem}
+                        onPress={() => !data.detailLocked && handleEditItem('detail', actualIdx)}
+                        disabled={data.detailLocked}
+                      >
+                        <View style={styles.listItemNum}>
+                          <Text style={styles.listItemNumText}>{actualIdx + 1}</Text>
+                        </View>
+                        <Text style={styles.listItemText} numberOfLines={3}>{item}</Text>
+                        {!data.detailLocked && (
+                          <Feather name="edit-2" size={14} color="#8888AA" style={styles.listItemIcon} />
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                  {/* 分页控件 */}
+                  {detailTotalPages > 1 && (
+                    <View style={styles.paginationRow}>
+                      <Pressable
+                        style={[styles.pageBtn, detailPage <= 1 && styles.pageBtnDisabled]}
+                        onPress={() => setDetailPage(p => Math.max(1, p - 1))}
+                        disabled={detailPage <= 1}
+                      >
+                        <Feather name="chevron-left" size={18} color={detailPage <= 1 ? GC.textTertiary : GC.textPrimary} />
+                      </Pressable>
+                      <Text style={styles.pageText}>{detailPage} / {detailTotalPages}</Text>
+                      <Pressable
+                        style={[styles.pageBtn, detailPage >= detailTotalPages && styles.pageBtnDisabled]}
+                        onPress={() => setDetailPage(p => Math.min(detailTotalPages, p + 1))}
+                        disabled={detailPage >= detailTotalPages}
+                      >
+                        <Feather name="chevron-right" size={18} color={detailPage >= detailTotalPages ? GC.textTertiary : GC.textPrimary} />
+                      </Pressable>
+                    </View>
                   )}
-                </Pressable>
-              ))
-            )}
-          </View>
-        )}
+                </>
+              )}
+            </View>
+          );
+        })()}
 
         {/* 开始写作按钮 */}
         {data.detailLocked && (
@@ -1015,6 +1153,33 @@ const styles = StyleSheet.create({
   chapterCountUnit: {
     color: GC.textSecondary,
     fontSize: 13,
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 16,
+  },
+  pageBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: GC.bgElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: GC.border,
+  },
+  pageBtnDisabled: {
+    opacity: 0.5,
+  },
+  pageText: {
+    fontSize: 14,
+    color: GC.textPrimary,
+    fontWeight: '600',
+    minWidth: 60,
+    textAlign: 'center',
   },
   addItemBtn: {
     flexDirection: 'row',
