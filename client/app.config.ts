@@ -34,7 +34,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         "expo-router",
         {
-          "origin": "https://novel-writer-backend-production-24e9.up.railway.app"
         }
       ],
       [

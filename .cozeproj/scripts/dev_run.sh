@@ -11,7 +11,7 @@ SERVER_PORT="9091"
 # Expo 项目配置
 EXPO_HOST="0.0.0.0"
 EXPO_DIR="expo"
-EXPO_PORT="5000"
+EXPO_PORT="9090"
 WEB_URL="${COZE_PROJECT_DOMAIN_DEFAULT:-http://127.0.0.1:${SERVER_PORT}}"
 ASSUME_YES="1"
 # 强制使用沙箱后端地址（不是 Expo 打包服务器）
@@ -148,8 +148,8 @@ detect_expo_fetch_failed() {
 }
 
 # ==================== 前置检查 ====================
-# 关掉nginx进程
-ps -ef | grep nginx | grep -v grep | awk '{print $2}' | xargs -r kill -9
+# 保留nginx进程（沙箱预览需要nginx反向代理）
+# nginx将5000端口代理到Metro(9090)，将/api/代理到后端(9091)
 
 echo "检查根目录 pre_install.py"
 if [ -f "$PREVIEW_DIR/pre_install.py" ]; then
