@@ -127,11 +127,19 @@ function MessageBubble({ message }: { message: ReviewMessage }) {
   );
 }
 
+/** Animated dot component */
+function AnimDot({ anim }: { anim: Animated.Value }) {
+  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
+  return <Animated.View style={[s.streamingDot, { opacity }]} />;
+}
+
 /** Streaming indicator for active agent */
 function StreamingIndicator({ agentId, agentType }: { agentId: string; agentType: string }) {
-  const dot1 = useRef(new Animated.Value(0)).current;
-  const dot2 = useRef(new Animated.Value(0)).current;
-  const dot3 = useRef(new Animated.Value(0)).current;
+  const [dots] = useState<[Animated.Value, Animated.Value, Animated.Value]>(() => [
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]);
 
   useEffect(() => {
     const animate = (dot: Animated.Value, delay: number) =>
@@ -142,12 +150,12 @@ function StreamingIndicator({ agentId, agentType }: { agentId: string; agentType
           Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
         ])
       );
-    const a1 = animate(dot1, 0);
-    const a2 = animate(dot2, 150);
-    const a3 = animate(dot3, 300);
+    const a1 = animate(dots[0], 0);
+    const a2 = animate(dots[1], 150);
+    const a3 = animate(dots[2], 300);
     a1.start(); a2.start(); a3.start();
     return () => { a1.stop(); a2.stop(); a3.stop(); };
-  }, [dot1, dot2, dot3]);
+  }, []);
 
   const label = getAgentLabel(agentId, agentType);
 
@@ -159,12 +167,9 @@ function StreamingIndicator({ agentId, agentType }: { agentId: string; agentType
       <View style={s.msgBubble}>
         <Text style={[s.msgName, { color: GC.primary }]}>{label}</Text>
         <View style={s.streamingDots}>
-          {[dot1, dot2, dot3].map((dot, i) => (
-            <Animated.View
-              key={i}
-              style={[s.streamingDot, { opacity: dot, backgroundColor: GC.primary }]}
-            />
-          ))}
+          <AnimDot anim={dots[0]} />
+          <AnimDot anim={dots[1]} />
+          <AnimDot anim={dots[2]} />
         </View>
       </View>
     </View>
@@ -187,24 +192,22 @@ function PendingQueue({ agents }: { agents: string[] }) {
 
 /** Vote progress bar */
 function VoteProgress({ messages }: { messages: ReviewMessage[] }) {
-  const voteMsgs = messages.filter((m) => m.step === 'vote' && m.stance);
+  const voteMsgs = messages.filter((m) => m.step === 'vote' && m.voteStance);
   if (voteMsgs.length === 0) return null;
 
-  const keepCount = voteMsgs.filter((m) => m.stance === 'keep').length;
-  const changeCount = voteMsgs.filter((m) => m.stance === 'change').length;
-  const minorCount = voteMsgs.filter((m) => m.stance === 'minor_change').length;
-  const total = Math.max(keepCount + changeCount + minorCount, 1);
+  const keepCount = voteMsgs.filter((m) => m.voteStance === 'keep').length;
+  const changeCount = voteMsgs.filter((m) => m.voteStance === 'change').length;
+  const total = Math.max(keepCount + changeCount, 1);
 
   return (
     <View style={s.voteBar}>
       <View style={s.voteBarRow}>
         <View style={[s.voteBarSegment, { flex: keepCount / total, backgroundColor: GC.success }]} />
-        <View style={[s.voteBarSegment, { flex: minorCount / total, backgroundColor: GC.warning }]} />
         <View style={[s.voteBarSegment, { flex: changeCount / total, backgroundColor: GC.danger }]} />
       </View>
       <View style={s.voteBarLabels}>
         <Text style={s.voteBarLabel}>keep {keepCount}</Text>
-        <Text style={s.voteBarLabel}>minor {minorCount}</Text>
+        <Text style={s.voteBarLabel}>change {changeCount}</Text>
         <Text style={s.voteBarLabel}>change {changeCount}</Text>
       </View>
     </View>
@@ -227,9 +230,9 @@ function OutlinePatchPanel({
       {patch.patches.map((p, i) => (
         <View key={i} style={s.patchItem}>
           <Text style={s.patchChapter}>Ch.{p.chapterIndex}</Text>
-          <Text style={s.patchOld}>{p.originalContent}</Text>
+          <Text style={s.patchOld}>{p.originalOutline}</Text>
           <Text style={s.patchArrow}>---</Text>
-          <Text style={s.patchNew}>{p.revisedContent}</Text>
+          <Text style={s.patchNew}>{p.revisedOutline}</Text>
         </View>
       ))}
       <View style={s.patchActions}>

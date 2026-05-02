@@ -1220,7 +1220,7 @@ app.get('/api/v1/slang/fresh', async (req, res) => {
 
 // POST /api/v1/review/agent-stream - 单agent流式调用
 app.post('/api/v1/review/agent-stream', async (req, res) => {
-  const { agentId, agentRole, agentType, prompt, model, apiUrl, apiKey } = req.body;
+  const { agentId, agentRole, agentType, prompt, systemPrompt, model, apiUrl, apiKey } = req.body;
 
   if (!prompt) {
     res.status(400).json({ error: 'Missing prompt' });
@@ -1247,11 +1247,14 @@ app.post('/api/v1/review/agent-stream', async (req, res) => {
         selectedModel = 'doubao-seed-2-0-mini-260215';
       }
 
+      const defaultSystem = `你是小说创作团队中的${agentRole || agentId}。说话要简洁有力，像真人在群里聊天一样，可以自然地带入网络流行梗。不要长篇大论，几句话说清楚立场和理由。`;
+      const finalSystem = systemPrompt || defaultSystem;
+
       const stream = await llmClient.stream(
         [
           {
             role: 'system' as const,
-            content: `你是小说创作团队中的${agentRole || agentId}。说话要简洁有力，像真人在群里聊天一样，可以自然地带入网络流行梗。不要长篇大论，几句话说清楚立场和理由。`,
+            content: finalSystem,
           },
           {
             role: 'user' as const,
@@ -1269,6 +1272,9 @@ app.post('/api/v1/review/agent-stream', async (req, res) => {
       }
     } else if (apiUrl && apiKey) {
       // 使用用户配置的第三方API (如DeepSeek)
+      const defaultSystem = `你是小说创作团队中的${agentRole || agentId}。说话要简洁有力，像真人在群里聊天一样，可以自然地带入网络流行梗。不要长篇大论，几句话说清楚立场和理由。`;
+      const finalSystem = systemPrompt || defaultSystem;
+
       const fetchUrl = `${apiUrl}/chat/completions`;
       const response = await fetch(fetchUrl, {
         method: 'POST',
@@ -1281,7 +1287,7 @@ app.post('/api/v1/review/agent-stream', async (req, res) => {
           messages: [
             {
               role: 'system',
-              content: `你是小说创作团队中的${agentRole || agentId}。说话要简洁有力，像真人在群里聊天一样，可以自然地带入网络流行梗。不要长篇大论，几句话说清楚立场和理由。`,
+              content: finalSystem,
             },
             { role: 'user', content: prompt },
           ],

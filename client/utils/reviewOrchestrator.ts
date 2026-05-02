@@ -153,15 +153,22 @@ function buildReaderSystemPrompt(reader: ReaderProfile, slangLib: string): strin
  * 调用LLM（通过SSE流式接口，使用react-native-sse）
  * 后端代理SSE接口：POST /api/v1/review/stream
  */
+interface AgentInfo {
+  agentId: string;
+  agentName: string;
+  agentType: AgentType;
+}
+
 async function callLLM(
   apiConfig: { baseUrl: string; apiKey: string; model: string },
+  agentInfo: AgentInfo,
   systemPrompt: string,
   userPrompt: string,
   onChunk: (chunk: string) => void,
   maxTokens: number = 2048,
 ): Promise<string> {
   const backendUrl = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
-  const url = `${backendUrl}/api/v1/review/stream`;
+  const url = `${backendUrl}/api/v1/review/agent-stream`;
 
   return new Promise((resolve, reject) => {
     let fullContent = '';
@@ -173,11 +180,14 @@ async function callLLM(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        apiKey: apiConfig.apiKey,
-        baseUrl: apiConfig.baseUrl,
-        model: apiConfig.model,
+        agentId: agentInfo.agentId,
+        agentRole: agentInfo.agentName,
+        agentType: agentInfo.agentType,
+        prompt: userPrompt,
         systemPrompt,
-        userPrompt,
+        model: apiConfig.model,
+        apiUrl: apiConfig.baseUrl,
+        apiKey: apiConfig.apiKey,
         maxTokens,
       }),
     });
@@ -415,6 +425,7 @@ export class ReviewOrchestrator {
       try {
         const content = await callLLM(
           this.apiConfig,
+          { agentId: agent.id, agentName: agent.name, agentType: 'pro' },
           systemPrompt,
           userPrompt,
           (chunk) => this.callbacks.onMessageChunk(msgId, chunk),
@@ -449,6 +460,7 @@ export class ReviewOrchestrator {
       try {
         const content = await callLLM(
           this.apiConfig,
+          { agentId: `reader_${reader.id}`, agentName: reader.name, agentType: 'reader' },
           systemPrompt,
           userPrompt,
           (chunk) => this.callbacks.onMessageChunk(msgId, chunk),
@@ -509,6 +521,7 @@ ${this.outline.slice(0, 1000)}
     try {
       const content = await callLLM(
         this.apiConfig,
+        { agentId: 'writer', agentName: '写手', agentType: 'pro' },
         systemPrompt,
         userPrompt,
         (chunk) => this.callbacks.onMessageChunk(msgId, chunk),
@@ -605,6 +618,7 @@ ${requirements}
       try {
         const content = await callLLM(
           this.apiConfig,
+          { agentId: agent.id, agentName: agent.name, agentType: agent.type },
           systemPrompt,
           userPrompt,
           (chunk) => this.callbacks.onMessageChunk(msgId, chunk),
@@ -697,6 +711,7 @@ ${this.outline.slice(0, 500)}`;
     try {
       const content = await callLLM(
         this.apiConfig,
+        { agentId: 'writer', agentName: '写手', agentType: 'pro' },
         systemPrompt,
         userPrompt,
         (chunk) => this.callbacks.onMessageChunk(msgId, chunk),
@@ -784,6 +799,7 @@ ${writerResponse.slice(0, 500)}
       try {
         const content = await callLLM(
           this.apiConfig,
+          { agentId: voterId, agentName: voterName, agentType: isReader ? 'reader' : 'pro' },
           systemPrompt,
           userPrompt,
           (chunk) => this.callbacks.onMessageChunk(msgId, chunk),
@@ -896,6 +912,7 @@ ${this.outline.slice(0, 1500)}
     try {
       const content = await callLLM(
         this.apiConfig,
+        { agentId: 'coordinator', agentName: '统筹', agentType: 'coordinator' },
         systemPrompt,
         userPrompt,
         (chunk) => this.callbacks.onMessageChunk(msgId, chunk),
@@ -1046,6 +1063,7 @@ ${this.outline.slice(0, 2000)}
     try {
       const content = await callLLM(
         this.apiConfig,
+        { agentId: 'detail_designer', agentName: '细纲', agentType: 'pro' },
         systemPrompt,
         userPrompt,
         (chunk) => this.callbacks.onMessageChunk(msgId, chunk),
@@ -1191,6 +1209,7 @@ ${this.stepMessages.get('outline_update')?.find(m => m.agentId === 'detail_desig
     try {
       const content = await callLLM(
         this.apiConfig,
+        { agentId: 'memory_compressor', agentName: '记忆', agentType: 'pro' },
         systemPrompt,
         userPrompt,
         (chunk) => this.callbacks.onMessageChunk(msgId, chunk),
@@ -1276,6 +1295,7 @@ ${this.session.originalText}
     try {
       const content = await callLLM(
         this.apiConfig,
+        { agentId: 'writer', agentName: '写手', agentType: 'pro' },
         systemPrompt,
         userPrompt,
         (chunk) => this.callbacks.onMessageChunk(msgId, chunk),
@@ -1345,6 +1365,7 @@ ${executedText.slice(0, 800)}
       try {
         const content = await callLLM(
           this.apiConfig,
+          { agentId: critic.agentId, agentName: critic.agentName, agentType: critic.agentType },
           systemPrompt,
           userPrompt,
           (chunk) => this.callbacks.onMessageChunk(msgId, chunk),

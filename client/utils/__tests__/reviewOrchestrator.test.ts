@@ -1,4 +1,3 @@
-/* eslint-disable no-emoji */
 import {
   ReviewStep,
   REVIEW_STEP_ORDER,

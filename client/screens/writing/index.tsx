@@ -19,6 +19,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { orchestrateAgents, type OrchestrationParams, type AgentStepResult, type CoordinatorReport } from '@/utils/agentOrchestrator';
 import { PRESET_AGENTS, type PresetAgent } from '@/utils/presetAgents';
+import { ReviewOrchestrator, type ReviewCallbacks } from '@/utils/reviewOrchestrator';
+import ReviewChatView from '@/components/ReviewChatView';
+import type { ReviewSession, ReviewMessage, ChangeRecord, ReviewStep, OutlinePatch } from '@/utils/reviewTypes';
+import { addReviewMessage, addChangeRecord, getSessionChanges, updateChangeStatus, canWriteChapter } from '@/utils/reviewStorage';
 import { GC } from '@/utils/glassColors';
 import { styles } from './writingStyles';
 
@@ -80,6 +84,244 @@ export default function WritingScreen() {
   });
   const [hasAutoLoaded, setHasAutoLoaded] = useState(false);
   const [currentQueueIdx, setCurrentQueueIdx] = useState(-1);
+
+  // 审查追责制状态
+  const [reviewVisible, setReviewVisible] = useState(false);
+  const [reviewParagraphIndex, setReviewParagraphIndex] = useState<number>(-1); // -1 = 整章审查
+  const [reviewMessages, setReviewMessages] = useState<ReviewMessage[]>([]);
+  const [reviewCurrentStep, setReviewCurrentStep] = useState<string>('idle');
+  const [reviewIsProcessing, setReviewIsProcessing] = useState(false);
+  const [reviewChangeRecords, setReviewChangeRecords] = useState<ChangeRecord[]>([]);
+  const [reviewOutlinePatch, setReviewOutlinePatch] = useState<OutlinePatch | null>(null);
+  const reviewMessagesRef = useRef<ReviewMessage[]>([]);
+  const reviewStepRef = useRef<string>('idle');
+  const orchestratorRef = useRef<ReviewOrchestrator | null>(null);
+
+  // 审查：启动追责制流程
+  const handleStartReview = useCallback(async (paragraphIndex: number) => {
+    setReviewVisible(true);
+    setReviewParagraphIndex(paragraphIndex);
+    setReviewMessages([]);
+    setReviewCurrentStep('showdown');
+    setReviewIsProcessing(true);
+    setReviewChangeRecords([]);
+    reviewMessagesRef.current = [];
+    reviewStepRef.current = 'showdown';
+
+    // 从AsyncStorage获取API配置
+    let apiConfig = { baseUrl: '', apiKey: '', model: '' };
+    try {
+      const raw = await AsyncStorage.getItem('apiConfigs');
+      if (raw) {
+        const configs = JSON.parse(raw);
+        if (configs.length > 0) {
+          apiConfig = { baseUrl: configs[0].baseUrl, apiKey: configs[0].apiKey, model: configs[0].model };
+        }
+      }
+    } catch {
+      // 使用默认（后端豆包兜底）
+    }
+
+    // 构建回调
+    const callbacks: ReviewCallbacks = {
+      onMessageChunk: (messageId: string, chunk: string) => {
+        // 流式更新：找到对应消息并追加内容
+        setReviewMessages(prev => {
+          const existing = prev.find(m => m.id === messageId);
+          if (existing) {
+            // 已有消息，追加内容
+            const next = prev.map(m => {
+              if (m.id === messageId && m.status === 'streaming') {
+                return { ...m, content: m.content + chunk };
+              }
+              return m;
+            });
+            reviewMessagesRef.current = next;
+            return next;
+          } else {
+            // 新消息，需要从编排器缓存中获取初始消息
+            const stepMsgs = orchestratorRef.current?.['stepMessages'];
+            if (stepMsgs) {
+              for (const msgs of (stepMsgs as Map<string, ReviewMessage[]>).values()) {
+                const found = msgs.find(m => m.id === messageId);
+                if (found) {
+                  const next = [...prev, { ...found, content: found.content + chunk }];
+                  reviewMessagesRef.current = next;
+                  return next;
+                }
+              }
+            }
+            // 找不到则保持不变
+            return prev;
+          }
+        });
+      },
+      onStepComplete: (step: ReviewStep, msgs: ReviewMessage[]) => {
+        // 步骤完成后更新状态
+        const stepIdx = ['showdown', 'write', 'review', 'respond', 'vote', 'impact', 'outline_update', 'consistency', 'execute', 'verify'].indexOf(step);
+        const nextStep = stepIdx < 9
+          ? ['showdown', 'write', 'review', 'respond', 'vote', 'impact', 'outline_update', 'consistency', 'execute', 'verify'][stepIdx + 1]
+          : 'completed';
+        reviewStepRef.current = nextStep;
+        setReviewCurrentStep(nextStep);
+
+        // 刷新消息列表
+        setReviewMessages(prev => {
+          const updated = [...prev];
+          for (const msg of msgs) {
+            const idx = updated.findIndex(m => m.id === msg.id);
+            if (idx >= 0) {
+              updated[idx] = { ...updated[idx], ...msg };
+            } else {
+              updated.push(msg);
+            }
+          }
+          reviewMessagesRef.current = updated;
+          return updated;
+        });
+
+        // 刷新改动记录
+        if (step === 'impact' || step === 'outline_update' || step === 'execute') {
+          getSessionChanges(orchestratorRef.current?.['session']?.id || '').then(changes => {
+            setReviewChangeRecords(changes);
+          }).catch(() => { /* ignore storage errors */ });
+        }
+      },
+      onNeedConfirm: async (change: ChangeRecord, outlinePatch: OutlinePatch | null) => {
+        // 显示细纲修订面板
+        if (outlinePatch) setReviewOutlinePatch(outlinePatch);
+        // 弹出确认对话框
+        return new Promise<boolean>((resolve) => {
+          Alert.alert(
+            '剧情改动确认',
+            `检测到全局级改动：${change.description}\n\n是否允许修改后续细纲？`,
+            [
+              { text: '驳回（降级为局部修改）', onPress: () => { setReviewOutlinePatch(null); resolve(false); }, style: 'cancel' },
+              { text: '确认', onPress: () => { setReviewOutlinePatch(null); resolve(true); } },
+            ],
+            { cancelable: false },
+          );
+        });
+      },
+      onError: (step: ReviewStep, error: Error) => {
+        // 添加错误消息
+        const stepIdx = ['showdown', 'write', 'review', 'respond', 'vote', 'impact', 'outline_update', 'consistency', 'execute', 'verify'].indexOf(step);
+        const errMsg: ReviewMessage = {
+          id: `err_${Date.now()}`,
+          sessionId: '',
+          step,
+          stepIndex: stepIdx,
+          agentId: 'system',
+          agentName: '系统',
+          agentType: 'coordinator',
+          content: `[CRITICAL] 步骤${step}出错：${error.message}`,
+          status: 'error',
+          timestamp: Date.now(),
+        };
+        setReviewMessages(prev => {
+          const next = [...prev, errMsg];
+          reviewMessagesRef.current = next;
+          return next;
+        });
+      },
+    };
+
+    // 创建编排器
+    const orchestrator = new ReviewOrchestrator(apiConfig, callbacks);
+    orchestratorRef.current = orchestrator;
+
+    try {
+      // 获取小说类型
+      const novelType = await AsyncStorage.getItem('novel_type') || '都市';
+
+      // 获取细纲文本
+      const outlineText = outlineInput || params.outline || '';
+
+      // 获取已写内容
+      const writtenContent = content || '';
+
+      // 初始化审查会话
+      await orchestrator.init(
+        chapterNumber - 1, // chapterIndex (0-based)
+        paragraphIndex,
+        writtenContent,
+        novelType,
+        outlineText,
+        writtenContent,
+      );
+
+      // 运行完整的10步审查流程
+      for (let i = 0; i < 10; i++) {
+        if (!orchestratorRef.current) break; // 用户关闭弹窗，中断审查
+        await orchestrator.runCurrentStep();
+
+        // 检查session是否完成或被中断
+        const session = orchestratorRef.current?.['session'];
+        if (session?.status === 'completed' || !orchestratorRef.current) break;
+      }
+    } catch (error) {
+      const errMsg: ReviewMessage = {
+        id: `err_${Date.now()}`,
+        sessionId: '',
+        step: 'showdown',
+        stepIndex: 0,
+        agentId: 'system',
+        agentName: '系统',
+        agentType: 'coordinator',
+        content: `[CRITICAL] 审查流程异常：${error instanceof Error ? error.message : String(error)}`,
+        status: 'error',
+        timestamp: Date.now(),
+      };
+      setReviewMessages(prev => [...prev, errMsg]);
+    } finally {
+      setReviewIsProcessing(false);
+      setReviewCurrentStep('completed');
+
+      // 如果审查产生了修改后的文本，更新到编辑器
+      const revised = orchestratorRef.current?.['session']?.revisedText;
+      if (revised && revised.trim()) {
+        setContent(revised);
+      }
+
+      // 添加完成消息
+      const doneMsg: ReviewMessage = {
+        id: `done_${Date.now()}`,
+        sessionId: '',
+        step: 'verify',
+        stepIndex: 9,
+        agentId: 'system',
+        agentName: '系统',
+        agentType: 'coordinator',
+        content: revised ? '审查流程结束，修改已应用。' : '审查流程结束，原文保持不变。',
+        status: 'done',
+        timestamp: Date.now(),
+      };
+      setReviewMessages(prev => [...prev, doneMsg]);
+    }
+  }, [chapterNumber, content, outlineInput, params.outline]);
+
+  // 审查：确认剧情改动（写入细纲）
+  const handleConfirmChange = useCallback(async (changeId: string) => {
+    await updateChangeStatus(changeId, 'applied');
+    setReviewChangeRecords(prev => prev.map(c => c.id === changeId ? { ...c, status: 'applied' as const } : c));
+  }, []);
+
+  // 审查：驳回剧情改动
+  const handleRejectChange = useCallback(async (changeId: string) => {
+    await updateChangeStatus(changeId, 'rejected');
+    setReviewChangeRecords(prev => prev.map(c => c.id === changeId ? { ...c, status: 'rejected' as const } : c));
+  }, []);
+
+  // 审查：确认细纲修订
+  const handleConfirmOutlinePatch = useCallback((_patch: OutlinePatch) => {
+    // 细纲修订已由编排器自动应用
+    setReviewOutlinePatch(null);
+  }, []);
+
+  // 审查：驳回细纲修订
+  const handleRejectOutlinePatch = useCallback(() => {
+    setReviewOutlinePatch(null);
+  }, []);
 
   // ref 跟踪最新值
   const isMultiModeRef = useRef(isMultiMode);
@@ -223,6 +465,21 @@ export default function WritingScreen() {
     if (!targetOutline.trim()) {
       Alert.alert('提示', '请先在大纲页生成细纲，然后从大纲页点击"开始写作"');
       return;
+    }
+
+    // 写作保护：检查是否有未处理的剧情改动
+    try {
+      const { can, pendingChanges } = await canWriteChapter(targetChNum - 1);
+      if (!can) {
+        Alert.alert(
+          '无法写作',
+          `检测到未处理的剧情改动（${pendingChanges.length}项），请先在审查中确认或驳回这些改动。`,
+          [{ text: '知道了' }],
+        );
+        return;
+      }
+    } catch {
+      // reviewStorage未就绪则跳过检查
     }
 
     // 记录参数用于 AppState 恢复
@@ -631,11 +888,11 @@ export default function WritingScreen() {
                       style={styles.reviewBtn}
                       onPress={() => {
                         if (!content.trim()) return;
-                        router.push('/chapter-review', { content, chapterNumber: String(chapterNumber), outline: outlineInput });
+                        handleStartReview(-1);
                       }}
                     >
                       <Ionicons name="chatbubbles" size={18} color="#fff" />
-                      <Text style={styles.reviewBtnText}>AI评审</Text>
+                      <Text style={styles.reviewBtnText}>审查</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -923,6 +1180,50 @@ export default function WritingScreen() {
             <ScrollView style={styles.previewScroll}>
               <Text style={styles.previewText}>{previewContent}</Text>
             </ScrollView>
+          </View>
+        </Modal>
+
+        {/* 追责审查弹窗 */}
+        <Modal visible={reviewVisible} animationType="slide" onRequestClose={() => {
+          // 中断审查流程
+          orchestratorRef.current = null;
+          setReviewVisible(false);
+          setReviewIsProcessing(false);
+        }}>
+          <View style={{ flex: 1, backgroundColor: GC.bgBase }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 50, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: GC.border }}>
+              <TouchableOpacity onPress={() => {
+                orchestratorRef.current = null;
+                setReviewVisible(false);
+                setReviewIsProcessing(false);
+              }} style={{ marginRight: 12 }}>
+                <Ionicons name="close" size={28} color={GC.textPrimary} />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: GC.textPrimary, flex: 1 }}>
+                追责审查{reviewCurrentStep !== 'idle' && reviewCurrentStep !== 'completed' ? ` - ${reviewCurrentStep}` : ''}
+              </Text>
+              {reviewMessages.length > 0 && (
+                <Text style={{ fontSize: 13, color: GC.textSecondary }}>{reviewMessages.length}条发言</Text>
+              )}
+            </View>
+            <ReviewChatView
+              messages={reviewMessages}
+              currentStep={reviewCurrentStep as ReviewStep | null}
+              isStepRunning={reviewIsProcessing}
+              pendingAgents={[]}
+              changeRecords={reviewChangeRecords}
+              outlinePatch={reviewOutlinePatch}
+              onConfirmOutlinePatch={handleConfirmOutlinePatch}
+              onRejectOutlinePatch={handleRejectOutlinePatch}
+              onConfirmChange={handleConfirmChange}
+              onRejectChange={handleRejectChange}
+              onClose={() => {
+                orchestratorRef.current = null;
+                setReviewVisible(false);
+                setReviewIsProcessing(false);
+              }}
+              sessionComplete={reviewCurrentStep === 'completed'}
+            />
           </View>
         </Modal>
       </KeyboardAvoidingView>
