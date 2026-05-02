@@ -1,3 +1,9 @@
+# ==================== ⚠️ 关键约束 ====================
+# 【绝对禁止】杀掉 Nginx 进程！预览面板依赖 Nginx 代理
+# Metro 必须运行在 9090 端口，Nginx(5000) → Metro(9090)
+# 违反会导致预览面板 "Packager is not running" 错误
+# ====================================================
+
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 PREVIEW_DIR="${COZE_PREVIEW_DIR:-/source/preview}"
 LOG_DIR="${COZE_LOG_DIR:-$ROOT_DIR/logs}"
