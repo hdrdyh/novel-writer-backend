@@ -1235,7 +1235,14 @@ app.post('/api/v1/review/agent-stream', async (req, res) => {
 
   try {
     // 优先使用 coze-coding-dev-sdk (豆包系模型)
-    if (!apiUrl || apiUrl.includes('deepseek') === false) {
+    // 如果没有配置apiUrl，或者apiUrl不是第三方API，则使用coze-sdk
+    const isThirdPartyApi = apiUrl && apiKey && (
+      apiUrl.includes('deepseek') || 
+      apiUrl.includes('openai') || 
+      apiUrl.includes('anthropic')
+    );
+    
+    if (!isThirdPartyApi) {
       const { LLMClient, Config } = await import('coze-coding-dev-sdk');
       const llmConfig = new Config();
       const llmClient = new LLMClient(llmConfig);
