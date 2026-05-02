@@ -489,10 +489,10 @@ export default function AgentConfigScreen() {
           obj[key] = val;
         }
       }
-      const name = obj['名称'] || obj['name'] || '';
-      const apiKey = obj['api key'] || obj['apikey'] || obj['key'] || obj['密钥'] || '';
-      const baseUrl = obj['base url'] || obj['baseurl'] || obj['url'] || obj['地址'] || '';
-      const model = obj['模型'] || obj['model'] || '';
+      const name = obj['模型'] || obj['名称'] || obj['name'] || '';
+      const apiKey = obj['key'] || obj['api key'] || obj['apikey'] || obj['密钥'] || '';
+      const baseUrl = obj['api'] || obj['base url'] || obj['baseurl'] || obj['url'] || obj['地址'] || '';
+      const model = obj['模型名'] || obj['模型id'] || obj['model'] || '';
       if (name && apiKey) {
         newConfigs.push({ name, apiKey, baseUrl: baseUrl || 'https://api.deepseek.com', model: model || 'deepseek-chat' });
       }
@@ -826,7 +826,7 @@ export default function AgentConfigScreen() {
                 </View>
                 <ScrollView style={m.modalBody}>
                   <Text style={s.apiImportHint}>粘贴API配置，每项用空行分隔。格式如下：</Text>
-                  <Text style={s.apiImportFormat}>{`名称: 我的DeepSeek\nAPI Key: sk-xxxxx\nBase URL: https://api.deepseek.com\n模型: deepseek-chat`}</Text>
+                  <Text style={s.apiImportFormat}>{`模型: 我的DeepSeek\nAPI: https://api.deepseek.com\nKey: sk-xxxxx\n模型名: deepseek-chat`}</Text>
                   <TextInput
                     style={[s.templateInput, s.apiImportInput]}
                     value={apiImportText}
