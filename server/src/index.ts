@@ -1121,6 +1121,231 @@ app.post('/api/v1/agents/reset', (req, res) => {
   res.json({ agents, message: 'Agent 已重置为默认配置' });
 });
 
+// ============== 梗库搜索 ==============
+import { SearchClient, Config, HeaderUtils } from "coze-coding-dev-sdk";
+
+// 时新梗缓存（内存缓存，30分钟过期）
+let cachedSlang = '';
+let cachedSlangTime = 0;
+const SLANG_CACHE_MS = 30 * 60 * 1000;
+
+/**
+ * GET /api/v1/slang/fresh
+ * 搜索最新网络流行梗
+ * Query: type? - 小说类型（如 玄修/都市），用于搜相关梗
+ */
+app.get('/api/v1/slang/fresh', async (req, res) => {
+  try {
+    // 检查缓存
+    if (cachedSlang && Date.now() - cachedSlangTime < SLANG_CACHE_MS) {
+      res.json({ slang: cachedSlang, cached: true });
+      return;
+    }
+
+    const novelType = (req.query.type as string) || '';
+    const now = new Date();
+    const monthStr = `${now.getFullYear()}年${now.getMonth() + 1}月`;
+    const query = `${monthStr} 最新网络流行语 盘点 热词 缩写 梗大全${novelType ? ` ${novelType}` : ''}`;
+
+    const customHeaders = HeaderUtils.extractForwardHeaders(
+      req.headers as Record<string, string>,
+    );
+    const config = new Config();
+    const client = new SearchClient(config, customHeaders);
+
+    const response = await client.webSearch(query, 5, true);
+
+    // 用LLM从搜索结果中提取梗（比正则准确得多）
+    const summaryText = response.summary || '';
+    const snippetTexts = (response.web_items || [])
+      .map((item) => `标题：${item.title}\n摘要：${item.snippet}`)
+      .join('\n\n');
+    const searchContext = `AI摘要：${summaryText}\n\n搜索结果：\n${snippetTexts}`;
+
+    console.log('[slang] Search returned', (response.web_items || []).length, 'items, summary length:', summaryText.length);
+    let freshSlang = '';
+    try {
+      const { LLMClient, Config } = await import('coze-coding-dev-sdk');
+      const llmConfig = new Config();
+      const llmClient = new LLMClient(llmConfig);
+      const llmResponse = await llmClient.invoke(
+        [
+          {
+            role: 'system' as const,
+            content: '你是一个网络流行语专家。从给定的搜索结果中，提取当前最火的网络流行语/梗/口头禅。只输出提取到的词，用斜杠分隔，不要解释，不要编号，不要其他任何内容。例如：破防了/赢麻了/寄/纯纯的/就这。如果没有找到流行语，输出空。',
+          },
+          {
+            role: 'user' as const,
+            content: searchContext,
+          },
+        ],
+        { model: 'doubao-seed-2-0-mini-260215', temperature: 0.3 },
+      );
+      console.log('[slang] LLM response length:', llmResponse.content?.length);
+      freshSlang = (llmResponse.content || '').trim();
+      freshSlang = freshSlang
+        .replace(/^\d+[.、)\]]\s*/gm, '')
+        .replace(/[，,、\n]+/g, ' / ')
+        .trim();
+    } catch (e) {
+      console.error('LLM slang extraction failed:', e);
+      const slangSet = new Set<string>();
+      const quotedMatches = searchContext.match(
+        /[「"'""《〈]([^「"'""》〉]{2,8})[」"'""》〉]/g,
+      );
+      if (quotedMatches) {
+        quotedMatches.forEach((m) => {
+          const clean = m.replace(/^[「"'""《〈]|[」"'""》〉]$/g, '').trim();
+          if (clean.length >= 2 && clean.length <= 8) {
+            slangSet.add(clean);
+          }
+        });
+      }
+      freshSlang = Array.from(slangSet).slice(0, 15).join(' / ');
+    }
+
+    // 缓存
+    cachedSlang = freshSlang;
+    cachedSlangTime = Date.now();
+
+    res.json({ slang: freshSlang, cached: false });
+  } catch (error) {
+    console.error('Slang search failed:', error);
+    // 搜索失败不阻塞，返回空
+    res.json({ slang: '', cached: false, error: '搜索失败，将使用经典梗' });
+  }
+});
+
+// ============== 审查系统 SSE 流式接口 ==============
+
+// POST /api/v1/review/agent-stream - 单agent流式调用
+app.post('/api/v1/review/agent-stream', async (req, res) => {
+  const { agentId, agentRole, agentType, prompt, model, apiUrl, apiKey } = req.body;
+
+  if (!prompt) {
+    res.status(400).json({ error: 'Missing prompt' });
+    return;
+  }
+
+  // SSE 响应头
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-store, no-transform, must-revalidate');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  try {
+    // 优先使用 coze-coding-dev-sdk (豆包系模型)
+    if (!apiUrl || apiUrl.includes('deepseek') === false) {
+      const { LLMClient, Config } = await import('coze-coding-dev-sdk');
+      const llmConfig = new Config();
+      const llmClient = new LLMClient(llmConfig);
+
+      // 选择模型 - 根据agent类型选不同模型
+      let selectedModel = model || 'doubao-seed-2-0-mini-260215';
+      // 如果model是deepseek系，强制用doubao替代
+      if (selectedModel.includes('deepseek')) {
+        selectedModel = 'doubao-seed-2-0-mini-260215';
+      }
+
+      const stream = await llmClient.stream(
+        [
+          {
+            role: 'system' as const,
+            content: `你是小说创作团队中的${agentRole || agentId}。说话要简洁有力，像真人在群里聊天一样，可以自然地带入网络流行梗。不要长篇大论，几句话说清楚立场和理由。`,
+          },
+          {
+            role: 'user' as const,
+            content: prompt,
+          },
+        ],
+        { model: selectedModel, temperature: 0.7 },
+      );
+
+      for await (const chunk of stream) {
+        const content = chunk.content || '';
+        if (content) {
+          res.write(`data: ${JSON.stringify({ content })}\n\n`);
+        }
+      }
+    } else if (apiUrl && apiKey) {
+      // 使用用户配置的第三方API (如DeepSeek)
+      const fetchUrl = `${apiUrl}/chat/completions`;
+      const response = await fetch(fetchUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: model || 'deepseek-chat',
+          messages: [
+            {
+              role: 'system',
+              content: `你是小说创作团队中的${agentRole || agentId}。说话要简洁有力，像真人在群里聊天一样，可以自然地带入网络流行梗。不要长篇大论，几句话说清楚立场和理由。`,
+            },
+            { role: 'user', content: prompt },
+          ],
+          stream: true,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) {
+        res.write(`data: ${JSON.stringify({ error: `API error: ${response.status}` })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        res.write(`data: ${JSON.stringify({ error: 'No response body' })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content || '';
+              if (content) {
+                res.write(`data: ${JSON.stringify({ content })}\n\n`);
+              }
+            } catch {
+              // 忽略解析失败的行
+            }
+          }
+        }
+      }
+    } else {
+      res.write(`data: ${JSON.stringify({ error: 'No API configuration available' })}\n\n`);
+    }
+
+    res.write('data: [DONE]\n\n');
+  } catch (error) {
+    console.error('[review-stream] Error:', error);
+    res.write(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`);
+    res.write('data: [DONE]\n\n');
+  }
+
+  res.end();
+});
+
 // 获取写作进度状态
 app.get('/api/v1/writing/status', (req, res) => {
   res.json({
