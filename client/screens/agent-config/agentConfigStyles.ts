@@ -4,6 +4,7 @@ import { GC } from '@/utils/glassColors';
 // ============== 弹窗样式（Modal通用） ==============
 export const m = StyleSheet.create({
   modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
   modalContent: { backgroundColor: GC.bgElevated, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%', borderWidth: 1, borderColor: GC.border },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: GC.border },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: GC.textPrimary },
@@ -125,9 +126,14 @@ export const s = StyleSheet.create({
     backgroundColor: GC.primary,
     borderRadius: 12,
     paddingVertical: 14,
-    marginTop: 12,
+    flex: 1,
   },
   addBtnText: { color: GC.textPrimary, fontSize: 15, fontWeight: '600' },
+  addRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
 
   resetBtn: { marginTop: 16, alignItems: 'center' },
   resetBtnText: { color: GC.textMuted, fontSize: 13 },
@@ -292,4 +298,31 @@ export const s = StyleSheet.create({
   importPreviewStatus: { fontSize: 11, fontWeight: '700', color: GC.textPrimary, backgroundColor: GC.border, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
   importPreviewName: { color: GC.textPrimary, fontSize: 14, fontWeight: '500', width: 70 },
   importPreviewPrompt: { flex: 1, color: GC.textMuted, fontSize: 12 },
+
+  // API导入
+  apiImportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: GC.accent + '18',
+    borderWidth: 1,
+    borderColor: GC.accent + '40',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  apiImportBtnText: { color: GC.accent, fontSize: 14, fontWeight: '500' },
+  apiImportModal: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
+  apiImportContent: { width: '90%', maxHeight: '80%', backgroundColor: GC.bgCard, borderRadius: 16, borderWidth: 1, borderColor: GC.border, overflow: 'hidden' },
+  apiImportHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  apiImportTitle: { color: GC.textPrimary, fontSize: 18, fontWeight: '700' },
+  apiImportHint: { color: GC.textMuted, fontSize: 12, marginBottom: 12, lineHeight: 18 },
+  apiImportFormat: { color: GC.textMuted, fontSize: 11, backgroundColor: GC.bgBase, borderRadius: 8, padding: 10, marginBottom: 12, fontFamily: 'monospace', lineHeight: 18 },
+  apiImportInput: { minHeight: 200, textAlignVertical: 'top', marginBottom: 12 },
+  apiImportPreview: { color: GC.accent, fontSize: 13, fontWeight: '500', marginTop: 4 },
+  apiImportActions: { flexDirection: 'row', gap: 10 },
+  apiImportCancel: { flex: 1, backgroundColor: GC.border, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  apiImportCancelText: { color: GC.textPrimary, fontSize: 15, fontWeight: '500' },
+  apiImportSubmit: { flex: 1, backgroundColor: GC.accent, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  apiImportSubmitText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
 });

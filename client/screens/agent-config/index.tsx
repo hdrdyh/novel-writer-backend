@@ -37,6 +37,8 @@ export default function AgentConfigScreen() {
   const [apiConfigs, setApiConfigs] = useState<ApiConfig[]>([]);
   const [apiModalVisible, setApiModalVisible] = useState(false);
   const [editingApi, setEditingApi] = useState<ApiConfig | null>(null);
+  const [apiImportVisible, setApiImportVisible] = useState(false);
+  const [apiImportText, setApiImportText] = useState('');
 
   // 协作Agent（预置Agent的用户配置）
   const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>([]);
@@ -470,6 +472,39 @@ export default function AgentConfigScreen() {
     }
   };
 
+  const handleApiImport = async () => {
+    const text = apiImportText.trim();
+    if (!text) { Alert.alert('提示', '请粘贴API配置文本'); return; }
+    // Parse: each block separated by blank line, key:value pairs
+    const blocks = text.split(/\n\s*\n/).filter((b: string) => b.trim());
+    const newConfigs: Omit<ApiConfig, 'id'>[] = [];
+    for (const block of blocks) {
+      const lines = block.split('\n').filter((l: string) => l.trim());
+      const obj: Record<string, string> = {};
+      for (const line of lines) {
+        const idx = line.indexOf(':');
+        if (idx > 0) {
+          const key = line.substring(0, idx).trim().toLowerCase();
+          const val = line.substring(idx + 1).trim();
+          obj[key] = val;
+        }
+      }
+      const name = obj['名称'] || obj['name'] || '';
+      const apiKey = obj['api key'] || obj['apikey'] || obj['key'] || obj['密钥'] || '';
+      const baseUrl = obj['base url'] || obj['baseurl'] || obj['url'] || obj['地址'] || '';
+      const model = obj['模型'] || obj['model'] || '';
+      if (name && apiKey) {
+        newConfigs.push({ name, apiKey, baseUrl: baseUrl || 'https://api.deepseek.com', model: model || 'deepseek-chat' });
+      }
+    }
+    if (newConfigs.length === 0) { Alert.alert('提示', '未识别到有效的API配置，请检查格式'); return; }
+    const added = newConfigs.map(c => ({ ...c, id: new Date().getTime().toString() + Math.random().toString(36).slice(2, 6) }));
+    await saveApiConfigs([...apiConfigs, ...added]);
+    setApiImportVisible(false);
+    setApiImportText('');
+    Alert.alert('导入成功', `已导入 ${added.length} 个API配置`);
+  };
+
   const testApiConnection = async (cfg: ApiConfig) => {
     try {
       const controller = new AbortController();
@@ -763,14 +798,67 @@ export default function AgentConfigScreen() {
                 </View>
               ))}
 
-              <TouchableOpacity style={s.addBtn} onPress={handleAddApi}>
-                <Ionicons name="add" size={20} color="#fff" />
-                <Text style={s.addBtnText}>添加API</Text>
-              </TouchableOpacity>
+              <View style={s.addRow}>
+                <TouchableOpacity style={s.addBtn} onPress={handleAddApi}>
+                  <Ionicons name="add" size={20} color="#fff" />
+                  <Text style={s.addBtnText}>添加API</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.addBtn, { backgroundColor: GC.accent }]} onPress={() => setApiImportVisible(true)}>
+                  <Ionicons name="download-outline" size={20} color="#fff" />
+                  <Text style={s.addBtnText}>导入API</Text>
+                </TouchableOpacity>
+              </View>
             </>
           )}
 
         </ScrollView>
+
+        {/* API导入弹窗 */}
+        <Modal visible={apiImportVisible} transparent animationType="fade">
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={m.modalOverlay}>
+              <View style={s.apiImportContent}>
+                <View style={m.modalHeader}>
+                  <Text style={m.modalTitle}>导入API配置</Text>
+                  <TouchableOpacity onPress={() => setApiImportVisible(false)}>
+                    <Ionicons name="close" size={24} color={GC.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView style={m.modalBody}>
+                  <Text style={s.apiImportHint}>粘贴API配置，每项用空行分隔。格式如下：</Text>
+                  <Text style={s.apiImportFormat}>{`名称: 我的DeepSeek\nAPI Key: sk-xxxxx\nBase URL: https://api.deepseek.com\n模型: deepseek-chat`}</Text>
+                  <TextInput
+                    style={[s.templateInput, s.apiImportInput]}
+                    value={apiImportText}
+                    onChangeText={setApiImportText}
+                    placeholder="粘贴API配置文本..."
+                    placeholderTextColor={GC.textMuted}
+                    multiline
+                    numberOfLines={8}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {apiImportText.trim() ? (
+                    <Text style={s.apiImportPreview}>
+                      识别到 {(() => {
+                        const blocks = apiImportText.trim().split(/\n\s*\n/);
+                        return blocks.filter(b => b.trim()).length;
+                      })()} 个API配置
+                    </Text>
+                  ) : null}
+                </ScrollView>
+                <View style={m.modalFooter}>
+                  <TouchableOpacity style={[m.modalBtn, m.cancelBtn]} onPress={() => setApiImportVisible(false)}>
+                    <Text style={m.cancelBtnText}>取消</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[m.modalBtn, m.submitBtn]} onPress={handleApiImport}>
+                    <Text style={m.submitBtnText}>导入</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
 
         {/* 弹窗 */}
         <ApiConfigModal
