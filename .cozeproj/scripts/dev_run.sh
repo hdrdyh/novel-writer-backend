@@ -1,9 +1,3 @@
-# ==================== ⚠️ 关键约束 ====================
-# 【绝对禁止】杀掉 Nginx 进程！预览面板依赖 Nginx 代理
-# Metro 必须运行在 9090 端口，Nginx(5000) → Metro(9090)
-# 违反会导致预览面板 "Packager is not running" 错误
-# ====================================================
-
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 PREVIEW_DIR="${COZE_PREVIEW_DIR:-/source/preview}"
 LOG_DIR="${COZE_LOG_DIR:-$ROOT_DIR/logs}"
@@ -15,18 +9,15 @@ mkdir -p "$LOG_DIR"
 SERVER_HOST="0.0.0.0"
 SERVER_PORT="9091"
 # Expo 项目配置
-EXPO_HOST="0.0.0.0"
+EXPO_HOST="lan"
 EXPO_DIR="expo"
-EXPO_PORT="9090"
+EXPO_PORT="5000"
 WEB_URL="${COZE_PROJECT_DOMAIN_DEFAULT:-http://127.0.0.1:${SERVER_PORT}}"
 ASSUME_YES="1"
-# 强制使用沙箱后端地址（不是 Expo 打包服务器）
-SANDBOX_BACKEND_URL="http://vefaas-prrxc29p-evjxady09u-d7qpsi03rt8n0s8g8ga0-sandbox:${SERVER_PORT}"
-EXPO_PUBLIC_BACKEND_BASE_URL="${SANDBOX_BACKEND_URL}"
+EXPO_PUBLIC_BACKEND_BASE_URL="${EXPO_PUBLIC_BACKEND_BASE_URL:-$WEB_URL}"
 EXPO_PUBLIC_COZE_PROJECT_ID="${COZE_PROJECT_ID:-}"
 
-# Metro打包器代理URL（本地开发服务器）
-EXPO_PACKAGER_PROXY_URL="http://127.0.0.1:${EXPO_PORT}"
+EXPO_PACKAGER_PROXY_URL="${EXPO_PUBLIC_BACKEND_BASE_URL}"
 export EXPO_PUBLIC_BACKEND_BASE_URL EXPO_PACKAGER_PROXY_URL EXPO_PUBLIC_COZE_PROJECT_ID
 # 运行时变量（为避免 set -u 的未绑定错误，预置为空）
 SERVER_PID=""
@@ -63,12 +54,6 @@ choose_next_free_port() {
 ensure_port() {
   local var_name=$1
   local port_val=$2
-  # ⚠️ 绝对禁止处理5000端口（Nginx）
-  if [ "$port_val" = "5000" ]; then
-    echo "⚠️ 跳过端口5000（Nginx，禁止杀掉）"
-    eval "$var_name=$port_val"
-    return 0
-  fi
   if is_port_free "$port_val"; then
     echo "端口未占用：$port_val"
     eval "$var_name=$port_val"
@@ -160,8 +145,11 @@ detect_expo_fetch_failed() {
 }
 
 # ==================== 前置检查 ====================
-# 保留nginx进程（沙箱预览需要nginx反向代理）
-# nginx将5000端口代理到Metro(9090)，将/api/代理到后端(9091)
+# 关掉nginx进程（必须！Nginx占用5000端口会导致Metro无法启动）
+nginx -s stop 2>/dev/null || true
+sleep 1
+# 确保nginx已停止
+ps -ef | grep "nginx: master" | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null || true
 
 echo "检查根目录 pre_install.py"
 if [ -f "$PREVIEW_DIR/pre_install.py" ]; then
@@ -185,17 +173,8 @@ check_command "lsof"
 check_command "bash"
 
 # 端口占用预检查与处理
-# ⚠️ 绝对不处理5000端口！Nginx在5000端口，预览面板依赖它
 ensure_port SERVER_PORT "$SERVER_PORT"
 ensure_port EXPO_PORT "$EXPO_PORT"
-
-# 确保Nginx正在运行（沙箱预览面板需要）
-if ! pgrep nginx > /dev/null 2>&1; then
-  echo "⚠️ Nginx未运行，正在启动..."
-  nginx 2>/dev/null || echo "Nginx启动失败（可能未安装）"
-else
-  echo "✅ Nginx正在运行"
-fi
 
 echo "==================== 启动 server 服务 ===================="
 echo "正在执行：pnpm run dev (server)"

@@ -262,20 +262,18 @@ import { Screen } from '../../../components/Screen';
 
 ## ⚠️ 沙箱环境关键约束（CRITICAL，必须遵守）
 
-### 1. Nginx 不可杀
-沙箱预览面板通过 Nginx 反向代理访问应用，**绝对禁止杀掉 Nginx 进程**。
-- Nginx 监听 5000 端口，代理到 Metro(9090) 和 后端(9091)
-- Metro 必须运行在 **9090 端口**，不是 5000
-- 如果 Nginx 被杀，预览面板会报 "Packager is not running" 错误
+### 1. Nginx 必须杀掉
+沙箱预置了Nginx监听5000端口，会与Metro冲突。`dev_run.sh` 会先用 `nginx -s stop` 停掉它，再启动Metro。
+- Metro 必须运行在 **5000 端口**（直接对外，不经过Nginx代理）
+- 后端API通过Metro的proxy中间件转发到9091
 
 ### 2. 端口分配
 | 端口 | 服务 | 说明 |
 |------|------|------|
-| 5000 | Nginx | 对外入口，代理到 Metro 和后端 |
-| 9090 | Metro | Expo Metro 打包器 |
-| 9091 | Express | 后端 API 服务 |
+| 5000 | Metro | Expo Metro 打包器，直接对外（Nginx必须杀掉） |
+| 9091 | Express | 后端 API 服务（通过Metro proxy转发） |
 
 ### 3. 修改 dev_run.sh 注意事项
-- 不要添加 `kill nginx` 或 `kill -9 $(pgrep nginx)` 等命令
-- Expo 启动命令必须使用 `--port 9090`
-- 后端 API 地址使用 `EXPO_PUBLIC_BACKEND_BASE_URL` 环境变量，不要硬编码
+- **必须先停Nginx**：`nginx -s stop` 再启动Metro
+- Expo 启动命令必须使用 `--port 5000` 和 `--host lan`
+- 后端API地址使用 `EXPO_PUBLIC_BACKEND_BASE_URL` 环境变量，不要硬编码
